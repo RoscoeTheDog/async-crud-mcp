@@ -1,0 +1,26 @@
+{
+  "version": "5.2.0",
+  "sprint_id": "",
+  "started_at": "2026-02-12T17:24:29.537807+00:00",
+  "updated_at": "2026-02-12T17:24:29.543006+00:00",
+  "resume_count": 0,
+  "current_phase": 1,
+  "phase_status": {
+    "1": "pending",
+    "2": "pending",
+    "3": "pending",
+    "4": "pending",
+    "5": "pending"
+  },
+  "phase_3_state": null,
+  "phase_4_state": null,
+  "phase_5_state": null,
+  "story_artifacts": {},
+  "gate_actions": {},
+  "active_tasks": {},
+  "completed_stories": [],
+  "deferred_stories": [],
+  "batches": [],
+  "validation_history": {},
+  "inferred_dependencies": {}
+}
