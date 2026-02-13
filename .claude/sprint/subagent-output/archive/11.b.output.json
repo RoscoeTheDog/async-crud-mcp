@@ -1,0 +1,44 @@
+{
+  "story_id": "11",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-12T22:30:00Z",
+  "implementation_output": {
+    "files_modified": [
+      "src/async_crud_mcp/tools/async_list.py",
+      "src/async_crud_mcp/tools/async_status.py",
+      "src/async_crud_mcp/tools/__init__.py",
+      "tests/test_tools/test_async_list.py",
+      "tests/test_tools/test_async_status.py"
+    ],
+    "changes_summary": "Implemented async_list and async_status MCP tools with comprehensive test coverage. async_list provides directory listing with glob filtering, recursive traversal, and optional hash attachment. async_status provides global server status and per-file lock/hash status. Both tools follow established patterns with PathValidator, LockManager, and HashRegistry integration. All 25 tests pass.",
+    "lines_changed": 1060
+  },
+  "micro_verification": {
+    "elements_checked": 2,
+    "passed": 2,
+    "failed": 0,
+    "results": [
+      {
+        "location": "src/async_crud_mcp/tools/async_list.py:1-194",
+        "risk_type": "integration_correctness",
+        "outcome": "passed",
+        "details": "All 13 test cases pass covering basic listing, glob filtering, recursive traversal, hash attachment, and error conditions"
+      },
+      {
+        "location": "src/async_crud_mcp/tools/async_status.py:1-139",
+        "risk_type": "integration_correctness",
+        "outcome": "passed",
+        "details": "All 12 test cases pass covering global status, per-file status, lock states, hash tracking, and error conditions"
+      }
+    ],
+    "context_for_testing": {
+      "failures": []
+    }
+  },
+  "blast_radius": {
+    "analyzed": false,
+    "is_remediation": false,
+    "impacts": []
+  }
+}
