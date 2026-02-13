@@ -126,7 +126,10 @@ The template provides:
 |    Read("file.py")       async_read(path="file.py")               |
 |    Write("file.py")      async_write(path="file.py", content=...) |
 |    Edit("file.py")       async_update(path="file.py", ...)        |
+|    Glob("*.py")          async_list(path="/dir", pattern="*.py")  |
 |                          async_delete(path="file.py")              |
+|                          async_rename(old_path=..., new_path=...)  |
+|                          async_append(path=..., content=...)       |
 +-----------------------------+-------------------------------------+
                               | MCP (SSE / Streamable HTTP)
                               v
@@ -134,28 +137,31 @@ The template provides:
 |                    async-crud-mcp Server                           |
 |                   (FastMCP, port 8720)                             |
 |                                                                   |
-|  +-------------------+    +-------------------+                   |
-|  |   MCP Tool Layer  |    |   Status Tools    |                   |
-|  | async_read()      |    | async_status()    |                   |
-|  | async_write()     |    | async_batch_read()|                   |
-|  | async_update()    |    | async_batch_write()|                  |
-|  | async_delete()    |    +-------------------+                   |
-|  +--------+----------+                                            |
+|  +---------------------+    +----------------------+              |
+|  |   CRUD Tools        |    |   Batch / Utility    |              |
+|  | async_read()        |    | async_batch_read()   |              |
+|  | async_write()       |    | async_batch_write()  |              |
+|  | async_update()      |    | async_batch_update() |              |
+|  | async_delete()      |    | async_list()         |              |
+|  | async_rename()      |    | async_append()       |              |
+|  |                     |    | async_status()       |              |
+|  +--------+------------+    +----------+-----------+              |
+|           |                            |                          |
+|  +--------v----------------------------v----+                     |
+|  |  Lock Manager       |  Per-file FIFO queue                    |
+|  |  - Read locks       |  Content hash tracking                  |
+|  |  - Write locks      |  TTL-based expiry                       |
+|  |  - Queue + FIFO     |  Deadlock prevention                    |
+|  +--------+------------+-------------------+                      |
 |           |                                                       |
-|  +--------v----------+                                            |
-|  |  Lock Manager      |  Per-file FIFO queue                     |
-|  |  - Read locks      |  Content hash tracking                   |
-|  |  - Write locks     |  TTL-based expiry                        |
-|  |  - Queue + FIFO    |  Deadlock prevention                     |
-|  +--------+-----------+                                           |
-|           |                                                       |
-|  +--------v----------+                                            |
-|  |  File I/O Layer   |  Atomic writes                            |
-|  |  - Read with hash |  Encoding detection                       |
-|  |  - Write + fsync  |  Path validation                          |
-|  |  - Diff engine    |  Access control                           |
-|  +-------------------+                                            |
-|                                                                   |
+|  +--------v----------+    +-------------------+                   |
+|  |  File I/O Layer   |    |  File Watcher     |                   |
+|  |  - Read with hash |    |  - watchdog       |                   |
+|  |  - Write + fsync  |    |  - Hash registry  |                   |
+|  |  - Diff engine    |    |    auto-update    |                   |
+|  |  - Path validator |    |  - External edit  |                   |
+|  +-------------------+    |    detection      |                   |
+|                           +-------------------+                   |
 |  +-------------------+                                            |
 |  | Persistence Layer |  Optional: file hashes + pending queue     |
 |  | (optional)        |  TTL-based stale entry purge on restart    |
@@ -202,14 +208,18 @@ async-crud-mcp/
 |       |   +-- async_write.py          # async_write() MCP tool
 |       |   +-- async_update.py         # async_update() MCP tool
 |       |   +-- async_delete.py         # async_delete() MCP tool
+|       |   +-- async_rename.py         # async_rename() MCP tool
+|       |   +-- async_append.py         # async_append() MCP tool
+|       |   +-- async_list.py           # async_list() MCP tool
 |       |   +-- async_status.py         # async_status() MCP tool
-|       |   +-- async_batch.py          # async_batch_read/write() MCP tools
+|       |   +-- async_batch.py          # async_batch_read/write/update() MCP tools
 |       +-- core/
 |       |   +-- __init__.py
 |       |   +-- lock_manager.py         # File lock manager + FIFO queue
 |       |   +-- file_io.py              # Atomic file operations + hashing
 |       |   +-- diff_engine.py          # Diff computation (JSON + unified)
 |       |   +-- path_validator.py       # Access control + base directory enforcement
+|       |   +-- file_watcher.py         # OS filesystem watcher (watchdog)
 |       |   +-- persistence.py          # Optional state persistence
 |       +-- models/
 |       |   +-- __init__.py
@@ -243,15 +253,20 @@ async-crud-mcp/
     +-- test_lock_manager.py
     +-- test_file_io.py
     +-- test_diff_engine.py
+    +-- test_file_watcher.py
     +-- test_tools/
     |   +-- test_async_read.py
     |   +-- test_async_write.py
     |   +-- test_async_update.py
     |   +-- test_async_delete.py
+    |   +-- test_async_rename.py
+    |   +-- test_async_append.py
+    |   +-- test_async_list.py
     |   +-- test_async_batch.py
     +-- test_integration/
         +-- test_concurrent_agents.py
         +-- test_contention.py
+        +-- test_external_modification.py
         +-- test_persistence.py
 ```
 
@@ -445,9 +460,25 @@ async-crud-mcp/
       "regions_changed": 3
     }
   },
+  "patches_applicable": false,
+  "conflicts": [
+    {"patch_index": 0, "reason": "old_string not found in current version"},
+    {"patch_index": 2, "reason": "old_string found but surrounding context changed"}
+  ],
+  "non_conflicting_patches": [1],
   "timestamp": "2026-02-12T17:30:00Z"
 }
 ```
+
+**Patch applicability fields** (present only when request used `patches` mode):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `patches_applicable` | `bool` | `true` if ALL patches can still be applied to the current file version |
+| `conflicts` | `list` | List of patches that cannot be applied, with `patch_index` and `reason` |
+| `non_conflicting_patches` | `list[int]` | Indices of patches that CAN still be applied to the current version |
+
+When `patches_applicable=true`, the agent can re-submit the same patches with the `current_hash` -- the server will apply them successfully. When `false`, the agent must adjust conflicting patches based on the diff.
 
 **Response** (contention -- unified diff format):
 
@@ -665,6 +696,216 @@ async-crud-mcp/
 
 ---
 
+### 3.8 async_list()
+
+**Purpose**: List directory contents with optional glob filtering. Provides coordinated directory awareness so agents don't need to fall back to native `Glob()`/`Read()` tools that bypass the server.
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | `string` | Yes | - | Absolute path to the directory |
+| `pattern` | `string` | No | `"*"` | Glob pattern to filter results (e.g., `"*.py"`, `"test_*"`) |
+| `recursive` | `bool` | No | `false` | If true, recurse into subdirectories |
+| `include_hashes` | `bool` | No | `false` | If true, include content hashes for files the server has tracked |
+
+**Behavior**:
+1. Validate `path` against configured base directories
+2. Check that directory exists (return `DIR_NOT_FOUND` if not)
+3. List directory contents, applying `pattern` filter
+4. If `include_hashes=true`, attach cached hashes from the hash registry for any files the server has previously read/written (hash is `null` for untracked files)
+5. Return response
+
+**Response** (success):
+
+```json
+{
+  "status": "ok",
+  "path": "/abs/path/to/dir",
+  "entries": [
+    {
+      "name": "file.py",
+      "type": "file",
+      "size_bytes": 1024,
+      "modified": "2026-02-12T17:30:00Z",
+      "hash": "sha256:a1b2c3d4..."
+    },
+    {
+      "name": "subdir",
+      "type": "directory",
+      "modified": "2026-02-12T17:00:00Z"
+    }
+  ],
+  "total_entries": 2,
+  "pattern": "*",
+  "recursive": false,
+  "timestamp": "2026-02-12T17:30:00Z"
+}
+```
+
+**Error codes**: `DIR_NOT_FOUND`, `ACCESS_DENIED`, `PATH_OUTSIDE_BASE`
+
+**Note**: This tool does NOT acquire locks. It provides a snapshot of directory state. Files may be created or deleted between the listing and subsequent operations.
+
+**Known limitation**: Batch reads are NOT a consistent snapshot. Each file is read independently with its own read lock. By the time the response reaches the agent, earlier file hashes may be stale if another agent modified those files during the batch. Agents should treat batch read hashes as "best effort" starting points and expect contention on subsequent updates.
+
+---
+
+### 3.9 async_rename()
+
+**Purpose**: Atomically rename or move a file with lock coordination on both source and destination paths.
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `old_path` | `string` | Yes | - | Absolute path to the existing file |
+| `new_path` | `string` | Yes | - | Absolute path for the new location |
+| `expected_hash` | `string` | No | `null` | If provided, rename only if source file hash matches |
+| `overwrite` | `bool` | No | `false` | If true, overwrite destination if it exists |
+| `create_dirs` | `bool` | No | `true` | Create parent directories for `new_path` if they don't exist |
+| `timeout` | `float` | No | `30.0` | Seconds to wait for lock acquisition |
+| `diff_format` | `string` | No | `"json"` | Format for contention diff if `expected_hash` mismatches |
+
+**Behavior**:
+1. Validate both `old_path` and `new_path` against configured base directories
+2. Check that `old_path` exists (return `FILE_NOT_FOUND` if not)
+3. If `overwrite=false`, check that `new_path` does NOT exist (return `FILE_EXISTS` if it does)
+4. Acquire exclusive write locks on BOTH paths with timeout. Lock ordering: alphabetical by path to prevent deadlocks between concurrent renames.
+5. If `expected_hash` provided: compute current hash of `old_path`. On mismatch, return contention response (same format as `async_update()`). Release locks.
+6. Create parent directories for `new_path` if `create_dirs=true`
+7. Rename file (OS-level rename, atomic on same filesystem)
+8. Update hash registry: remove `old_path`, add `new_path`
+9. Release both locks
+10. Return response
+
+**Response** (success):
+
+```json
+{
+  "status": "ok",
+  "old_path": "/abs/path/to/old.py",
+  "new_path": "/abs/path/to/new.py",
+  "hash": "sha256:a1b2c3d4...",
+  "timestamp": "2026-02-12T17:30:00Z"
+}
+```
+
+**Error codes**: `FILE_NOT_FOUND`, `FILE_EXISTS`, `ACCESS_DENIED`, `PATH_OUTSIDE_BASE`, `LOCK_TIMEOUT`, `RENAME_ERROR`
+
+**Cross-filesystem note**: If `old_path` and `new_path` are on different filesystems, the rename falls back to copy + delete (not atomic). The response includes `"cross_filesystem": true` in this case.
+
+---
+
+### 3.10 async_batch_update()
+
+**Purpose**: Update multiple existing files in a single MCP call with per-file contention resolution.
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `files` | `list[BatchUpdateItem]` | Yes | - | List of files to update |
+| `timeout` | `float` | No | `30.0` | Per-file timeout for lock acquisition |
+| `diff_format` | `string` | No | `"json"` | Format for contention diffs |
+
+**BatchUpdateItem**:
+
+```json
+{
+  "path": "/abs/path/to/file.py",
+  "expected_hash": "sha256:...",
+  "content": "full replacement content",
+  "patches": [{"old_string": "...", "new_string": "..."}],
+  "encoding": "utf-8"
+}
+```
+
+Note: `content` and `patches` are mutually exclusive per file, same as `async_update()`.
+
+**Response**:
+
+```json
+{
+  "status": "ok",
+  "results": [
+    {
+      "status": "ok",
+      "path": "/abs/path/to/file1.py",
+      "previous_hash": "sha256:old...",
+      "hash": "sha256:new...",
+      "bytes_written": 2048,
+      "timestamp": "2026-02-12T17:30:00Z"
+    },
+    {
+      "status": "contention",
+      "path": "/abs/path/to/file2.py",
+      "expected_hash": "sha256:expected...",
+      "current_hash": "sha256:actual...",
+      "message": "File was modified by another operation.",
+      "diff": { "format": "json", "changes": [], "summary": {} },
+      "patches_applicable": false,
+      "conflicts": [{"patch_index": 0, "reason": "old_string not found in current version"}]
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "succeeded": 1,
+    "contention": 1,
+    "failed": 0
+  }
+}
+```
+
+**Atomicity**: NOT transactional. Each file is updated independently. If file 2 has contention, file 1 may have already been written. The response reports per-file status so the agent can retry only the failed files.
+
+---
+
+### 3.11 async_append()
+
+**Purpose**: Append content to a file without reading the full file first. Efficient for log files, data collection, and incremental output.
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | `string` | Yes | - | Absolute path to the file |
+| `content` | `string` | Yes | - | Content to append |
+| `encoding` | `string` | No | `"utf-8"` | File encoding |
+| `create_if_missing` | `bool` | No | `false` | Create the file if it does not exist |
+| `create_dirs` | `bool` | No | `true` | Create parent directories if `create_if_missing=true` |
+| `separator` | `string` | No | `""` | String to insert before the appended content (e.g., `"\n"`) |
+| `timeout` | `float` | No | `30.0` | Seconds to wait for lock acquisition |
+
+**Behavior**:
+1. Validate `path` against configured base directories
+2. If file does not exist and `create_if_missing=false`, return `FILE_NOT_FOUND`
+3. If file does not exist and `create_if_missing=true`, create file (with parent dirs if needed)
+4. Acquire exclusive write lock with timeout (FIFO)
+5. Append `separator` + `content` to end of file
+6. Compute and update content hash for the full file
+7. Release write lock
+8. Return response
+
+**Response** (success):
+
+```json
+{
+  "status": "ok",
+  "path": "/abs/path/to/file.log",
+  "hash": "sha256:new...",
+  "bytes_appended": 256,
+  "total_size_bytes": 4096,
+  "timestamp": "2026-02-12T17:30:00Z"
+}
+```
+
+**Error codes**: `FILE_NOT_FOUND`, `ACCESS_DENIED`, `PATH_OUTSIDE_BASE`, `LOCK_TIMEOUT`, `WRITE_ERROR`, `FILE_TOO_LARGE`
+
+**Note**: No `expected_hash` parameter. Appends are inherently additive -- they don't conflict with other appends. If the agent needs contention detection on appends, use `async_update()` instead.
+
+---
+
 ## 4. Core Components
 
 ### 4.1 Lock Manager (`core/lock_manager.py`)
@@ -679,6 +920,9 @@ The lock manager provides per-file read/write locking with FIFO queue semantics.
 | `async_write` | Exclusive (write) | Blocks new reads | No |
 | `async_update` | Exclusive (write) | Blocks new reads | No |
 | `async_delete` | Exclusive (write) | Blocks new reads | No |
+| `async_rename` | Exclusive (write) x2 | Blocks on both paths | No (alphabetical lock order) |
+| `async_append` | Exclusive (write) | Blocks new reads | No |
+| `async_list` | None | N/A | N/A |
 
 **FIFO Queue**:
 - Each file path has an independent queue
@@ -755,6 +999,60 @@ Computes the difference between two file versions for contention responses.
 
 **Write Strategy**: Debounced writes (at most once per second) to avoid I/O overhead from frequent state changes.
 
+### 4.6 File Watcher (`core/file_watcher.py`)
+
+Monitors base directories for external file modifications using OS-level filesystem events. This ensures the hash registry stays current when files are edited outside the MCP server (e.g., human editing in VS Code).
+
+**Platform Implementation**:
+
+| Platform | API | Library |
+|----------|-----|---------|
+| Windows | `ReadDirectoryChangesW` | `watchdog` (or direct ctypes) |
+| macOS | `FSEvents` | `watchdog` |
+| Linux | `inotify` | `watchdog` |
+
+**Behavior**:
+1. On server startup, register watchers for all configured `base_directories`
+2. On file change event (create, modify, delete):
+   - If the file is in the hash registry, re-read and update its hash
+   - If the file was deleted, remove it from the hash registry
+   - If the file is new (not in registry), ignore (it will be registered on first access)
+3. Events are debounced (100ms) to handle editors that save via temp-file-then-rename
+
+**Integration with contention**: When a human edits `file.py` in VS Code, the watcher updates the hash registry immediately. The next `async_update()` from an agent sees a hash mismatch and receives a standard contention response with diff. The agent does not need to know whether the change came from another agent or an external editor -- the resolution workflow is the same.
+
+**Configuration**:
+
+```json
+{
+  "watcher": {
+    "enabled": true,
+    "_enabled_help": "Enable OS filesystem watcher for external modification detection",
+    "debounce_ms": 100,
+    "_debounce_ms_help": "Debounce interval for filesystem events (editors save via rename)"
+  }
+}
+```
+
+**Dependency**: `watchdog>=4.0` (cross-platform filesystem monitoring)
+
+### 4.7 Connection Lifecycle
+
+MCP tool calls are blocking from the client's perspective -- the agent sends a request and waits for a response. The server-side lock manager holds the request in the FIFO queue until the lock is acquired or the timeout expires.
+
+**Timeout and disconnection**:
+- The `timeout` parameter on write operations defines how long the server will hold a request in the queue
+- If the client disconnects before the server responds (e.g., agent process killed, network timeout), the server detects the closed connection and removes the pending request from the FIFO queue
+- This prevents orphaned queue entries from blocking subsequent requests
+- The server logs disconnection events for debugging: `"Client disconnected while waiting for lock on {path}"`
+
+**Notification support** (future): The MCP specification supports server-to-client notifications. While Claude Code CLI does not currently consume MCP notifications, the server architecture is designed to support them when client support is available. Potential notification events:
+- `file_changed`: A tracked file was modified (by another agent or externally)
+- `lock_released`: A file the agent was waiting on is now available
+- `queue_position`: Agent's position in the FIFO queue changed
+
+These notifications are **not implemented in v0.1.0** but the event infrastructure (file watcher, lock state changes) produces the signals needed to emit them.
+
 ---
 
 ## 5. Configuration
@@ -815,6 +1113,14 @@ Following the daemon-service template's `CONFIG.template.md` pattern with pydant
 
     "ttl_multiplier": 2.0,
     "_ttl_multiplier_help": "TTL for persisted entries = request timeout * this multiplier"
+  },
+
+  "watcher": {
+    "enabled": true,
+    "_enabled_help": "Enable OS filesystem watcher for external modification detection (inotify/ReadDirectoryChangesW/FSEvents)",
+
+    "debounce_ms": 100,
+    "_debounce_ms_help": "Debounce interval in ms for filesystem events (editors save via temp-file-then-rename)"
   }
 }
 ```
@@ -843,6 +1149,7 @@ dependencies = [
     "loguru>=0.7",
     "tenacity>=8.0",
     "httpx>=0.24",
+    "watchdog>=4.0",
     "python-dotenv>=1.0",
     "pywin32>=306; sys_platform == 'win32'",
 ]
@@ -876,6 +1183,8 @@ dev = [
 | `FILE_TOO_LARGE` | 413 | File exceeds max_file_size_bytes |
 | `WRITE_ERROR` | 500 | OS-level write failure |
 | `DELETE_ERROR` | 500 | OS-level delete failure |
+| `RENAME_ERROR` | 500 | OS-level rename failure |
+| `DIR_NOT_FOUND` | 404 | Directory does not exist (async_list) |
 | `SERVER_ERROR` | 500 | Unexpected internal error |
 
 ### 7.2 Error Response Schema
@@ -914,9 +1223,10 @@ The server uses Python's `asyncio` event loop with `asyncio.Lock` and `asyncio.C
 
 ### 8.3 Deadlock Prevention
 
-- Single-file locks only: no multi-file atomic operations (batch operations lock files sequentially)
+- Single-file locks for CRUD operations: batch operations lock files sequentially, one at a time
+- **Exception**: `async_rename()` acquires locks on two files simultaneously. Deadlock is prevented by always acquiring locks in alphabetical path order (consistent lock ordering).
 - TTL on all exclusive locks: locks expire after `timeout` seconds
-- No nested lock acquisition: a single request never holds locks on multiple files simultaneously
+- No nested lock acquisition beyond the rename exception above
 - Persisted locks have TTL expiry on server restart
 
 ---
@@ -949,10 +1259,11 @@ The server uses Python's `asyncio` event loop with `asyncio.Lock` and `asyncio.C
 
 | Component | Test Focus |
 |-----------|------------|
-| `lock_manager` | Lock semantics, FIFO ordering, timeout, TTL expiry |
-| `file_io` | Atomic writes, hash computation, encoding |
-| `diff_engine` | JSON diff, unified diff, edge cases (empty file, single line) |
-| `path_validator` | Base directory enforcement, symlink escape, traversal |
+| `lock_manager` | Lock semantics, FIFO ordering, timeout, TTL expiry, dual-lock ordering (rename) |
+| `file_io` | Atomic writes, hash computation, encoding, append operations |
+| `diff_engine` | JSON diff, unified diff, edge cases (empty file, single line), patch applicability |
+| `path_validator` | Base directory enforcement, symlink escape, traversal, directory listing |
+| `file_watcher` | Event debouncing, hash registry update, create/modify/delete events |
 | `persistence` | Save/load state, TTL purge on restart |
 
 ### 10.2 Integration Tests
@@ -963,9 +1274,15 @@ The server uses Python's `asyncio` event loop with `asyncio.Lock` and `asyncio.C
 | Read-write contention | Read completes, write queues, next read queues behind write |
 | Write-write contention | Two writes on same file: FIFO order, second gets contention diff |
 | Timeout | Write request times out while waiting for lock |
+| Client disconnect | Client disconnects mid-wait; server removes pending request from queue |
 | Diff accuracy | Verify diff correctly reflects changes between versions |
+| Patch applicability | Contention response correctly reports which patches can still apply |
+| Rename atomicity | Concurrent rename + read on same file; dual-lock ordering prevents deadlock |
+| Append concurrency | Multiple concurrent appends produce correct combined output |
+| Directory listing | async_list returns current state including recently created files |
+| External modification | File edited outside server; watcher updates hash; next update gets contention |
 | Persistence round-trip | Server restart with pending queue; TTL purge; hash re-validation |
-| Batch operations | Multiple files in single request, partial failures |
+| Batch operations | Multiple files in single request, partial failures (read/write/update) |
 
 ### 10.3 Stress Tests (future)
 
@@ -1158,7 +1475,7 @@ Use SINGLE `APP_NAME` constant (`async-crud-mcp`, lowercase-hyphenated) for ALL 
 | # | Question | Status |
 |---|----------|--------|
 | 1 | Should `async_update()` support partial file patching (e.g., line-range edits) in addition to `old_string`/`new_string` pairs? | Deferred to v0.2.0 |
-| 2 | Should the server support watching directories for external file changes (inotify/ReadDirectoryChangesW)? | Deferred to v0.2.0 |
+| 2 | Should the server support watching directories for external file changes (inotify/ReadDirectoryChangesW)? | **Resolved**: Yes, via `watchdog` library. See Section 4.6 File Watcher. OS-level filesystem events update hash registry in real-time. External edits trigger standard contention responses. |
 | 3 | Port assignment: is 8720 available in the daemon-service port registry? | **Resolved**: Using 8720 in Custom range (8720+) per port-assignment SSOT |
 | 4 | Should batch operations support mixing read and write in a single call? | Deferred to v0.2.0 |
 
