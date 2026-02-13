@@ -3,7 +3,7 @@
   "version": "5.1.0",
   "sprint_id": "",
   "created_at": "2026-02-13T01:48:42.919280+00:00",
-  "updated_at": "2026-02-13T03:52:43.351467+00:00",
+  "updated_at": "2026-02-13T04:09:31.721650+00:00",
   "stories": {
     "1": {
       "id": "1",
@@ -96,7 +96,7 @@
     },
     "8": {
       "id": "8",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "3",
@@ -108,7 +108,7 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:10.770384+00:00",
-      "updated_at": "2026-02-13T02:02:10.770384+00:00"
+      "updated_at": "2026-02-13T04:09:30.649199+00:00"
     },
     "9": {
       "id": "9",
@@ -180,7 +180,7 @@
     },
     "14": {
       "id": "14",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "6"
@@ -189,11 +189,11 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:33.235731+00:00",
-      "updated_at": "2026-02-13T02:02:33.235731+00:00"
+      "updated_at": "2026-02-13T04:09:31.208909+00:00"
     },
     "15": {
       "id": "15",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "5",
@@ -203,7 +203,7 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:33.919458+00:00",
-      "updated_at": "2026-02-13T02:02:33.919458+00:00"
+      "updated_at": "2026-02-13T04:09:31.721584+00:00"
     },
     "16": {
       "id": "16",

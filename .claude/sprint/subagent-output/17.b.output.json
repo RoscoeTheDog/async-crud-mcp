@@ -1,0 +1,59 @@
+{
+  "story_id": "17",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-12T23:15:00Z",
+  "implementation_output": {
+    "files_modified": [
+      "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
+      "src/async_crud_mcp/daemon/windows/dispatcher.py",
+      "src/async_crud_mcp/daemon/windows/session_detector.py",
+      "src/async_crud_mcp/daemon/windows/__init__.py",
+      "src/async_crud_mcp/daemon/installer.py"
+    ],
+    "changes_summary": "Implemented three Windows-specific daemon modules (bootstrap_service.py, dispatcher.py, session_detector.py) by adapting daemon-service template snippets. bootstrap_service.py provides DaemonService class with Windows Service wrapper and install/uninstall/start/stop functions using direct win32service.CreateService() API. dispatcher.py implements MultiUserDispatcher for per-user MCP server worker process management with session logon/logoff handling, port conflict detection, health monitoring, and config hot-reload. session_detector.py provides Windows WTS API session detection utilities. Updated windows/__init__.py to export public API and installer.py to import from windows.bootstrap_service. All critical bug fixes (BUG-01 through BUG-13) and architectural decisions (ADR-008, ADR-011, ADR-012) from the reference implementation are incorporated.",
+    "lines_changed": 1426
+  },
+  "micro_verification": {
+    "elements_checked": 3,
+    "passed": 3,
+    "failed": 0,
+    "results": [
+      {
+        "location": "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
+        "risk_type": "syntax_check",
+        "outcome": "passed",
+        "details": "Python syntax validation passed"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/windows/dispatcher.py",
+        "risk_type": "resource_leak",
+        "outcome": "passed",
+        "details": "stderr_file opened at line 403 is properly closed in exception handler at lines 442-447"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/windows/session_detector.py",
+        "risk_type": "syntax_check",
+        "outcome": "passed",
+        "details": "Python syntax validation passed"
+      }
+    ],
+    "context_for_testing": {
+      "failures": [],
+      "notes": [
+        "All three modules require pywin32 and Windows platform - tests should be skipped on non-Windows platforms using pytest.mark.skipif(sys.platform != 'win32')",
+        "bootstrap_service.py: ReportServiceStatus(SERVICE_RUNNING) is the first line of SvcDoRun() to prevent SCM error 1053 (BUG-01)",
+        "bootstrap_service.py: Uses WindowsSelectorEventLoopPolicy with manual event loop creation to avoid 'signal only works in main thread' error (BUG-02/10)",
+        "dispatcher.py: Uses CREATE_NEW_PROCESS_GROUP flag for clean worker termination (AC-17.4)",
+        "dispatcher.py: Implements three-layer port conflict detection and orphan process cleanup (ADR-012)",
+        "dispatcher.py: Logging fallback chain: ProgramData -> LocalAppData -> Temp (BUG-05/06)",
+        "session_detector.py: Filters sessions by WTSActive and WTSConnected states"
+      ]
+    }
+  },
+  "blast_radius": {
+    "analyzed": false,
+    "is_remediation": false,
+    "impacts": []
+  }
+}
