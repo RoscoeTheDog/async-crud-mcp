@@ -1,0 +1,12 @@
+{
+  "story_id": "5",
+  "phase": "b",
+  "status": "passed",
+  "files_modified": [
+    "src/async_crud_mcp/core/__init__.py",
+    "src/async_crud_mcp/core/lock_manager.py",
+    "tests/test_lock_manager.py"
+  ],
+  "summary": "Implemented lock manager with FIFO queue for story 5",
+  "session_id": "b9a1a1e4-3f31-4611-82fa-db1d679979e8"
+}

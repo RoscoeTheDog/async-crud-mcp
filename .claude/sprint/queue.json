@@ -3,22 +3,22 @@
   "version": "5.1.0",
   "sprint_id": "",
   "created_at": "2026-02-13T01:48:42.919280+00:00",
-  "updated_at": "2026-02-13T02:02:39.112899+00:00",
+  "updated_at": "2026-02-13T03:37:45.528813+00:00",
   "stories": {
     "1": {
       "id": "1",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [],
       "blocks": [],
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:01:53.872419+00:00",
-      "updated_at": "2026-02-13T02:01:53.872419+00:00"
+      "updated_at": "2026-02-13T03:09:44.348160+00:00"
     },
     "2": {
       "id": "2",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "1"
@@ -27,11 +27,11 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:07.766817+00:00",
-      "updated_at": "2026-02-13T02:02:07.766817+00:00"
+      "updated_at": "2026-02-13T03:23:23.121895+00:00"
     },
     "3": {
       "id": "3",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "1"
@@ -40,11 +40,11 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:08.308597+00:00",
-      "updated_at": "2026-02-13T02:02:08.308597+00:00"
+      "updated_at": "2026-02-13T03:23:23.653748+00:00"
     },
     "4": {
       "id": "4",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "2"
@@ -53,11 +53,11 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:08.853539+00:00",
-      "updated_at": "2026-02-13T02:02:08.853539+00:00"
+      "updated_at": "2026-02-13T03:37:44.526907+00:00"
     },
     "5": {
       "id": "5",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "1"
@@ -66,7 +66,7 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:09.370234+00:00",
-      "updated_at": "2026-02-13T02:02:09.370234+00:00"
+      "updated_at": "2026-02-13T03:23:24.381229+00:00"
     },
     "6": {
       "id": "6",
@@ -83,7 +83,7 @@
     },
     "7": {
       "id": "7",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "1"
@@ -92,7 +92,7 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:10.262958+00:00",
-      "updated_at": "2026-02-13T02:02:10.262958+00:00"
+      "updated_at": "2026-02-13T03:37:45.017144+00:00"
     },
     "8": {
       "id": "8",
@@ -207,7 +207,7 @@
     },
     "16": {
       "id": "16",
-      "status": "queued",
+      "status": "passed",
       "story_type": "feature",
       "depends_on": [
         "2"
@@ -216,7 +216,7 @@
       "deferred_reason": null,
       "file_path": null,
       "created_at": "2026-02-13T02:02:34.777283+00:00",
-      "updated_at": "2026-02-13T02:02:34.777283+00:00"
+      "updated_at": "2026-02-13T03:37:45.528775+00:00"
     },
     "17": {
       "id": "17",
@@ -272,7 +272,7 @@
     },
     "21": {
       "id": "21",
-      "status": "queued",
+      "status": "deferred",
       "story_type": "feature",
       "depends_on": [
         "5",
@@ -281,27 +281,27 @@
         "14"
       ],
       "blocks": [],
-      "deferred_reason": null,
+      "deferred_reason": "user_skip",
       "file_path": null,
       "created_at": "2026-02-13T02:02:37.883293+00:00",
-      "updated_at": "2026-02-13T02:02:37.883293+00:00"
+      "updated_at": "2026-02-13T02:24:10.476891+00:00"
     },
     "22": {
       "id": "22",
-      "status": "queued",
+      "status": "deferred",
       "story_type": "feature",
       "depends_on": [
         "12"
       ],
       "blocks": [],
-      "deferred_reason": null,
+      "deferred_reason": "user_skip",
       "file_path": null,
       "created_at": "2026-02-13T02:02:38.499998+00:00",
-      "updated_at": "2026-02-13T02:02:38.499998+00:00"
+      "updated_at": "2026-02-13T02:24:11.093129+00:00"
     },
     "23": {
       "id": "23",
-      "status": "queued",
+      "status": "deferred",
       "story_type": "feature",
       "depends_on": [
         "13",
@@ -309,10 +309,10 @@
         "15"
       ],
       "blocks": [],
-      "deferred_reason": null,
+      "deferred_reason": "user_skip",
       "file_path": null,
       "created_at": "2026-02-13T02:02:39.112823+00:00",
-      "updated_at": "2026-02-13T02:02:39.112823+00:00"
+      "updated_at": "2026-02-13T02:24:11.755890+00:00"
     }
   },
   "execution_order": [
