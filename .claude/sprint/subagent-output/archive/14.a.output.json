@@ -1,0 +1,48 @@
+{
+  "story_id": "14",
+  "validation_id": "-14",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:42:00Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-14.1, AC-14.2, AC-14.3, AC-14.4, AC-14.5, AC-14.6"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "test_output_missing",
+  "error_signatures": [
+    "TestMissing:tests/test_file_watcher.py::*::*:P0_acceptance_criteria_without_tests",
+    "CoverageFailure:coverage.json::scoped::0.0:threshold_80"
+  ],
+  "convergence": null,
+  "notes": "Story 14 is BLOCKED on missing test output (Check D). This is a blocking condition because test pass rate validation cannot run without test execution results. Additionally, Check C indicates all 6 P0 acceptance criteria lack test coverage. Check J also fails due to 0% code coverage. The story cannot proceed until tests are executed and integrated into the validation pipeline."
+}

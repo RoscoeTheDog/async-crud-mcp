@@ -1,0 +1,66 @@
+{
+  "story_id": 4,
+  "validation_id": -4,
+  "phase": "a",
+  "status": "passed",
+  "timestamp": "2026-02-12T00:00:00Z",
+  "validation_type": "structural",
+  "acceptance_criteria": {
+    "AC-4.1": {
+      "description": "Base directory whitelist enforcement",
+      "status": "passed",
+      "evidence": "PathValidator._resolved_bases list enforces whitelist, validation logic checks against multiple base directories, tests confirm rejection of paths outside whitelist"
+    },
+    "AC-4.2": {
+      "description": "Absolute path resolution",
+      "status": "passed",
+      "evidence": "os.path.abspath() converts relative paths to absolute (line 81), tests verify relative paths are resolved correctly"
+    },
+    "AC-4.3": {
+      "description": "Symlink resolution BEFORE base directory check",
+      "status": "passed",
+      "evidence": "os.path.realpath() called at line 85 (before validation at line 104), resolves symlinks to real locations before checking base directory whitelist"
+    },
+    "AC-4.4": {
+      "description": "Reject .. traversal after resolution",
+      "status": "passed",
+      "evidence": "os.path.normpath() normalizes path, defensive check at lines 95-98 verifies no '..' remain in path parts, tests confirm traversal rejection"
+    },
+    "AC-4.5": {
+      "description": "Cross-platform path normalization",
+      "status": "passed",
+      "evidence": "os.path.normcase() for case handling (line 91), os.sep for separator handling (line 108), tests validate Windows/Unix behaviors including UNC paths"
+    }
+  },
+  "test_results": {
+    "total_tests": 23,
+    "passed": 20,
+    "failed": 0,
+    "skipped": 3,
+    "skip_reason": "Symlink tests require admin privileges on Windows",
+    "test_file": "tests/test_path_validator.py"
+  },
+  "code_review": {
+    "implementation_file": "src/async_crud_mcp/core/path_validator.py",
+    "lines_of_code": 134,
+    "class_count": 2,
+    "classes": [
+      "PathValidationError (exception)",
+      "PathValidator (main implementation)"
+    ],
+    "key_methods": [
+      "__init__(base_directories)",
+      "validate(path)",
+      "base_directories (property)",
+      "resolved_base_directories (property)"
+    ]
+  },
+  "security_analysis": {
+    "symlink_handling": "Correct - uses realpath() before validation to prevent symlink-based escape",
+    "traversal_defense": "Correct - defense in depth with normpath() and explicit '..' check",
+    "prefix_matching": "Correct - uses separator-aware prefix check to prevent /foo/bar matching /foo/barbaz",
+    "windows_support": "Correct - handles case-insensitive matching and UNC paths"
+  },
+  "summary": "Story 4 (Path validator with base directory enforcement) is COMPLETE and PASSED structural validation. All 5 acceptance criteria are satisfied. Implementation correctly handles path resolution, symlink security, traversal rejection, and cross-platform compatibility. 20/23 tests pass (3 skipped due to platform constraints). No structural issues found.",
+  "recommendation": "APPROVED for implementation. Ready to proceed to phase-b (integration testing) if applicable."
+}

@@ -1,0 +1,62 @@
+{
+  "story_id": "18",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-12T22:30:00Z",
+  "implementation_output": {
+    "files_modified": [
+      "src/async_crud_mcp/daemon/macos/launchd.plist",
+      "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+      "src/async_crud_mcp/daemon/linux/systemd.service",
+      "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+      "src/async_crud_mcp/daemon/installer.py"
+    ],
+    "changes_summary": "Implemented macOS LaunchAgent and Linux systemd service support. Created launchd.plist template and launchd_installer.sh for macOS. Created systemd.service template and systemd_installer.sh for Linux. Updated LaunchdInstaller and SystemdInstaller classes in installer.py to delegate to shell scripts using subprocess calls, matching the WindowsServiceInstaller pattern.",
+    "lines_changed": 772
+  },
+  "micro_verification": {
+    "elements_checked": 4,
+    "passed": 4,
+    "failed": 0,
+    "results": [
+      {
+        "location": "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+        "risk_type": "shell_syntax",
+        "outcome": "passed",
+        "details": "Bash syntax validation passed"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+        "risk_type": "shell_syntax",
+        "outcome": "passed",
+        "details": "Bash syntax validation passed"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/macos/launchd.plist",
+        "risk_type": "xml_structure",
+        "outcome": "passed",
+        "details": "Valid XML structure verified"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/installer.py",
+        "risk_type": "python_compilation",
+        "outcome": "passed",
+        "details": "Python compilation successful, factory pattern returns correct installer classes for each platform"
+      }
+    ],
+    "context_for_testing": {
+      "failures": [],
+      "notes": [
+        "Integration testing deferred to actual macOS/Linux environments as development is on Windows",
+        "Shell scripts validated for syntax but not executed",
+        "Factory pattern and script path construction verified with mocked platform detection",
+        "All implementation follows the WindowsServiceInstaller pattern of using subprocess calls"
+      ]
+    }
+  },
+  "blast_radius": {
+    "analyzed": false,
+    "is_remediation": false,
+    "impacts": []
+  }
+}

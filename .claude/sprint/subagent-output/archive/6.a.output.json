@@ -1,0 +1,46 @@
+{
+  "story_id": "6",
+  "validation_id": "-6",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:27:45Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report"
+    }
+  },
+  "blocked_checks": [
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output_and_coverage_report",
+  "error_signatures": [
+    "MissingTestOutput:tests:story_6:undefined:No test output available",
+    "MissingCoverageReport:coverage:story_6:undefined:No coverage report found"
+  ],
+  "convergence": null
+}

@@ -1,0 +1,55 @@
+{
+  "story_id": "18",
+  "validation_id": "-18",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:46:11Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-18.1, AC-18.2, AC-18.3, AC-18.4"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)",
+      "coverage": 0.0,
+      "threshold": 0.8,
+      "touched_files": [
+        "src/async_crud_mcp/daemon/installer.py",
+        "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+        "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+        "src/async_crud_mcp/daemon/macos/launchd.plist",
+        "src/async_crud_mcp/daemon/linux/systemd.service"
+      ]
+    }
+  },
+  "blocked_checks": [
+    "C",
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output_and_coverage_and_missing_tests",
+  "error_signatures": [],
+  "convergence": null
+}

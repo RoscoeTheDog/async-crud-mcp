@@ -1,0 +1,79 @@
+{
+  "story_id": "9",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T05:45:00Z",
+  "semantic_checks": {
+    "code_exists": true,
+    "alignment_score": 0.98,
+    "recency_ok": true,
+    "test_coverage_ok": true
+  },
+  "design_validation": {
+    "pattern_correctness": true,
+    "fix_quality": "good",
+    "regression_risk": "low"
+  },
+  "diff_verification": {
+    "files_modified": [
+      "src/async_crud_mcp/tools/async_update.py",
+      "tests/test_tools/test_async_update.py",
+      "src/async_crud_mcp/tools/__init__.py"
+    ],
+    "expected_files_touched": true,
+    "change_magnitude": "sufficient"
+  },
+  "ac_results": {
+    "AC-9.1": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Hash comparison implemented at lines 99-101 with proper contention detection. Tests verify file remains unchanged on hash mismatch."
+    },
+    "AC-9.2": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Full content replacement mode implemented at lines 178-188. Comprehensive test suite with 5 test methods covering success cases, hash tracking, disk writes, registry updates, and byte counting."
+    },
+    "AC-9.3": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Patch mode with old_string/new_string pairs implemented at lines 189-222. Tests verify single patch, multiple patches, and first-occurrence-only replacement behavior."
+    },
+    "AC-9.4": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Contention response with diff support implemented at lines 111-162. Both JSON and unified diff formats supported via diff_format parameter. Tests verify both formats with proper structure."
+    },
+    "AC-9.5": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 0.95,
+      "recent": true,
+      "has_tests": true,
+      "notes": "All three fields (patches_applicable, conflicts, non_conflicting_patches) implemented at lines 120-153. Tests verify true/false cases for patches_applicable and correct indices for non-conflicting patches."
+    },
+    "AC-9.6": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 0.95,
+      "recent": true,
+      "has_tests": true,
+      "notes": "CONTENT_OR_PATCHES_REQUIRED error implemented both at model validation (requests.py:47-56) and defense in depth (async_update.py:47-53). Test verifies Pydantic validation catches invalid requests."
+    }
+  },
+  "failed_acs": [],
+  "issues": [],
+  "remediation_needed": false
+}

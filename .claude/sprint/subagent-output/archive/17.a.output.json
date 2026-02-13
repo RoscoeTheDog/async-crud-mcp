@@ -1,0 +1,78 @@
+{
+  "validation_id": "-17",
+  "story_id": "17",
+  "phase": "a",
+  "timestamp": "2026-02-13T05:46:49.194927+00:00",
+  "structural_checks": {
+    "A": {
+      "check_id": "A",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": []
+    },
+    "B": {
+      "check_id": "B",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": []
+    },
+    "C": {
+      "check_id": "C",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-17.1, AC-17.2, AC-17.3, AC-17.4, AC-17.5"
+      ],
+      "warnings": []
+    },
+    "D": {
+      "check_id": "D",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "errors": [
+        "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+      ],
+      "warnings": [],
+      "missing_data": "test_output"
+    },
+    "J": {
+      "check_id": "J",
+      "passed": true,
+      "blocking": true,
+      "blocked": false,
+      "errors": [],
+      "warnings": [
+        "No touched files info available, using overall coverage"
+      ]
+    }
+  },
+  "convergence_analysis": {
+    "status": "passed",
+    "action": "done",
+    "reason": null,
+    "run_count": 0,
+    "failure_trend": "none"
+  },
+  "phase_outcome": {
+    "status": "blocked",
+    "reason": "Check D blocked due to missing test output data",
+    "blocking_checks": [
+      "D"
+    ],
+    "proceed_to_phase_b": false
+  },
+  "summary": {
+    "checks_passed": 3,
+    "checks_failed": 1,
+    "checks_blocked": 1,
+    "blocking_check_failures": 1,
+    "blocking_check_blocked": 1,
+    "phase_a_pass": false
+  }
+}

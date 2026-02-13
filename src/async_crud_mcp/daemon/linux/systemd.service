@@ -1,0 +1,37 @@
+[Unit]
+Description=async-crud-mcp MCP Daemon
+Documentation=https://github.com/yourusername/async-crud-mcp
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=BOOTSTRAP_PATH_PLACEHOLDER
+Restart=always
+RestartSec=30
+
+# Working directory
+WorkingDirectory=WORKING_DIR_PLACEHOLDER
+
+# File descriptor limit
+LimitNOFILE=1024
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+# Read-write paths for application data
+ReadWritePaths=DATA_DIR_PLACEHOLDER
+ReadWritePaths=CONFIG_DIR_PLACEHOLDER
+ReadWritePaths=STATE_DIR_PLACEHOLDER
+ReadWritePaths=CACHE_DIR_PLACEHOLDER
+ReadWritePaths=LOGS_DIR_PLACEHOLDER
+
+# Private temp directory
+PrivateTmp=true
+
+# Environment
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

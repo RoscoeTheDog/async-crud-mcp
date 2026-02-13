@@ -1,0 +1,47 @@
+{
+  "story_id": "8",
+  "validation_id": "-8",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:30:45Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-8.1, AC-8.2, AC-8.3, AC-8.4, AC-8.5, AC-8.6"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report"
+    }
+  },
+  "blocked_checks": [
+    "C",
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_coverage_and_test_output_and_coverage_report",
+  "error_signatures": [
+    "MissingTestCoverage:story-8:core-mcp-tools:async_read_and_async_write:P0 ACs without test mapping"
+  ],
+  "convergence": null
+}

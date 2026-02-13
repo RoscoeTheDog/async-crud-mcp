@@ -1,0 +1,45 @@
+{
+  "story_id": "19",
+  "validation_id": "-19",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:49:05Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": false,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-19.1, AC-19.2, AC-19.3, AC-19.4, AC-19.5"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": ["D"],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "ValidationError:tests:story_19:test_coverage:coverage_missing",
+    "ValidationError:tests:story_19:test_traceability:AC_without_tests"
+  ],
+  "convergence": null
+}

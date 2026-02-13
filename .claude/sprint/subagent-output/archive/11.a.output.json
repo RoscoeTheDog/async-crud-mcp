@@ -1,0 +1,46 @@
+{
+  "story_id": "11",
+  "validation_id": "-11",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:35:13.081385+00:00",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "MissingTestCoverage:tests/test_tools/test_async_list.py:test_async_list:P0_AC_missing",
+    "MissingTestCoverage:tests/test_tools/test_async_status.py:test_async_status:P0_AC_missing",
+    "CoverageBelowThreshold:src/async_crud_mcp/tools/async_list.py:coverage_0%_expected_80%",
+    "CoverageBelowThreshold:src/async_crud_mcp/tools/async_status.py:coverage_0%_expected_80%"
+  ],
+  "convergence": null
+}

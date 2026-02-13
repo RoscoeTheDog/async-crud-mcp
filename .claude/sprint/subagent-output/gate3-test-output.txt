@@ -1,0 +1,305 @@
+C:\Users\Admin\AppData\Roaming\Python\Python313\site-packages\web3\__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+============================= test session starts =============================
+platform win32 -- Python 3.13.7, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\Admin\Documents\GitHub\async-crud-mcp
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.12.0, langsmith-0.4.37, asyncio-1.3.0, cov-7.0.0, httpx-0.36.0, json-report-1.5.0, metadata-3.1.1, timeout-2.4.0, web3-6.11.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 304 items
+
+tests\test_cli\test_bootstrap_cmd.py ......                              [  1%]
+tests\test_cli\test_config_cmd.py ......                                 [  3%]
+tests\test_cli\test_daemon_cmd.py ....                                   [  5%]
+tests\test_cli\test_install_cmd.py ....                                  [  6%]
+tests\test_cli\test_setup_cmd.py FFF                                     [  7%]
+tests\test_config.py ..................                                  [ 13%]
+tests\test_diff_engine.py ..................................             [ 24%]
+tests\test_file_io.py ..................s.....                           [ 32%]
+tests\test_file_watcher.py ..................                            [ 38%]
+tests\test_lock_manager.py .................                             [ 44%]
+tests\test_path_validator.py ...........sss.........                     [ 51%]
+tests\test_persistence.py ...........                                    [ 55%]
+tests\test_server.py ...FFFF.......                                      [ 59%]
+tests\test_tools\test_async_append.py F.............                     [ 64%]
+tests\test_tools\test_async_batch_read.py ......                         [ 66%]
+tests\test_tools\test_async_batch_update.py .......                      [ 68%]
+tests\test_tools\test_async_batch_write.py .......                       [ 71%]
+tests\test_tools\test_async_delete.py ........                           [ 73%]
+tests\test_tools\test_async_list.py .............                        [ 77%]
+tests\test_tools\test_async_read.py ............                         [ 81%]
+tests\test_tools\test_async_rename.py ...........F                       [ 85%]
+tests\test_tools\test_async_status.py ............                       [ 89%]
+tests\test_tools\test_async_update.py .....................              [ 96%]
+tests\test_tools\test_async_write.py ..........                          [100%]
+
+================================== FAILURES ===================================
+___________________________ test_wizard_new_config ____________________________
+
+mock_prompt = <MagicMock name='ask' id='2881793861888'>
+mock_confirm = <MagicMock name='ask' id='2881793860544'>
+mock_get_path = <MagicMock name='get_config_file_path' id='2881793857856'>
+mock_find_port = <MagicMock name='find_available_port' id='2881793865584'>
+mock_init_config = <MagicMock name='init_config' id='2881793865920'>
+mock_get_installer = <MagicMock name='get_installer' id='2881793866256'>
+
+    @patch("async_crud_mcp.cli.setup_cmd.get_installer")
+    @patch("async_crud_mcp.cli.setup_cmd.init_config")
+    @patch("async_crud_mcp.cli.setup_cmd.find_available_port")
+    @patch("async_crud_mcp.cli.setup_cmd.get_config_file_path")
+    @patch("async_crud_mcp.cli.setup_cmd.Confirm.ask")
+    @patch("async_crud_mcp.cli.setup_cmd.Prompt.ask")
+    def test_wizard_new_config(
+        mock_prompt,
+        mock_confirm,
+        mock_get_path,
+        mock_find_port,
+        mock_init_config,
+        mock_get_installer,
+    ):
+        """Test wizard with new config."""
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+        mock_get_path.return_value = mock_path
+    
+        mock_find_port.return_value = 8720
+        mock_prompt.side_effect = ["8720", "127.0.0.1", "sse", "INFO"]
+        mock_confirm.return_value = True
+    
+        mock_init_config.return_value = Path("/tmp/config.json")
+    
+        mock_installer = MagicMock()
+        mock_get_installer.return_value = mock_installer
+    
+        result = runner.invoke(app, ["wizard"])
+    
+>       assert result.exit_code == 0
+E       assert 2 == 0
+E        +  where 2 = <Result SystemExit(2)>.exit_code
+
+tests\test_cli\test_setup_cmd.py:43: AssertionError
+__________________ test_wizard_existing_config_no_overwrite ___________________
+
+mock_confirm = <MagicMock name='ask' id='2881794464400'>
+mock_get_path = <MagicMock name='get_config_file_path' id='2881794466416'>
+
+    @patch("async_crud_mcp.cli.setup_cmd.get_config_file_path")
+    @patch("async_crud_mcp.cli.setup_cmd.Confirm.ask")
+    def test_wizard_existing_config_no_overwrite(mock_confirm, mock_get_path):
+        """Test wizard with existing config, no overwrite."""
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_get_path.return_value = mock_path
+    
+        mock_confirm.side_effect = [False, False]
+    
+        result = runner.invoke(app, ["wizard"])
+    
+>       assert result.exit_code == 0
+E       assert 2 == 0
+E        +  where 2 = <Result SystemExit(2)>.exit_code
+
+tests\test_cli\test_setup_cmd.py:62: AssertionError
+___________________________ test_wizard_no_install ____________________________
+
+mock_prompt = <MagicMock name='ask' id='2881794467760'>
+mock_confirm = <MagicMock name='ask' id='2881794468096'>
+mock_get_path = <MagicMock name='get_config_file_path' id='2881794468432'>
+mock_find_port = <MagicMock name='find_available_port' id='2881794468768'>
+mock_init_config = <MagicMock name='init_config' id='2881794469104'>
+
+    @patch("async_crud_mcp.cli.setup_cmd.init_config")
+    @patch("async_crud_mcp.cli.setup_cmd.find_available_port")
+    @patch("async_crud_mcp.cli.setup_cmd.get_config_file_path")
+    @patch("async_crud_mcp.cli.setup_cmd.Confirm.ask")
+    @patch("async_crud_mcp.cli.setup_cmd.Prompt.ask")
+    def test_wizard_no_install(
+        mock_prompt,
+        mock_confirm,
+        mock_get_path,
+        mock_find_port,
+        mock_init_config,
+    ):
+        """Test wizard declining daemon installation."""
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+        mock_get_path.return_value = mock_path
+    
+        mock_find_port.return_value = 8720
+        mock_prompt.side_effect = ["8720", "127.0.0.1", "sse", "INFO"]
+        mock_confirm.return_value = False
+    
+        mock_init_config.return_value = Path("/tmp/config.json")
+    
+        result = runner.invoke(app, ["wizard"])
+    
+>       assert result.exit_code == 0
+E       assert 2 == 0
+E        +  where 2 = <Result SystemExit(2)>.exit_code
+
+tests\test_cli\test_setup_cmd.py:91: AssertionError
+___________________ TestFastMCPServer.test_tools_registered ___________________
+
+self = <tests.test_server.TestFastMCPServer object at 0x0000029EF8087D90>
+
+    def test_tools_registered(self):
+        """Test that all 11 CRUD tools + health tool are registered."""
+        # Get registered tool names from the FastMCP instance
+        # FastMCP stores tools in _tool_manager.tools dict
+>       tool_names = list(mcp._tool_manager.tools.keys())
+                          ^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'ToolManager' object has no attribute 'tools'
+
+tests\test_server.py:54: AttributeError
+______________________ TestFastMCPServer.test_tool_count ______________________
+
+self = <tests.test_server.TestFastMCPServer object at 0x0000029EF80AF5C0>
+
+    def test_tool_count(self):
+        """Test that exactly 12 tools are registered (11 CRUD + 1 health)."""
+>       tool_count = len(mcp._tool_manager.tools)
+                         ^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'ToolManager' object has no attribute 'tools'
+
+tests\test_server.py:76: AttributeError
+________________ TestToolWrappers.test_async_read_tool_wrapper ________________
+
+self = <tests.test_server.TestToolWrappers object at 0x0000029EF8086D50>
+temp_base_dir = WindowsPath('C:/Users/Admin/AppData/Local/Temp/tmp9w13jxct')
+
+    @pytest.mark.asyncio
+    async def test_async_read_tool_wrapper(self, temp_base_dir):
+        """Test async_read_tool wrapper with minimal parameters."""
+        # Create a test file
+        test_file = temp_base_dir / "test.txt"
+        test_file.write_text("test content\n")
+    
+        # Mock the settings to include temp_base_dir
+        with patch("async_crud_mcp.server.settings") as mock_settings:
+            mock_settings.crud.base_directories = [str(temp_base_dir)]
+    
+            # Re-import to apply mocked settings
+            from async_crud_mcp.server import async_read_tool
+    
+            # Call the tool wrapper
+>           response = await async_read_tool(
+                path=str(test_file),
+                offset=0,
+                limit=None,
+                encoding="utf-8",
+            )
+E           TypeError: 'FunctionTool' object is not callable
+
+tests\test_server.py:104: TypeError
+__________________ TestToolWrappers.test_health_tool_wrapper __________________
+
+self = <tests.test_server.TestToolWrappers object at 0x0000029EF8314050>
+
+    @pytest.mark.asyncio
+    async def test_health_tool_wrapper(self):
+        """Test health_tool wrapper returns dict."""
+        from async_crud_mcp.server import health_tool
+    
+>       response = await health_tool()
+                         ^^^^^^^^^^^^^
+E       TypeError: 'FunctionTool' object is not callable
+
+tests\test_server.py:120: TypeError
+_____________ TestAsyncAppendSuccess.test_append_to_existing_file _____________
+
+self = <tests.test_tools.test_async_append.TestAsyncAppendSuccess object at 0x0000029EF8314690>
+temp_base_dir = WindowsPath('C:/Users/Admin/AppData/Local/Temp/tmp99p0v9bg')
+path_validator = <async_crud_mcp.core.path_validator.PathValidator object at 0x0000029EF835CD40>
+lock_manager = <async_crud_mcp.core.lock_manager.LockManager object at 0x0000029EF82C67B0>
+hash_registry = <async_crud_mcp.core.file_io.HashRegistry object at 0x0000029EF84AADA0>
+
+    @pytest.mark.asyncio
+    async def test_append_to_existing_file(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test append adds content to existing file."""
+        file_path = temp_base_dir / "existing.txt"
+        original_content = "Line 1\n"
+        file_path.write_text(original_content, encoding='utf-8')
+    
+        append_content = "Line 2\n"
+        request = AsyncAppendRequest(path=str(file_path), content=append_content)
+        response = await async_append(request, path_validator, lock_manager, hash_registry)
+    
+        assert response.status == "ok"
+        assert response.path == str(file_path)
+        assert response.bytes_appended == len(append_content.encode('utf-8'))
+        assert response.hash.startswith("sha256:")
+    
+        # Verify file content
+        final_content = file_path.read_text(encoding='utf-8')
+        assert final_content == original_content + append_content
+    
+        # Verify total size
+>       assert response.total_size_bytes == len(final_content.encode('utf-8'))
+E       AssertionError: assert 15 == 14
+E        +  where 15 = AppendSuccessResponse(status='ok', path='C:\\Users\\Admin\\AppData\\Local\\Temp\\tmp99p0v9bg\\existing.txt', hash='sha...5547432ce58b1f06aecb1b2f968c2d03', bytes_appended=7, total_size_bytes=15, timestamp='2026-02-13T05:19:00.117690+00:00').total_size_bytes
+E        +  and   14 = len(b'Line 1\nLine 2\n')
+E        +    where b'Line 1\nLine 2\n' = <built-in method encode of str object at 0x0000029EF8355CB0>('utf-8')
+E        +      where <built-in method encode of str object at 0x0000029EF8355CB0> = 'Line 1\nLine 2\n'.encode
+
+tests\test_tools\test_async_append.py:62: AssertionError
+______ TestAsyncRenameCrossFilesystem.test_rename_cross_filesystem_flag _______
+
+self = <tests.test_tools.test_async_rename.TestAsyncRenameCrossFilesystem object at 0x0000029EF8394CD0>
+temp_base_dir = WindowsPath('C:/Users/Admin/AppData/Local/Temp/tmp_se4iasz')
+path_validator = <async_crud_mcp.core.path_validator.PathValidator object at 0x0000029EF866B770>
+lock_manager = <async_crud_mcp.core.lock_manager.LockManager object at 0x0000029EF852F150>
+hash_registry = <async_crud_mcp.core.file_io.HashRegistry object at 0x0000029EF86B5360>
+
+    @pytest.mark.asyncio
+    async def test_rename_cross_filesystem_flag(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test cross_filesystem flag is set correctly when filesystems differ."""
+        old_path = temp_base_dir / "source.txt"
+        new_path = temp_base_dir / "dest.txt"
+        content = "Test content"
+        old_path.write_text(content, encoding='utf-8')
+    
+        # Mock os.stat to simulate different filesystems
+        import os
+        original_stat = os.stat
+    
+        def mock_stat(path):
+            stat_result = original_stat(path)
+            # Make destination directory appear on different filesystem
+            if str(new_path.parent) in str(path):
+                # Create a new stat_result with different st_dev
+                class MockStat:
+                    st_dev = 9999  # Different device number
+                    st_ino = stat_result.st_ino
+                    st_mode = stat_result.st_mode
+                    st_nlink = stat_result.st_nlink
+                    st_uid = stat_result.st_uid
+                    st_gid = stat_result.st_gid
+                    st_size = stat_result.st_size
+                    st_atime = stat_result.st_atime
+                    st_mtime = stat_result.st_mtime
+                    st_ctime = stat_result.st_ctime
+                return MockStat()
+            return stat_result
+    
+        with patch('os.stat', side_effect=mock_stat):
+            request = AsyncRenameRequest(old_path=str(old_path), new_path=str(new_path))
+            response = await async_rename(request, path_validator, lock_manager, hash_registry)
+    
+            assert response.status == "ok"
+>           assert response.cross_filesystem is True
+E           AssertionError: assert False is True
+E            +  where False = RenameSuccessResponse(status='ok', old_path='C:\\Users\\Admin\\AppData\\Local\\Temp\\tmp_se4iasz\\source.txt', new_pat...24f56e9999527dba9542481580d69feb89056aabaa0aa87', timestamp='2026-02-13T05:19:03.843116+00:00', cross_filesystem=False).cross_filesystem
+
+tests\test_tools\test_async_rename.py:284: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_cli/test_setup_cmd.py::test_wizard_new_config - assert 2 == 0
+FAILED tests/test_cli/test_setup_cmd.py::test_wizard_existing_config_no_overwrite
+FAILED tests/test_cli/test_setup_cmd.py::test_wizard_no_install - assert 2 == 0
+FAILED tests/test_server.py::TestFastMCPServer::test_tools_registered - Attri...
+FAILED tests/test_server.py::TestFastMCPServer::test_tool_count - AttributeEr...
+FAILED tests/test_server.py::TestToolWrappers::test_async_read_tool_wrapper
+FAILED tests/test_server.py::TestToolWrappers::test_health_tool_wrapper - Typ...
+FAILED tests/test_tools/test_async_append.py::TestAsyncAppendSuccess::test_append_to_existing_file
+FAILED tests/test_tools/test_async_rename.py::TestAsyncRenameCrossFilesystem::test_rename_cross_filesystem_flag
+================== 9 failed, 291 passed, 4 skipped in 25.20s ==================

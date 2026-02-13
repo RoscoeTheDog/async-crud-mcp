@@ -1,0 +1,176 @@
+{
+  "story_id": 7,
+  "validation_id": -7,
+  "phase": "a",
+  "phase_name": "structural",
+  "timestamp": "2026-02-12T21:35:00Z",
+  "status": "PASSED",
+  "summary": "All structural requirements for Story 7 validation phase A passed successfully",
+  "acceptance_criteria": {
+    "AC-7.1": {
+      "description": "JSON diff with change regions (added/removed/modified)",
+      "status": "PASS",
+      "details": {
+        "file": "src/async_crud_mcp/core/diff_engine.py",
+        "function": "compute_json_diff",
+        "change_types": [
+          "added",
+          "removed",
+          "modified"
+        ],
+        "region_tracking": "via opcodes from difflib.SequenceMatcher",
+        "implemented": true
+      }
+    },
+    "AC-7.2": {
+      "description": "Unified diff format (standard git diff style)",
+      "status": "PASS",
+      "details": {
+        "file": "src/async_crud_mcp/core/diff_engine.py",
+        "function": "compute_unified_diff",
+        "uses_difflib": "difflib.unified_diff",
+        "headers": [
+          "--- expected",
+          "+++ current"
+        ],
+        "hunk_headers": true,
+        "implemented": true
+      }
+    },
+    "AC-7.3": {
+      "description": "Configurable context lines",
+      "status": "PASS",
+      "details": {
+        "json_support": true,
+        "unified_support": true,
+        "default_value": 3,
+        "parameter_name": "context_lines",
+        "functions": [
+          "compute_json_diff",
+          "compute_unified_diff",
+          "compute_diff"
+        ]
+      }
+    },
+    "AC-7.4": {
+      "description": "Summary with line counts and region count",
+      "status": "PASS",
+      "details": {
+        "model": "DiffSummary",
+        "fields": [
+          "lines_added",
+          "lines_removed",
+          "lines_modified",
+          "regions_changed"
+        ],
+        "file": "src/async_crud_mcp/models/responses.py",
+        "frozen": true,
+        "immutable": true
+      }
+    },
+    "AC-7.5": {
+      "description": "Uses Python difflib",
+      "status": "PASS",
+      "details": {
+        "import": "import difflib",
+        "difflib_components": [
+          "difflib.SequenceMatcher",
+          "difflib.unified_diff"
+        ],
+        "used_in_functions": [
+          "compute_json_diff (SequenceMatcher.get_opcodes)",
+          "compute_unified_diff (unified_diff)"
+        ]
+      }
+    }
+  },
+  "supporting_models": {
+    "DiffChange": {
+      "file": "src/async_crud_mcp/models/responses.py",
+      "frozen": true,
+      "fields": {
+        "type": "Literal['added', 'removed', 'modified']",
+        "start_line": "int (1-indexed)",
+        "end_line": "int | None (multi-line changes)",
+        "old_content": "str | None (for removed/modified)",
+        "new_content": "str | None (for added/modified)",
+        "context_before": "str | None",
+        "context_after": "str | None"
+      }
+    },
+    "JsonDiff": {
+      "file": "src/async_crud_mcp/models/responses.py",
+      "frozen": true,
+      "fields": {
+        "format": "Literal['json']",
+        "changes": "list[DiffChange]",
+        "summary": "DiffSummary"
+      }
+    },
+    "UnifiedDiff": {
+      "file": "src/async_crud_mcp/models/responses.py",
+      "frozen": true,
+      "fields": {
+        "format": "Literal['unified']",
+        "content": "str (diff content)",
+        "summary": "DiffSummary"
+      }
+    },
+    "DiffSummary": {
+      "file": "src/async_crud_mcp/models/responses.py",
+      "frozen": true,
+      "fields": {
+        "lines_added": "int",
+        "lines_removed": "int",
+        "lines_modified": "int",
+        "regions_changed": "int"
+      }
+    }
+  },
+  "dispatcher_function": {
+    "name": "compute_diff",
+    "signature": "compute_diff(old_content: str, new_content: str, diff_format: Literal['json', 'unified'] = 'json', context_lines: int = 3)",
+    "default_format": "json",
+    "default_context": 3,
+    "returns": "JsonDiff | UnifiedDiff"
+  },
+  "helper_function": {
+    "name": "check_patch_applicability",
+    "purpose": "Check which patches from update request can apply despite hash mismatch",
+    "returns": "tuple[bool, list[int], list[int]]",
+    "uses_patch_command": true
+  },
+  "test_coverage": {
+    "file": "tests/test_diff_engine.py",
+    "test_classes": 14,
+    "test_methods": 44,
+    "coverage_areas": [
+      "Identical content scenarios",
+      "Empty content scenarios",
+      "Single line changes (add/remove/modify)",
+      "Multi-line changes",
+      "Mixed changes (combined operations)",
+      "Multiple change regions",
+      "Configurable context lines",
+      "Unified diff format correctness",
+      "Summary accuracy",
+      "Trailing newline handling",
+      "compute_diff dispatcher",
+      "Patch applicability helper",
+      "Large file performance (1000+ lines)",
+      "Edge cases (whitespace, unicode, very long lines, blank lines)"
+    ]
+  },
+  "integration_points": {
+    "models": {
+      "imports": "DiffChange, DiffSummary, JsonDiff, UnifiedDiff from async_crud_mcp.models.responses"
+    },
+    "used_by": [
+      "Contention responses in update/delete/rename operations"
+    ]
+  },
+  "overall_result": "PASS",
+  "pass_count": 5,
+  "fail_count": 0,
+  "notes": "Story 7 structural validation complete. All acceptance criteria met. The diff engine module provides both JSON and unified diff formats with configurable context lines, proper summary statistics, and uses Python's standard difflib module. Supporting models (DiffChange, JsonDiff, UnifiedDiff, DiffSummary) are properly defined with frozen=True for immutability. Comprehensive test coverage (44 test methods across 14 test classes) validates all scenarios including edge cases, performance, and helper functions."
+}

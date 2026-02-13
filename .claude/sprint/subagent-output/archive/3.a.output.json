@@ -1,0 +1,109 @@
+{
+  "validation_id": "-3",
+  "story_id": "3",
+  "phase": "a",
+  "phase_type": "structural_checks",
+  "status": "blocked",
+  "reason": "Critical validation data missing: test output and coverage reports required for blocking checks D and J",
+  "structural_checks": {
+    "A": {
+      "check_id": "A",
+      "name": "Metadata Validation",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "blocking_reason": null,
+      "errors": [],
+      "warnings": [],
+      "repairs_applied": [],
+      "severity": "info"
+    },
+    "B": {
+      "check_id": "B",
+      "name": "AC Completion Formatting",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "blocking_reason": null,
+      "errors": [],
+      "warnings": [],
+      "severity": "info"
+    },
+    "C": {
+      "check_id": "C",
+      "name": "AC to Test Traceability",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "blocking_reason": "P0 acceptance criteria lack test coverage",
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-3.1, AC-3.2, AC-3.3, AC-3.4, AC-3.5, AC-3.6"
+      ],
+      "acs_missing_tests": [
+        "AC-3.1",
+        "AC-3.2",
+        "AC-3.3",
+        "AC-3.4",
+        "AC-3.5",
+        "AC-3.6"
+      ],
+      "warnings": [],
+      "severity": "error"
+    },
+    "D": {
+      "check_id": "D",
+      "name": "Test Pass Rates",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "blocking_reason": "Missing critical data: test output not available",
+      "errors": [
+        "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+      ],
+      "warnings": [],
+      "severity": "critical",
+      "missing_data": "test_output"
+    },
+    "J": {
+      "check_id": "J",
+      "name": "Coverage Validation",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "blocking_reason": "Missing critical data: coverage report not available",
+      "errors": [
+        "No coverage report found. Coverage must be generated before validation. Run tests with coverage enabled (e.g., pytest --cov, nyc, go test -cover)."
+      ],
+      "warnings": [],
+      "severity": "critical",
+      "missing_data": "coverage_report"
+    }
+  },
+  "summary": {
+    "checks_passed": 2,
+    "checks_failed": 1,
+    "checks_blocked": 2,
+    "total_checks": 5,
+    "blocking_failures": 3
+  },
+  "convergence_analysis": {
+    "status": "passed",
+    "action": "done",
+    "reason": null,
+    "run_count": 0,
+    "failure_trend": "none"
+  },
+  "phase_decision": {
+    "outcome": "blocked",
+    "can_proceed_to_phase_b": false,
+    "blocking_reason": "Missing validation data (test output and coverage reports) blocks story advancement through Gate 4. Checks D and J returned exit code 3 (BLOCKED). Check C failed with blocking=true. These must be resolved before phase B can proceed."
+  },
+  "next_actions": [
+    "Run test suite for story 3 to generate test output",
+    "Generate coverage report with coverage enabled",
+    "Re-run validation phase A after tests and coverage are available"
+  ],
+  "error_signatures": [],
+  "executed_at": "2026-02-13T05:24:32.926000+00:00",
+  "execution_duration_seconds": 22.795
+}

@@ -1,0 +1,52 @@
+{
+  "story_id": "5",
+  "validation_id": "-5",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:28:00Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report"
+    }
+  },
+  "blocked_checks": [
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output_and_coverage_report",
+  "error_signatures": [
+    "MissingTestCoverage:story-5:lock-manager:all-acs:P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3, AC-5.4, AC-5.5, AC-5.6, AC-5.7, AC-5.8"
+  ],
+  "convergence": null,
+  "summary": {
+    "total_checks": 5,
+    "passed_checks": 2,
+    "failed_checks": 1,
+    "blocked_checks": 2,
+    "blocking_issue": "Story 5 requires test implementation and coverage reporting before Phase B validation can proceed"
+  }
+}

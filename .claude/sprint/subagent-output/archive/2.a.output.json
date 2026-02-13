@@ -1,0 +1,43 @@
+{
+  "story_id": "2",
+  "validation_id": "-2",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:24:15Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-2.1, AC-2.2, AC-2.3, AC-2.4"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report",
+      "error": "No coverage report found. Coverage must be generated before validation. Run tests with coverage enabled (e.g., pytest --cov, nyc, go test -cover)."
+    }
+  },
+  "blocked_checks": ["D", "J"],
+  "blocked_reason": "missing_test_output_and_coverage",
+  "error_signatures": [],
+  "convergence": null
+}
