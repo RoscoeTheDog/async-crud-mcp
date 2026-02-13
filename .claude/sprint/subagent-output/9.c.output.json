@@ -1,0 +1,28 @@
+{
+  "story_id": "9",
+  "phase": "c",
+  "status": "passed",
+  "completed_at": "2026-02-13T05:30:00Z",
+  "testing_output": {
+    "test_framework": "pytest",
+    "test_results": {
+      "total": 21,
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    "duration_seconds": 1.79,
+    "raw_output_file": ".claude/sprint/test-output/story-9-tests.txt",
+    "coverage_data": {
+      "format": "json",
+      "report_file": ".claude/sprint/test-output/story-9-coverage.json",
+      "coverage_percent": 82.14,
+      "threshold_percent": 80,
+      "meets_threshold": true,
+      "touched_files": [
+        "src/async_crud_mcp/tools/async_update.py",
+        "src/async_crud_mcp/tools/__init__.py"
+      ]
+    }
+  }
+}

@@ -1,28 +1,47 @@
 {
   "story_id": "8",
+  "validation_id": "-8",
   "phase": "a",
-  "status": "passed",
-  "completed_at": "2026-02-12T22:00:00Z",
-  "planning_output": {
-    "implementation_plan": "Create two new tool modules (async_read.py and async_write.py) in src/async_crud_mcp/tools/, each implementing a single async function that serves as the MCP tool handler. Both tools follow the same pattern: validate path via PathValidator, coordinate locks via LockManager, perform I/O via file_io functions, compute hashes, and return typed Pydantic responses.\n\nThe tools accept a Settings/config object (or its relevant sub-objects) plus shared singletons (PathValidator, LockManager, HashRegistry) that will be injected by the FastMCP server (Story 13). For now, the tool functions accept these as explicit parameters.\n\nasync_read:\n1. Validate path using PathValidator.validate() - raises PathValidationError -> ErrorResponse(PATH_OUTSIDE_BASE)\n2. Check file exists - FileNotFoundError -> ErrorResponse(FILE_NOT_FOUND)\n3. Acquire shared read lock via LockManager.acquire_read(str(validated_path))\n4. Inside try/finally (ensuring lock release):\n   a. Read file in binary mode, compute hash via compute_hash(raw_bytes)\n   b. Decode content using request.encoding\n   c. Split into lines, compute total_lines\n   d. Apply offset/limit slicing on the lines list\n   e. Join sliced lines back to content string\n   f. Build ReadSuccessResponse with all fields\n5. Release read lock in finally block via LockManager.release_read()\n6. Return ReadSuccessResponse or ErrorResponse\n\nasync_write:\n1. Validate path using PathValidator.validate() - PathValidationError -> ErrorResponse(PATH_OUTSIDE_BASE)\n2. Check file does NOT exist - if exists -> ErrorResponse(FILE_EXISTS)\n3. Acquire exclusive write lock via LockManager.acquire_write(str(validated_path), timeout) - LockTimeout -> ErrorResponse(LOCK_TIMEOUT)\n4. Inside try/finally (ensuring lock release):\n   a. If create_dirs=True, create parent directories (os.makedirs with exist_ok=True)\n   b. Encode content to bytes using request.encoding\n   c. Call atomic_write(str(validated_path), encoded_bytes)\n   d. Compute hash via compute_hash(encoded_bytes)\n   e. Update HashRegistry with new hash\n   f. Build WriteSuccessResponse with path, hash, bytes_written, timestamp\n5. Release write lock in finally block\n6. Return WriteSuccessResponse or ErrorResponse\n\nError handling pattern: Each tool function wraps its body in try/except blocks catching specific exceptions and converting them to ErrorResponse with appropriate ErrorCode values. The outer function signature returns ReadSuccessResponse | ErrorResponse (or WriteSuccessResponse | ErrorResponse).",
-    "files_to_modify": [
-      "src/async_crud_mcp/tools/async_read.py",
-      "src/async_crud_mcp/tools/async_write.py",
-      "src/async_crud_mcp/tools/__init__.py",
-      "tests/test_tools/__init__.py",
-      "tests/test_tools/test_async_read.py",
-      "tests/test_tools/test_async_write.py"
-    ],
-    "estimated_complexity": "medium",
-    "ac_breakdown": {
-      "AC-8.1": "async_read: Implement path validation by calling PathValidator.validate(request.path) at the start of the function. On PathValidationError, return ErrorResponse(error_code=ErrorCode.PATH_OUTSIDE_BASE). Acquire shared read lock via LockManager.acquire_read(str(validated_path)), returning request_id. In the locked section, read the file in binary mode (open(validated_path, 'rb').read()), compute hash via compute_hash(raw_bytes), decode to string using request.encoding, and build ReadSuccessResponse with content, hash (sha256:... format), total_lines, offset, limit, lines_returned, encoding, path (as string), and ISO 8601 timestamp via datetime.now(timezone.utc).isoformat(). Release lock in finally block.",
-      "AC-8.2": "async_read offset/limit: After reading and decoding the full file content, split into lines using splitlines(keepends=True). Compute total_lines = len(lines). Apply slicing: sliced = lines[offset:offset+limit] if limit is not None, else lines[offset:]. Compute lines_returned = len(sliced). Join sliced lines back: content = ''.join(sliced). Note: the hash is computed on the FULL file content (raw bytes) regardless of offset/limit, per PRD spec.",
-      "AC-8.3": "async_write file-exists check: After path validation but BEFORE acquiring the write lock, check os.path.exists(str(validated_path)). If the file exists, immediately return ErrorResponse(error_code=ErrorCode.FILE_EXISTS, message=f'File already exists: {request.path}', path=request.path). This check happens before locking to avoid unnecessary lock contention. A second existence check inside the lock is also prudent to handle races (between the first check and lock acquisition, another writer could create the file).",
-      "AC-8.4": "async_write exclusive write lock with FIFO: Call LockManager.acquire_write(str(validated_path), timeout=request.timeout). LockManager already implements FIFO queue semantics (Story 5). On LockTimeout exception, return ErrorResponse(error_code=ErrorCode.LOCK_TIMEOUT, message=f'Failed to acquire write lock within {request.timeout}s', path=request.path). The lock is always released in a finally block via LockManager.release_write().",
-      "AC-8.5": "async_write atomic write via file_io: Encode content to bytes: encoded = request.content.encode(request.encoding). Call atomic_write(str(validated_path), encoded) from core.file_io. This handles temp file creation, fsync, os.replace with Windows retry, and parent directory fsync on Linux. On success, compute hash via compute_hash(encoded) and update HashRegistry. bytes_written = len(encoded).",
-      "AC-8.6": "async_write create_dirs: If request.create_dirs is True, before calling atomic_write, create parent directories: os.makedirs(os.path.dirname(str(validated_path)), exist_ok=True). The validated_path from PathValidator is already an absolute Path, so os.path.dirname will correctly extract the parent. If create_dirs is False and parent doesn't exist, let atomic_write's natural OSError propagate and catch it as ErrorResponse(error_code=ErrorCode.WRITE_ERROR)."
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:30:45Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
-    "testing_strategy": "Create tests/test_tools/ directory with __init__.py and two test files.\n\ntest_async_read.py:\n- Test successful read of existing file with full content (no offset/limit)\n- Test read with offset only (skip first N lines)\n- Test read with limit only (read first N lines)\n- Test read with offset AND limit combined\n- Test hash is always of full file content regardless of offset/limit\n- Test FILE_NOT_FOUND error for non-existent file\n- Test PATH_OUTSIDE_BASE error for path outside base directories\n- Test ENCODING_ERROR for files with wrong encoding specified\n- Test concurrent reads don't block each other\n- Test read blocks behind active write lock\n- Test empty file returns empty content with correct hash\n- Test single-line file edge case\n\ntest_async_write.py:\n- Test successful write creates new file with correct content and hash\n- Test FILE_EXISTS error when file already exists\n- Test LOCK_TIMEOUT when write lock cannot be acquired\n- Test PATH_OUTSIDE_BASE error for invalid path\n- Test create_dirs=True creates parent directories\n- Test create_dirs=False fails when parent directory missing\n- Test atomic write produces correct bytes_written count\n- Test hash in response matches recomputed hash of file on disk\n- Test HashRegistry is updated after successful write\n- Test exclusive lock prevents concurrent writes\n- Test WRITE_ERROR on permission denied\n\nAll tests use pytest-asyncio with auto mode. Tests create temporary directories as fixtures for base_directories. Shared fixtures: PathValidator, LockManager, HashRegistry instances.",
-    "dependencies": []
-  }
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-8.1, AC-8.2, AC-8.3, AC-8.4, AC-8.5, AC-8.6"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report"
+    }
+  },
+  "blocked_checks": [
+    "C",
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_coverage_and_test_output_and_coverage_report",
+  "error_signatures": [
+    "MissingTestCoverage:story-8:core-mcp-tools:async_read_and_async_write:P0 ACs without test mapping"
+  ],
+  "convergence": null
 }

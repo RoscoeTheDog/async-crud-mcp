@@ -3,10 +3,10 @@ $schema: story-file-v5.1
 id: '4'
 title: Path validator with base directory enforcement
 type: feature
-status: queued
+status: implemented
 parent: null
 created_at: '2026-02-13T01:58:51.461506+00:00'
-updated_at: '2026-02-13T01:58:51.461506+00:00'
+updated_at: '2026-02-12T00:00:00.000000+00:00'
 depends_on:
 - 2
 blocks: []
@@ -15,9 +15,9 @@ affected_by: []
 deferred_reason: null
 deferred_at: null
 validation:
-  status: null
-  runs: 0
-  latest_artifact: null
+  status: passed
+  runs: 1
+  latest_artifact: .claude/sprint/validation/story-4-phase-a-results.json
   active_remediation: null
 ---
 

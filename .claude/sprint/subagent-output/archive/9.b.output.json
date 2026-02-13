@@ -2,47 +2,78 @@
   "story_id": "9",
   "phase": "b",
   "status": "passed",
-  "completed_at": "2026-02-12T22:45:00Z",
-  "implementation_output": {
+  "completed_at": "2026-02-13T05:45:00Z",
+  "semantic_checks": {
+    "code_exists": true,
+    "alignment_score": 0.98,
+    "recency_ok": true,
+    "test_coverage_ok": true
+  },
+  "design_validation": {
+    "pattern_correctness": true,
+    "fix_quality": "good",
+    "regression_risk": "low"
+  },
+  "diff_verification": {
     "files_modified": [
       "src/async_crud_mcp/tools/async_update.py",
-      "src/async_crud_mcp/tools/__init__.py",
-      "tests/test_tools/test_async_update.py"
+      "tests/test_tools/test_async_update.py",
+      "src/async_crud_mcp/tools/__init__.py"
     ],
-    "changes_summary": "Implemented async_update() MCP tool with hash-based contention detection, full content replacement mode, and patch mode with old_string/new_string pairs. Added comprehensive test suite with 21 tests covering success cases, contention responses, error handling, and concurrency. Fixed Windows line ending issue in tests (CRLF vs LF).",
-    "lines_changed": 842
+    "expected_files_touched": true,
+    "change_magnitude": "sufficient"
   },
-  "micro_verification": {
-    "elements_checked": 3,
-    "passed": 3,
-    "failed": 0,
-    "results": [
-      {
-        "location": "src/async_crud_mcp/tools/async_update.py",
-        "risk_type": "type_safety",
-        "outcome": "passed",
-        "details": "Pyright type checking passed with 0 errors, 0 warnings"
-      },
-      {
-        "location": "tests/test_tools/test_async_update.py",
-        "risk_type": "test_coverage",
-        "outcome": "passed",
-        "details": "All 21 tests passed covering content mode, patch mode, contention detection, error cases, and concurrency"
-      },
-      {
-        "location": "src/async_crud_mcp/tools/async_update.py",
-        "risk_type": "platform_compatibility",
-        "outcome": "passed",
-        "details": "Windows line ending issue identified and fixed in tests (write_bytes vs write_text)"
-      }
-    ],
-    "context_for_testing": {
-      "failures": []
+  "ac_results": {
+    "AC-9.1": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Hash comparison implemented at lines 99-101 with proper contention detection. Tests verify file remains unchanged on hash mismatch."
+    },
+    "AC-9.2": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Full content replacement mode implemented at lines 178-188. Comprehensive test suite with 5 test methods covering success cases, hash tracking, disk writes, registry updates, and byte counting."
+    },
+    "AC-9.3": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Patch mode with old_string/new_string pairs implemented at lines 189-222. Tests verify single patch, multiple patches, and first-occurrence-only replacement behavior."
+    },
+    "AC-9.4": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true,
+      "notes": "Contention response with diff support implemented at lines 111-162. Both JSON and unified diff formats supported via diff_format parameter. Tests verify both formats with proper structure."
+    },
+    "AC-9.5": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 0.95,
+      "recent": true,
+      "has_tests": true,
+      "notes": "All three fields (patches_applicable, conflicts, non_conflicting_patches) implemented at lines 120-153. Tests verify true/false cases for patches_applicable and correct indices for non-conflicting patches."
+    },
+    "AC-9.6": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 0.95,
+      "recent": true,
+      "has_tests": true,
+      "notes": "CONTENT_OR_PATCHES_REQUIRED error implemented both at model validation (requests.py:47-56) and defense in depth (async_update.py:47-53). Test verifies Pydantic validation catches invalid requests."
     }
   },
-  "blast_radius": {
-    "analyzed": false,
-    "is_remediation": false,
-    "impacts": []
-  }
+  "failed_acs": [],
+  "issues": [],
+  "remediation_needed": false
 }

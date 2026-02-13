@@ -1,25 +1,55 @@
 {
   "story_id": "18",
+  "validation_id": "-18",
   "phase": "a",
-  "status": "passed",
-  "completed_at": "2026-02-12T22:15:00Z",
-  "planning_output": {
-    "implementation_plan": "Story 18 implements macOS LaunchAgent and Linux systemd service support for the async-crud-mcp daemon. The daemon infrastructure (Story 16) already provides the InstallerBase ABC with skeleton LaunchdInstaller and SystemdInstaller classes, cross-platform paths (paths.py), and a factory get_installer() function. Template snippets exist in the daemon-service template repository with complete launchd.plist, launchd_installer.sh, systemd.service, and systemd_installer.sh files.\n\nThe implementation has four parts:\n1. Create macOS launchd.plist adapted from template with async-crud-mcp placeholders resolved\n2. Create macOS launchd_installer.sh adapted from template with app-specific configuration\n3. Create Linux systemd.service unit adapted from template with async-crud-mcp placeholders resolved\n4. Create Linux systemd_installer.sh adapted from template with app-specific configuration\n5. Flesh out the skeleton LaunchdInstaller and SystemdInstaller classes in installer.py to delegate to the shell scripts or use subprocess calls matching the WindowsServiceInstaller pattern\n\nKey design decisions:\n- Shell scripts are the primary interface (matching template pattern), Python InstallerBase implementations wrap them via subprocess\n- macOS uses ~/Library/LaunchAgents/ for user-level LaunchAgent plists (no sudo required)\n- Linux uses ~/.config/systemd/user/ for user-level systemd units (no sudo required)\n- Both installers generate the service config file dynamically during install (not just copy a static file) to resolve bootstrap path at install time\n- APP_NAME='async-crud-mcp' used throughout, SERVICE_NAME='async-crud-mcp-daemon'\n- The console_scripts entry point 'async-crud-mcp' from pyproject.toml provides the bootstrap path\n- Paths use the existing paths.py helpers (get_logs_dir, get_data_dir, get_config_dir) for consistency",
-    "files_to_modify": [
-      "src/async_crud_mcp/daemon/macos/launchd.plist",
-      "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
-      "src/async_crud_mcp/daemon/linux/systemd.service",
-      "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
-      "src/async_crud_mcp/daemon/installer.py"
-    ],
-    "estimated_complexity": "medium",
-    "ac_breakdown": {
-      "AC-18.1": "Create src/async_crud_mcp/daemon/macos/launchd.plist - a valid launchd plist pointing to async-crud-mcp. Adapt from daemon-service template (resources/snippets/macos/launchd.plist) by replacing [APP_NAME] placeholders with 'async-crud-mcp'. Key plist keys: Label=com.async-crud-mcp.daemon, ProgramArguments pointing to the bootstrap entry point, RunAtLoad=true, KeepAlive=true, WorkingDirectory=~/Library/Application Support/async-crud-mcp, StandardOutPath=~/Library/Logs/async-crud-mcp/stdout.log, StandardErrorPath=~/Library/Logs/async-crud-mcp/stderr.log, ThrottleInterval=30, ProcessType=Background. This is a reference/template plist; the installer script generates the actual runtime plist with resolved paths.",
-      "AC-18.2": "Create src/async_crud_mcp/daemon/macos/launchd_installer.sh - shell script managing launchctl load/unload. Adapt from daemon-service template (resources/snippets/macos/launchd_installer.sh) by setting APP_NAME='async-crud-mcp' and BOOTSTRAP_PATH to detect the installed CLI entry point (which async-crud-mcp or the venv bin path). Commands: install (validate bootstrap, ensure dirs, generate plist, launchctl load), uninstall (launchctl unload, remove plist), status (launchctl list grep), logs (tail stderr/stdout), start, stop. Also update LaunchdInstaller class in installer.py to call these commands or implement equivalent logic using subprocess calls to launchctl directly (matching the WindowsServiceInstaller pattern of using subprocess).",
-      "AC-18.3": "Create src/async_crud_mcp/daemon/linux/systemd.service - a valid systemd user service unit. Adapt from daemon-service template (resources/snippets/linux/systemd.service) by replacing [APP_NAME] with 'async-crud-mcp'. Key directives: [Unit] After=network.target, [Service] Type=simple, ExecStart path to bootstrap, Restart=always, RestartSec=30, WorkingDirectory=%h/.local/share/async-crud-mcp, LimitNOFILE=1024, security hardening (NoNewPrivileges, ProtectSystem=strict, ProtectHome=read-only, ReadWritePaths for data/config/state/cache dirs, PrivateTmp), [Install] WantedBy=default.target. This is a reference unit; the installer generates the runtime unit with resolved paths.",
-      "AC-18.4": "Create src/async_crud_mcp/daemon/linux/systemd_installer.sh - shell script managing systemctl enable/start. Adapt from daemon-service template (resources/snippets/linux/systemd_installer.sh) by setting APP_NAME='async-crud-mcp' and BOOTSTRAP_PATH detection. Uses XDG-compliant paths (XDG_DATA_HOME, XDG_CONFIG_HOME, XDG_STATE_HOME, XDG_CACHE_HOME). Commands: install (validate bootstrap, ensure dirs, generate service file, daemon-reload, enable, start, check linger), uninstall (stop, disable, remove, daemon-reload), status (is-enabled, is-active, linger check), logs (journalctl --user), start, stop, restart, enable-linger. Also update SystemdInstaller class in installer.py to wrap these operations via subprocess calls to systemctl --user."
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:46:11Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
-    "testing_strategy": "Testing macOS/Linux service support is limited since the development environment is Windows. Strategy:\n1. Static validation: Verify plist XML is well-formed (xmllint if available), verify systemd unit file syntax\n2. Shell script validation: Run shellcheck on both installer scripts (bash -n for syntax check at minimum)\n3. Python unit tests for LaunchdInstaller and SystemdInstaller classes using unittest.mock to mock subprocess calls - verify correct launchctl/systemctl commands are constructed\n4. Test get_installer() factory returns correct class per platform using mock sys.platform\n5. Integration testing deferred to actual macOS/Linux environments\n\nTest files: tests/test_installer.py (extend existing or create) with mocked platform tests",
-    "dependencies": []
-  }
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-18.1, AC-18.2, AC-18.3, AC-18.4"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)",
+      "coverage": 0.0,
+      "threshold": 0.8,
+      "touched_files": [
+        "src/async_crud_mcp/daemon/installer.py",
+        "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+        "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+        "src/async_crud_mcp/daemon/macos/launchd.plist",
+        "src/async_crud_mcp/daemon/linux/systemd.service"
+      ]
+    }
+  },
+  "blocked_checks": [
+    "C",
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output_and_coverage_and_missing_tests",
+  "error_signatures": [],
+  "convergence": null
 }

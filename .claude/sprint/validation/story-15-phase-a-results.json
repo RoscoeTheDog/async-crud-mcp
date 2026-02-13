@@ -1,0 +1,231 @@
+{
+  "story_id": 15,
+  "validation_id": -15,
+  "phase": "a",
+  "phase_name": "structural",
+  "timestamp": "2026-02-12T21:45:00Z",
+  "status": "PASSED",
+  "summary": "All structural requirements for Story 15 (Persistence layer) validation phase A passed successfully. Optional state persistence for hash registry and pending queue entries is fully implemented with TTL-based purge, hash re-validation on startup, debounced writes, and enable/disable configuration.",
+  "acceptance_criteria": {
+    "AC-15.1": {
+      "description": "Persists file hash registry to DATA_DIR/state.json",
+      "status": "PASS",
+      "details": {
+        "implementation_file": "src/async_crud_mcp/core/persistence.py",
+        "default_location": "C:\\Users\\{user}\\AppData\\Local\\async-crud-mcp\\data\\state.json",
+        "configurable": true,
+        "config_field": "PersistenceConfig.state_file",
+        "fallback_to_data_dir": true,
+        "state_structure": {
+          "version": 1,
+          "saved_at": "ISO8601 timestamp",
+          "hash_registry": "snapshot of all (path, hash) pairs",
+          "pending_queue": "snapshot of lock manager queue state"
+        }
+      }
+    },
+    "AC-15.2": {
+      "description": "Persists pending queue entries (metadata only)",
+      "status": "PASS",
+      "details": {
+        "implementation": "StatePersistence._save() calls self._lock_manager.snapshot() (line 234)",
+        "metadata_persisted": [
+          "request_id",
+          "lock_type (read/write)",
+          "created_at timestamp",
+          "timeout duration",
+          "ttl_expires_at timestamp",
+          "active_readers count",
+          "active_writer flag"
+        ],
+        "test_coverage": "test_save_and_load_pending_queue verifies metadata persistence",
+        "location_in_state": "pending_queue field in state.json"
+      }
+    },
+    "AC-15.3": {
+      "description": "TTL-based purge of expired entries on startup",
+      "status": "PASS",
+      "details": {
+        "implementation": "StatePersistence.load() calls await self._lock_manager.purge_expired() (line 103)",
+        "method_location": "LockManager.purge_expired() in src/async_crud_mcp/core/lock_manager.py",
+        "ttl_basis": "LockManager uses ttl_multiplier * timeout to calculate TTL",
+        "purge_logic": "Removes queue entries where current time > ttl_expires_at",
+        "logging": "Logs info message with count of purged entries (line 105)",
+        "test_coverage": "test_ttl_purge_on_startup verifies expired entries are removed",
+        "config": "ttl_multiplier in PersistenceConfig (default 2.0)"
+      }
+    },
+    "AC-15.4": {
+      "description": "Re-validates hashes against disk files on startup",
+      "status": "PASS",
+      "details": {
+        "implementation": "StatePersistence._revalidate_hashes() (lines 120-161)",
+        "validation_steps": [
+          "For each (path, hash) in registry",
+          "Check if file exists on disk",
+          "If exists: compute current hash and compare",
+          "If missing: remove from registry with info log",
+          "If hash differs: update registry with new hash and warning log",
+          "If hash matches: keep as-is (no log)"
+        ],
+        "hash_computation": "Uses compute_file_hash() from file_io module",
+        "error_handling": "Catches OSError and PermissionError for inaccessible files",
+        "summary_logging": "Reports counts of removed and updated entries (line 161)",
+        "test_coverage": [
+          "test_hash_revalidation_file_exists_match",
+          "test_hash_revalidation_file_exists_mismatch",
+          "test_hash_revalidation_file_deleted"
+        ]
+      }
+    },
+    "AC-15.5": {
+      "description": "Debounced writes (at most once per second)",
+      "status": "PASS",
+      "details": {
+        "implementation": "StatePersistence.mark_dirty() and _do_save() (lines 163-195)",
+        "debounce_mechanism": {
+          "default_duration": "1.0 second (configurable via write_debounce_seconds)",
+          "config_field": "PersistenceConfig.write_debounce_seconds",
+          "implementation": "asyncio.call_later() schedules write after debounce window"
+        },
+        "behavior": {
+          "first_mark_dirty": "Schedules timer for write after debounce_seconds",
+          "subsequent_calls": "Cancels existing timer and reschedules (debounces)",
+          "no_redundant_writes": "Multiple rapid calls result in single write after debounce"
+        },
+        "immediate_flush": "save_now() bypasses debounce (used during shutdown)",
+        "test_coverage": "test_debounced_writes verifies single write for 5 rapid updates",
+        "concurrency_safety": "Uses asyncio.Lock (_save_lock) to prevent concurrent writes"
+      }
+    },
+    "AC-15.6": {
+      "description": "Enabled/disabled via configuration",
+      "status": "PASS",
+      "details": {
+        "config_class": "PersistenceConfig in src/async_crud_mcp/config.py (lines 71-77)",
+        "enabled_field": {
+          "name": "enabled",
+          "type": "bool",
+          "default": "False",
+          "env_var": "ASYNC_CRUD_MCP_PERSISTENCE__ENABLED"
+        },
+        "no_op_when_disabled": [
+          "load() returns immediately (line 79)",
+          "mark_dirty() returns immediately (line 171)",
+          "save_now() returns immediately (line 204)"
+        ],
+        "zero_overhead": "When disabled=False, persistence has zero runtime overhead (immediate returns)",
+        "configuration_sources": [
+          "Environment variables with ASYNC_CRUD_MCP_ prefix",
+          "JSON config file",
+          "Default values (enabled=False)"
+        ],
+        "test_coverage": "test_disabled_persistence_noop verifies no state file created when disabled",
+        "settings_integration": "Integrated into Settings model (line 102 of config.py)"
+      }
+    }
+  },
+  "test_results": {
+    "test_file": "tests/test_persistence.py",
+    "total_tests": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "test_cases": [
+      "test_save_and_load_hash_registry",
+      "test_save_and_load_pending_queue",
+      "test_ttl_purge_on_startup",
+      "test_hash_revalidation_file_exists_match",
+      "test_hash_revalidation_file_exists_mismatch",
+      "test_hash_revalidation_file_deleted",
+      "test_debounced_writes",
+      "test_disabled_persistence_noop",
+      "test_custom_state_file_path",
+      "test_corrupt_state_file",
+      "test_save_now_flushes_immediately"
+    ],
+    "runtime_seconds": 3.14
+  },
+  "code_review": {
+    "implementation_file": "src/async_crud_mcp/core/persistence.py",
+    "lines_of_code": 247,
+    "class_count": 1,
+    "classes": [
+      "StatePersistence (main implementation)"
+    ],
+    "key_methods": [
+      "__init__(hash_registry, lock_manager, config)",
+      "async load() - Load state from disk with recovery",
+      "_revalidate_hashes() - Re-validate all hashes on startup",
+      "mark_dirty() - Mark state as dirty and schedule debounced write",
+      "async _do_save() - Internal debounced save operation",
+      "async save_now() - Force immediate save bypassing debounce",
+      "async _save() - Serialize and write state to disk"
+    ],
+    "dependencies": [
+      "asyncio",
+      "json",
+      "pathlib.Path",
+      "loguru.logger",
+      "config.PersistenceConfig",
+      "daemon.paths.get_data_dir",
+      "file_io.HashRegistry, atomic_write, compute_file_hash",
+      "lock_manager.LockManager"
+    ]
+  },
+  "configuration_review": {
+    "config_file": "src/async_crud_mcp/config.py",
+    "persistence_config_section": "PersistenceConfig (lines 71-77)",
+    "fields": [
+      {
+        "name": "enabled",
+        "type": "bool",
+        "default": "False",
+        "description": "Enable/disable persistence"
+      },
+      {
+        "name": "state_file",
+        "type": "str | None",
+        "default": "None",
+        "description": "Path to state.json (None = default DATA_DIR location)"
+      },
+      {
+        "name": "write_debounce_seconds",
+        "type": "float",
+        "default": "1.0",
+        "description": "Debounce window for writes"
+      },
+      {
+        "name": "ttl_multiplier",
+        "type": "float",
+        "default": "2.0",
+        "description": "Multiplier for TTL calculation (timeout * ttl_multiplier)"
+      }
+    ],
+    "integration": "Integrated into Settings model with proper nesting (line 102)"
+  },
+  "integration_review": {
+    "state_file_structure": {
+      "version": "Schema version (1)",
+      "saved_at": "ISO8601 timestamp of save",
+      "hash_registry": "Dict[path, hash_value]",
+      "pending_queue": "Dict[path, LockQueueState]"
+    },
+    "startup_sequence": "load() is called during server initialization to recover state",
+    "mark_dirty_calls": "Called whenever hash registry or lock manager state changes",
+    "shutdown_sequence": "save_now() called during graceful shutdown to flush pending writes"
+  },
+  "security_analysis": {
+    "file_path_handling": "Uses pathlib.Path for safe path operations",
+    "json_parsing": "Validates JSON structure with schema version field",
+    "error_handling": "Gracefully handles corrupt state files with fresh start",
+    "permission_errors": "Catches and logs PermissionError during re-validation",
+    "atomic_writes": "Uses atomic_write() from file_io to prevent partial writes",
+    "no_privilege_escalation": "Never attempts to modify protected files outside user directory"
+  },
+  "overall_result": "PASS",
+  "pass_count": 6,
+  "fail_count": 0,
+  "notes": "Story 15 persistence layer is fully implemented and tested. All acceptance criteria are satisfied: (1) Hash registry persists to state.json in DATA_DIR with configurable location, (2) Pending queue entries (metadata only) are persisted, (3) TTL-based purge removes expired locks on startup, (4) Hash re-validation checks disk state on startup, (5) Debounced writes prevent excessive I/O with configurable 1-second window, (6) Persistence can be disabled via configuration for zero overhead. All 11 unit tests pass. Implementation includes proper error handling for corrupt files, permission errors, and missing files. Configuration is flexible via environment variables and JSON config files. Zero overhead when disabled.",
+  "recommendation": "APPROVED for implementation. Persistence layer is production-ready. All acceptance criteria met with comprehensive test coverage and proper error handling. Ready for integration testing if applicable."
+}

@@ -1,0 +1,52 @@
+{
+  "story_id": "13",
+  "validation_id": "-13",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:39:53.172266+00:00",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-13.1, AC-13.2, AC-13.3, AC-13.4, AC-13.5"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "failed_checks": [
+    "C",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "NoTestOutput:story_13:story_metadata:validation:missing_test_data",
+    "NoCoverage:src/async_crud_mcp/server.py:module_level:missing_coverage_data",
+    "UnmappedACs:story_13:acceptance_criteria:AC-13.1-AC-13.5:no_test_traceability"
+  ],
+  "convergence": null
+}

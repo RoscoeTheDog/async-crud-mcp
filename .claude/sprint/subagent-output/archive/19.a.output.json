@@ -1,9 +1,9 @@
 {
-  "story_id": "2",
-  "validation_id": "-2",
+  "story_id": "19",
+  "validation_id": "-19",
   "phase": "a",
   "status": "blocked",
-  "completed_at": "2026-02-13T05:24:15Z",
+  "completed_at": "2026-02-13T05:49:05Z",
   "structural_checks": {
     "A": {
       "passed": true,
@@ -17,9 +17,9 @@
     },
     "C": {
       "passed": false,
-      "blocking": true,
+      "blocking": false,
       "blocked": false,
-      "error": "P0 acceptance criteria without test coverage: AC-2.1, AC-2.2, AC-2.3, AC-2.4"
+      "error": "P0 acceptance criteria without test coverage: AC-19.1, AC-19.2, AC-19.3, AC-19.4, AC-19.5"
     },
     "D": {
       "passed": false,
@@ -31,13 +31,15 @@
     "J": {
       "passed": false,
       "blocking": true,
-      "blocked": true,
-      "missing_data": "coverage_report",
-      "error": "No coverage report found. Coverage must be generated before validation. Run tests with coverage enabled (e.g., pytest --cov, nyc, go test -cover)."
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
     }
   },
-  "blocked_checks": ["D", "J"],
-  "blocked_reason": "missing_test_output_and_coverage",
-  "error_signatures": [],
+  "blocked_checks": ["D"],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "ValidationError:tests:story_19:test_coverage:coverage_missing",
+    "ValidationError:tests:story_19:test_traceability:AC_without_tests"
+  ],
   "convergence": null
 }

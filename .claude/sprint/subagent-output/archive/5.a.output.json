@@ -1,27 +1,52 @@
 {
   "story_id": "5",
+  "validation_id": "-5",
   "phase": "a",
-  "status": "passed",
-  "completed_at": "2026-02-12T00:00:00Z",
-  "planning_output": {
-    "implementation_plan": "Implement a per-file asyncio-based read/write lock manager with FIFO queue semantics in `src/async_crud_mcp/core/lock_manager.py`. The lock manager is the core concurrency primitive for the entire MCP server -- all file-mutating tools acquire locks through it.\n\n## Architecture\n\nThe module defines three main classes:\n\n1. **`LockEntry`** - A dataclass representing a single pending lock request in the FIFO queue. Fields: `request_id` (UUID), `lock_type` (read/write), `event` (asyncio.Event to signal grant), `created_at` (monotonic timestamp), `timeout` (seconds), `ttl_expires_at` (optional, for persistence mode).\n\n2. **`FileLock`** - Per-file lock state. Manages the FIFO queue for a single file path. Fields: `active_readers` (int count), `active_writer` (bool), `queue` (collections.deque of LockEntry), `_condition` (asyncio.Condition for signaling). Methods: `acquire_read()`, `acquire_write()`, `release_read()`, `release_write()`, `_promote_next()` (internal: wakes eligible waiters from front of queue).\n\n3. **`LockManager`** - Top-level manager holding a dict of `{path: FileLock}`. Methods: `acquire_read(path)`, `acquire_write(path, timeout)`, `release_read(path)`, `release_write(path)`, `acquire_dual_write(path_a, path_b, timeout)` (for rename), `get_status(path)`, `get_all_status()`, `purge_expired()` (for TTL), `snapshot()` / `restore(state)` (for persistence).\n\nAlso defines:\n4. **`LockType`** - Enum: READ, WRITE\n5. **`LockTimeout`** - Exception raised when lock acquisition times out\n\n## FIFO Queue Algorithm\n\nThe key invariant: once a write request enters the queue, all subsequent read requests queue behind it (starvation prevention). The `_promote_next()` method, called after every release, inspects the front of the queue:\n- If front is WRITE and no active readers/writer: grant it (set event)\n- If front is READ and no active writer: grant it AND grant all consecutive READs behind it (batch promotion), stopping at the next WRITE entry\n- If front is WRITE but there are active readers: do nothing (wait for readers to drain)\n\nThis ensures FIFO ordering, concurrent read batching, and write starvation prevention.\n\n## Timeout Mechanism\n\nWrite lock acquisition uses `asyncio.wait_for(entry.event.wait(), timeout=timeout)`. On `asyncio.TimeoutError`, the entry is removed from the queue and `LockTimeout` is raised. Read locks have no timeout per PRD spec.\n\n## Dual-Lock for Rename\n\n`acquire_dual_write(path_a, path_b, timeout)` sorts paths alphabetically, then acquires write locks sequentially in that order. This consistent ordering prevents deadlocks between concurrent renames (e.g., rename A->B and rename B->A).\n\n## TTL for Persistence\n\nEach `LockEntry` has an optional `ttl_expires_at = created_at + timeout * ttl_multiplier`. The `purge_expired()` method iterates all queues and removes entries past their TTL. Called on server restart after loading persisted state.\n\n## Export\n\nUpdate `src/async_crud_mcp/core/__init__.py` to export `LockManager`, `LockType`, `LockTimeout`.",
-    "files_to_modify": [
-      "src/async_crud_mcp/core/lock_manager.py",
-      "src/async_crud_mcp/core/__init__.py",
-      "tests/test_lock_manager.py"
-    ],
-    "estimated_complexity": "high",
-    "ac_breakdown": {
-      "AC-5.1": "Per-file asyncio-based read/write locking: Create `FileLock` class with `active_readers` (int) and `active_writer` (bool) state. `acquire_read()` checks no active writer and no pending writes ahead in queue, then increments `active_readers`. `acquire_write()` checks no active readers and no active writer, sets `active_writer=True`. Both use `asyncio.Condition` for signaling. `LockManager` maps `dict[str, FileLock]` keyed by normalized absolute path. Each acquire/release is an async context manager for safety.",
-      "AC-5.2": "FIFO queue ordering per file: Each `FileLock` maintains a `collections.deque[LockEntry]` queue. New requests append to the back. `_promote_next()` inspects only the front of the queue -- never skips entries. A write at position N blocks all reads at position N+1, N+2, etc. until the write is granted and released. This guarantees strict FIFO ordering.",
-      "AC-5.3": "Concurrent reads allowed (shared lock): When `_promote_next()` finds a READ at the front and no active writer, it grants that READ and continues granting consecutive READs from the front of the queue (batch promotion). This allows N concurrent readers. Only an active write lock or a queued write ahead in the queue blocks a read.",
-      "AC-5.4": "Exclusive writes block reads and other writes: When a WRITE entry is at the front of the queue, it is only granted when `active_readers == 0` and `active_writer == False`. While a write lock is held, no reads or writes can proceed -- they remain in the queue. On write release, `_promote_next()` is called to wake the next eligible waiter(s).",
-      "AC-5.5": "Timeout handling returns LOCK_TIMEOUT: Write lock acquisition wraps `asyncio.wait_for(entry.event.wait(), timeout=timeout)`. On `asyncio.TimeoutError`, the entry is removed from the deque, and a `LockTimeout` exception is raised. The caller (MCP tool handler) catches this and returns error_code `LOCK_TIMEOUT`. Read locks have no timeout per PRD.",
-      "AC-5.6": "Starvation prevention: Once a WRITE entry is queued, `_promote_next()` will NOT promote READ entries that are behind it. New reads arriving after a pending write are appended to the back of the queue, behind the write. This prevents continuous reads from starving a pending write indefinitely. The write will be granted as soon as current active readers drain.",
-      "AC-5.7": "TTL-based expiry for persistence mode: Each `LockEntry` stores `ttl_expires_at = monotonic_time + timeout * ttl_multiplier` (ttl_multiplier from config, default 2.0). `LockManager.purge_expired()` iterates all file queues, removes entries where `current_time > ttl_expires_at`, and resets orphaned active_reader/active_writer state. `snapshot()` serializes all state for persistence; `restore(state)` loads it back. Called on server restart before accepting new requests.",
-      "AC-5.8": "Alphabetical lock ordering for dual-lock: `LockManager.acquire_dual_write(path_a, path_b, timeout)` sorts `[path_a, path_b]` alphabetically, then calls `acquire_write(sorted[0], timeout)` followed by `acquire_write(sorted[1], timeout)`. If the second acquisition fails (timeout), the first lock is released before raising. This consistent ordering prevents deadlocks between concurrent rename operations (A->B vs B->A)."
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:28:00Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
-    "testing_strategy": "Create `tests/test_lock_manager.py` with pytest-asyncio tests covering:\n\n1. **Basic read lock**: Acquire and release read lock, verify state\n2. **Basic write lock**: Acquire and release write lock, verify state\n3. **Concurrent reads**: Multiple async tasks acquire read locks simultaneously -- all succeed without blocking\n4. **Write blocks reads**: Active write lock blocks new read acquisition until released\n5. **Read blocks writes**: Active read lock(s) block write acquisition until all released\n6. **FIFO ordering**: Queue 3 operations (write, read, write) -- verify they execute in order\n7. **Starvation prevention**: Queue write behind active reads, then queue more reads -- verify write executes before the later reads\n8. **Batch read promotion**: Write releases, next entries are 3 reads followed by a write -- verify all 3 reads promoted simultaneously\n9. **Timeout**: Write lock acquisition with 0.1s timeout behind a held write lock -- verify LockTimeout raised\n10. **Timeout cleanup**: After timeout, verify the entry is removed from queue and subsequent operations work\n11. **Dual-lock alphabetical**: Verify acquire_dual_write sorts paths and acquires in order\n12. **Dual-lock deadlock prevention**: Two concurrent dual-lock operations on overlapping paths -- verify no deadlock\n13. **TTL expiry**: Create entries with short TTL, call purge_expired(), verify they are removed\n14. **Snapshot/restore**: Snapshot state, restore to new manager, verify equivalent state\n15. **Reentrant safety**: Verify that releasing a lock properly triggers promotion of next waiter",
-    "dependencies": []
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "coverage_report"
+    }
+  },
+  "blocked_checks": [
+    "D",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output_and_coverage_report",
+  "error_signatures": [
+    "MissingTestCoverage:story-5:lock-manager:all-acs:P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3, AC-5.4, AC-5.5, AC-5.6, AC-5.7, AC-5.8"
+  ],
+  "convergence": null,
+  "summary": {
+    "total_checks": 5,
+    "passed_checks": 2,
+    "failed_checks": 1,
+    "blocked_checks": 2,
+    "blocking_issue": "Story 5 requires test implementation and coverage reporting before Phase B validation can proceed"
   }
 }

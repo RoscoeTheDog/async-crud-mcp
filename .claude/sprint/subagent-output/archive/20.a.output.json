@@ -1,0 +1,45 @@
+{
+  "story_id": "20",
+  "validation_id": "-20",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:49:10Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-20.1, AC-20.2, AC-20.3, AC-20.4, AC-20.5, AC-20.6, AC-20.7, AC-20.8"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [],
+  "convergence": null,
+  "summary": "Story 20 is blocked on Gate 4 (Validation) Phase A. Check D cannot execute because test output is missing. Before Gate 4 can proceed, tests must be run during Gate 2 Phase C (test execution). Additionally, checks C and J have blocking failures that will need to be addressed: all 8 P0 acceptance criteria lack test traceability, and code coverage is 0% (below 80% threshold)."
+}

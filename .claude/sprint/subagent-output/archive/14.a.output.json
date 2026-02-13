@@ -1,25 +1,48 @@
 {
   "story_id": "14",
+  "validation_id": "-14",
   "phase": "a",
-  "status": "passed",
-  "completed_at": "2026-02-12T22:00:00Z",
-  "planning_output": {
-    "implementation_plan": "Create `src/async_crud_mcp/core/file_watcher.py` implementing an OS filesystem watcher using watchdog. The module provides a `FileWatcher` class that monitors configured base_directories for external file changes and updates the HashRegistry in real-time. Key design decisions:\n\n1. **Event Handler** (`_DebouncedEventHandler` subclassing `watchdog.events.FileSystemEventHandler`): Receives raw filesystem events, stores them in a per-path pending dict with timestamps. A background timer thread flushes events older than `debounce_ms`.\n\n2. **Debounce + Coalesce Logic**: Events are buffered per normalized path. Within the debounce window (100ms default), if a DELETE is followed by a CREATE on the same path, the pair is coalesced into a single MODIFY event. After the debounce window expires, the final event type is dispatched to the hash registry update logic.\n\n3. **Observer Factory** (`_create_observer`): Per PRD 13.12, selects between native `Observer` and `PollingObserver` based on:\n   - Network path detection (UNC `\\\\` or `/mnt/` prefix) -> PollingObserver\n   - inotify limit OSError -> fallback to PollingObserver\n   - Default -> native Observer\n\n4. **Hash Registry Integration**: On MODIFY/CREATE for files already in registry -> re-hash and update. On DELETE -> remove from registry. New files not in registry -> ignore (registered on first MCP access per PRD).\n\n5. **Lifecycle**: `start()` creates observers for each base_directory, `stop()` stops all observers and the debounce timer. Integrates with `ShutdownHandler` via callback registration.\n\n6. **Configuration**: Uses existing `WatcherConfig` (enabled, debounce_ms) from `config.py`. Watches directories from `CrudConfig.base_directories`.",
-    "files_to_modify": [
-      "src/async_crud_mcp/core/file_watcher.py",
-      "src/async_crud_mcp/core/__init__.py",
-      "tests/test_file_watcher.py"
-    ],
-    "estimated_complexity": "medium",
-    "ac_breakdown": {
-      "AC-14.1": "Watches configured base_directories: The `FileWatcher.__init__` accepts a list of base directory paths (from `CrudConfig.base_directories`) and a `HashRegistry` instance. `start()` iterates over each directory, calls `_create_observer(path)` to get the appropriate observer, schedules the `_DebouncedEventHandler` with `recursive=True`, and starts the observer. Each observer is stored in `self._observers: list[BaseObserver]` for lifecycle management. If a directory doesn't exist at startup, log a warning and skip it (don't crash).",
-      "AC-14.2": "Updates hash registry on create/modify/delete events: The `_DebouncedEventHandler` receives `on_created`, `on_modified`, `on_deleted`, and `on_moved` events from watchdog. After debounce + coalesce processing, the flush logic calls:\n- MODIFY/CREATE (file in registry): `compute_file_hash(path)` -> `registry.update(path, new_hash)`. Wrap in try/except for files that vanish between event and hash (race condition).\n- DELETE: `registry.remove(path)`.\n- CREATE (file NOT in registry): no-op (per PRD: 'it will be registered on first access').\n- MOVED: treat as DELETE of old path + CREATE at new path.\nOnly process file events (skip directory events via `event.is_directory` check).",
-      "AC-14.3": "100ms debounce for editor save patterns: The `_DebouncedEventHandler` maintains `_pending: dict[str, tuple[str, float]]` mapping normalized_path -> (event_type, timestamp). When an event arrives, it updates the pending entry with the new event type and current time. A daemon `threading.Timer` (or a background thread with sleep loop) runs every ~50ms checking for entries where `time.monotonic() - timestamp >= debounce_ms/1000`. Expired entries are flushed to the registry update logic. The debounce interval comes from `WatcherConfig.debounce_ms` (default 100).",
-      "AC-14.4": "Coalesces DELETE+CREATE into MODIFY: During the debounce window, if the pending dict has a DELETE for a path and a CREATE arrives for the same path (or vice versa), the pending entry is updated to MODIFY. Specifically:\n- Pending is DELETE, new event is CREATE -> set pending to MODIFY\n- Pending is CREATE, new event is DELETE -> remove pending (net no-op)\n- Pending is MODIFY, new event is anything -> keep as MODIFY\nThis handles the editor temp-file-then-rename pattern (VS Code, Vim) where a save produces DELETE + CREATE in rapid succession.",
-      "AC-14.5": "PollingObserver fallback for network paths and inotify limit: `_create_observer(path)` implements the fallback strategy from PRD 13.12:\n1. `_is_network_path(path)` checks for UNC paths (`\\\\` prefix) or common network mount points. If True -> return `PollingObserver(timeout=2)` with a warning log.\n2. Try native `Observer()`, schedule handler, `start()`. If `OSError` with 'inotify' in message or `errno == 28` -> log warning, fall back to `PollingObserver(timeout=2)`.\n3. On macOS, the native observer is FSEventsObserver (via watchdog's auto-detection). No special handling needed beyond the general fallback.",
-      "AC-14.6": "Configurable via watcher config section: The existing `WatcherConfig` model in `config.py` already has `enabled: bool = True` and `debounce_ms: int = 100`. The `FileWatcher` accepts these values in its constructor. The `enabled` flag is checked before starting observers (if False, `start()` is a no-op). No changes needed to `config.py` - the model is already complete."
+  "status": "blocked",
+  "completed_at": "2026-02-13T05:42:00Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
-    "testing_strategy": "Create `tests/test_file_watcher.py` with the following test categories:\n\n1. **Unit tests for debounce/coalesce logic** (no real filesystem):\n   - Test that rapid events within debounce window are coalesced\n   - Test DELETE+CREATE coalesced to MODIFY\n   - Test CREATE+DELETE results in no-op\n   - Test single event passes through after debounce\n\n2. **Unit tests for observer factory**:\n   - Test `_is_network_path` with UNC paths, normal paths\n   - Test fallback to PollingObserver on network paths\n\n3. **Integration tests with real filesystem** (using `tmp_path` fixture):\n   - Create file in watched directory -> verify hash registry updated\n   - Modify file -> verify hash updated\n   - Delete file -> verify removed from registry\n   - Create file not in registry -> verify ignored\n\n4. **Lifecycle tests**:\n   - Start/stop without errors\n   - Start with non-existent directory -> warning logged, no crash\n   - Start with enabled=False -> no observers created\n\nUse `pytest-asyncio` and `pytest-timeout` (already in dev deps). Use `threading.Event` waits for async event processing in integration tests. Mock `watchdog.observers.Observer` for unit tests where needed.",
-    "dependencies": []
-  }
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-14.1, AC-14.2, AC-14.3, AC-14.4, AC-14.5, AC-14.6"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "test_output_missing",
+  "error_signatures": [
+    "TestMissing:tests/test_file_watcher.py::*::*:P0_acceptance_criteria_without_tests",
+    "CoverageFailure:coverage.json::scoped::0.0:threshold_80"
+  ],
+  "convergence": null,
+  "notes": "Story 14 is BLOCKED on missing test output (Check D). This is a blocking condition because test pass rate validation cannot run without test execution results. Additionally, Check C indicates all 6 P0 acceptance criteria lack test coverage. Check J also fails due to 0% code coverage. The story cannot proceed until tests are executed and integrated into the validation pipeline."
 }
