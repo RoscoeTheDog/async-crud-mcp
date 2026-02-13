@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
@@ -47,7 +47,7 @@ class DaemonConfig(BaseModel):
 
     enabled: bool = True
     host: str = "127.0.0.1"
-    port: int | None = 8720  # None = auto-assign via username hash
+    port: int | None = Field(default=8720, ge=1024, le=65535)  # None = auto-assign via username hash
     transport: Literal["sse", "stdio"] = "sse"
     log_level: str = "DEBUG"
     config_poll_seconds: int = 3
@@ -55,6 +55,14 @@ class DaemonConfig(BaseModel):
     session_poll_seconds: int = 3
     wait_for_session: bool = True
     health_check_interval: int = 30
+
+    @field_validator('host')
+    @classmethod
+    def host_must_not_be_empty(cls, v: str) -> str:
+        """Validate that host is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError('host must be a non-empty string')
+        return v
 
 
 class CrudConfig(BaseModel):
@@ -84,8 +92,27 @@ class WatcherConfig(BaseModel):
     debounce_ms: int = 100
 
 
-# Module-level variable to store JSON file path for settings_customise_sources
-_json_config_file: Path | None = None
+# Module-level variables
+_json_config_file: Path | None = None  # For settings_customise_sources
+_settings_cache: "Settings | None" = None  # For singleton pattern
+
+
+def _strip_comment_fields(data: Any) -> Any:
+    """Recursively strip keys starting with _ or $ from dict.
+
+    Args:
+        data: Dictionary to clean (or any other type, which is returned as-is)
+
+    Returns:
+        Dictionary with comment fields removed, or original value if not a dict
+    """
+    if not isinstance(data, dict):
+        return data
+    return {
+        k: _strip_comment_fields(v) if isinstance(v, dict) else v
+        for k, v in data.items()
+        if not k.startswith('_') and not k.startswith('$')
+    }
 
 
 class Settings(BaseSettings):
@@ -106,6 +133,23 @@ class Settings(BaseSettings):
         env_prefix="ASYNC_CRUD_MCP_",
         env_nested_delimiter="__",
     )
+
+    @classmethod
+    def from_file(cls, config_path: Path | str) -> "Settings":
+        """Load settings from a JSON config file.
+
+        Args:
+            config_path: Path to JSON config file
+
+        Returns:
+            Settings instance loaded from file, or default Settings if file doesn't exist
+        """
+        path = Path(config_path)
+        if not path.exists():
+            return cls()
+        raw = json.loads(path.read_text(encoding='utf-8'))
+        cleaned = _strip_comment_fields(raw)
+        return cls(**cleaned)
 
     @classmethod
     def settings_customise_sources(
@@ -130,21 +174,37 @@ class Settings(BaseSettings):
         return (env_settings, init_settings)
 
 
-def get_settings(config_path: Path | str | None = None) -> Settings:
+def get_settings(config_path: Path | str | None = None, *, _force_reload: bool = False) -> Settings:
     """Load settings from optional JSON config file and environment variables.
 
+    Implements singleton pattern - returns cached settings unless _force_reload=True
+    or config_path is provided.
+
     Args:
-        config_path: Optional path to JSON config file
+        config_path: Optional path to JSON config file. If provided, bypasses cache.
+        _force_reload: If True, bypasses cache and creates fresh Settings instance
 
     Returns:
         Settings instance with merged configuration
     """
-    global _json_config_file
+    global _json_config_file, _settings_cache
+
+    # Return cached settings if available and no reload requested
+    if _settings_cache is not None and not _force_reload and config_path is None:
+        return _settings_cache
+
+    # Create new settings instance
     if config_path:
         _json_config_file = Path(config_path)
         try:
             settings = Settings()
         finally:
             _json_config_file = None  # Reset after use
-        return settings
-    return Settings()
+    else:
+        settings = Settings()
+
+    # Cache the settings if no config_path was provided
+    if config_path is None:
+        _settings_cache = settings
+
+    return settings

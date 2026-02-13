@@ -6,8 +6,9 @@ type: feature
 status: queued
 parent: null
 created_at: '2026-02-13T07:54:41.782885+00:00'
-updated_at: '2026-02-13T07:54:41.782885+00:00'
-depends_on: []
+updated_at: '2026-02-13T08:05:06.799141+00:00'
+depends_on:
+- '7'
 blocks: []
 cross_story_impact: []
 affected_by: []

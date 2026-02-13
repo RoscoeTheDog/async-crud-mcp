@@ -1,55 +1,40 @@
 """Daemon subcommand group for lifecycle management."""
 
-import asyncio
-import subprocess
-import sys
-from pathlib import Path
+import json
+import time
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 
-from async_crud_mcp.daemon.bootstrap_daemon import BootstrapDaemon
+from async_crud_mcp.daemon.config_init import generate_default_config
+from async_crud_mcp.daemon.config_watcher import atomic_write_config
 from async_crud_mcp.daemon.health import check_health
-from async_crud_mcp.daemon.paths import get_logs_dir
+from async_crud_mcp.daemon.paths import get_config_file_path, get_logs_dir, get_user_config_file_path, get_user_logs_dir
 
 app = typer.Typer(help="Daemon lifecycle management")
 console = Console()
 
 
 @app.command()
-def start(background: bool = typer.Option(False, "--background", "-b", help="Run in background")):
+def start():
     """Start the daemon."""
     try:
-        daemon = BootstrapDaemon()
+        config_path = get_config_file_path()
 
-        if background:
-            python_exe = sys.executable
-            script_args = [python_exe, "-m", "async_crud_mcp.daemon.bootstrap_daemon"]
-
-            if sys.platform == "win32":
-                subprocess.Popen(
-                    script_args,
-                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                subprocess.Popen(
-                    script_args,
-                    start_new_session=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-
-            console.print("[green]Daemon started in background[/green]")
+        if config_path.exists():
+            config = json.loads(config_path.read_text(encoding="utf-8"))
         else:
-            console.print("[cyan]Starting daemon in foreground...[/cyan]")
-            asyncio.run(daemon.run())
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config = generate_default_config()
 
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Daemon interrupted[/yellow]")
+        config["daemon"]["enabled"] = True
+        atomic_write_config(config_path, config)
+
+        console.print("[green]Daemon start requested[/green]")
+        console.print("[dim]The daemon will start automatically via the ConfigWatcher[/dim]")
+
     except Exception as e:
         console.print(f"[red]Failed to start daemon:[/red] {e}")
         raise typer.Exit(code=1)
@@ -58,27 +43,132 @@ def start(background: bool = typer.Option(False, "--background", "-b", help="Run
 @app.command()
 def stop():
     """Stop the daemon."""
-    console.print("[yellow]Stop command not yet implemented[/yellow]")
-    console.print("[dim]Use your platform's service manager or kill the process[/dim]")
+    try:
+        config_path = get_config_file_path()
+
+        if not config_path.exists():
+            console.print("[yellow]Config file not found, daemon may not be running[/yellow]")
+            raise typer.Exit(code=1)
+
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["daemon"]["enabled"] = False
+        atomic_write_config(config_path, config)
+
+        console.print("[green]Daemon stop requested[/green]")
+        console.print("[dim]The daemon will stop automatically via the ConfigWatcher[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Failed to stop daemon:[/red] {e}")
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def restart():
     """Restart the daemon."""
-    console.print("[cyan]Restarting daemon...[/cyan]")
     try:
-        stop()
-        start()
+        config_path = get_config_file_path()
+
+        if not config_path.exists():
+            console.print("[yellow]Config file not found, creating new config and starting daemon[/yellow]")
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config = generate_default_config()
+            config["daemon"]["enabled"] = True
+            atomic_write_config(config_path, config)
+            console.print("[green]Daemon started[/green]")
+            return
+
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+
+        console.print("[cyan]Stopping daemon...[/cyan]")
+        stop_config = json.loads(json.dumps(config))
+        stop_config["daemon"]["enabled"] = False
+        atomic_write_config(config_path, stop_config)
+
+        config_poll_seconds = config.get("daemon", {}).get("config_poll_seconds", 3)
+        config_debounce_seconds = config.get("daemon", {}).get("config_debounce_seconds", 1.0)
+        wait_time = config_poll_seconds + config_debounce_seconds
+
+        console.print(f"[dim]Waiting {wait_time}s for daemon to stop...[/dim]")
+        time.sleep(wait_time)
+
+        console.print("[cyan]Starting daemon...[/cyan]")
+        start_config = json.loads(json.dumps(config))
+        start_config["daemon"]["enabled"] = True
+        atomic_write_config(config_path, start_config)
+
+        console.print("[green]Daemon restart requested[/green]")
+
     except Exception as e:
         console.print(f"[red]Restart failed:[/red] {e}")
         raise typer.Exit(code=1)
 
 
+def _check_user_health(username: str) -> dict:
+    """Check health for a specific user's daemon configuration.
+
+    Args:
+        username: Username whose config to check
+
+    Returns:
+        Health check result dictionary
+    """
+    user_config_path = get_user_config_file_path(username)
+
+    if not user_config_path.exists():
+        return {
+            "status": "unknown",
+            "message": f"Config not found for user: {username}",
+            "config_readable": False,
+        }
+
+    try:
+        user_config = json.loads(user_config_path.read_text(encoding="utf-8"))
+        host = user_config.get("daemon", {}).get("host", "127.0.0.1")
+        port = user_config.get("daemon", {}).get("port", 8720)
+
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex((host, port))
+        sock.close()
+
+        return {
+            "status": "healthy" if result == 0 else "degraded",
+            "message": f"User {username} daemon",
+            "config_readable": True,
+            "daemon_enabled": user_config.get("daemon", {}).get("enabled", False),
+            "host": host,
+            "port": port,
+            "port_listening": result == 0,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error checking user {username}: {e}",
+            "config_readable": False,
+        }
+
+
 @app.command()
-def status():
+def status(
+    username: str = typer.Option(None, "--username", "-u", help="Check specific user's daemon"),
+    all_users: bool = typer.Option(False, "--all", "-a", help="Check all known users"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
     """Check daemon health status."""
     try:
-        health = check_health()
+        if all_users:
+            console.print("[yellow]--all option: multi-user enumeration not yet implemented[/yellow]")
+            console.print("[dim]Falling back to current user status[/dim]")
+
+        if username:
+            health = _check_user_health(username)
+        else:
+            health = check_health()
+
+        if json_output:
+            console.print(json.dumps(health, indent=2))
+            return
+
         status_text = health.get("status", "unknown").upper()
 
         if health["status"] == "healthy":
@@ -112,10 +202,22 @@ def status():
 
 
 @app.command()
-def logs(follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")):
+def logs(
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+    lines: int = typer.Option(None, "--lines", "-n", help="Show last N lines"),
+    username: str = typer.Option(None, "--username", "-u", help="Show logs for specific user"),
+    user: str = typer.Option(None, "--user", help="Alias for --username"),
+):
     """View daemon logs."""
     try:
-        log_file = get_logs_dir() / "daemon.log"
+        target_username = username or user
+
+        if target_username:
+            log_dir = get_user_logs_dir(target_username)
+        else:
+            log_dir = get_logs_dir()
+
+        log_file = log_dir / "daemon.log"
 
         if not log_file.exists():
             console.print(f"[yellow]Log file not found:[/yellow] {log_file}")
@@ -127,19 +229,28 @@ def logs(follow: bool = typer.Option(False, "--follow", "-f", help="Follow log o
 
             try:
                 with open(log_file, "r", encoding="utf-8") as f:
+                    if lines is not None:
+                        all_lines = f.readlines()
+                        for line in all_lines[-lines:]:
+                            console.print(line, end="")
+
                     f.seek(0, 2)
                     while True:
                         line = f.readline()
                         if line:
                             console.print(line, end="")
                         else:
-                            import time
                             time.sleep(0.5)
             except KeyboardInterrupt:
                 console.print("\n[dim]Stopped following logs[/dim]")
         else:
             with open(log_file, "r", encoding="utf-8") as f:
-                content = f.read()
+                if lines is not None:
+                    all_lines = f.readlines()
+                    content = "".join(all_lines[-lines:])
+                else:
+                    content = f.read()
+
                 syntax = Syntax(content, "log", theme="monokai", line_numbers=False)
                 console.print(syntax)
 

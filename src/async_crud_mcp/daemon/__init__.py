@@ -25,6 +25,7 @@ from .installer import get_installer
 from .logging_setup import get_logger, setup_logging
 from .paths import (
     APP_NAME,
+    get_cache_dir,
     get_config_dir,
     get_config_file_path,
     get_data_dir,
@@ -62,6 +63,7 @@ __all__ = [
     'setup_logging',
     # Paths
     'APP_NAME',
+    'get_cache_dir',
     'get_config_dir',
     'get_config_file_path',
     'get_data_dir',

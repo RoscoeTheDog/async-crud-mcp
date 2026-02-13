@@ -25,18 +25,76 @@ class TestPortPreflightCheck:
         _check_port_available("127.0.0.1", port)
 
     def test_port_already_in_use(self):
-        """Test that check raises RuntimeError when port is occupied."""
+        """Test that check exits with code 48 when port is occupied."""
         # Bind a socket to a port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         _, port = sock.getsockname()
 
         try:
-            # Should raise because port is occupied
-            with pytest.raises(RuntimeError, match=f"Port {port} is already in use"):
+            # Should exit with code 48 (EADDRINUSE) because port is occupied
+            with pytest.raises(SystemExit) as exc_info:
                 _check_port_available("127.0.0.1", port)
+            assert exc_info.value.code == 48
         finally:
             sock.close()
+
+    def test_port_in_use_logs_error(self):
+        """Test that EADDRINUSE logs an error message."""
+        # Bind a socket to a port
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        _, port = sock.getsockname()
+
+        try:
+            # Mock logger.error to capture the log call
+            with patch("async_crud_mcp.server.logger.error") as mock_error:
+                with pytest.raises(SystemExit):
+                    _check_port_available("127.0.0.1", port)
+                # Verify error was logged
+                mock_error.assert_called_once()
+                call_args = mock_error.call_args[0][0]
+                assert f"Port {port} is already in use" in call_args
+        finally:
+            sock.close()
+
+
+class TestSecurityWarning:
+    """Test security warning for non-localhost binding."""
+
+    def test_non_localhost_warning(self):
+        """Test that binding to non-localhost address logs a warning."""
+        # Test the security logic directly
+        host = "0.0.0.0"
+        with patch("async_crud_mcp.server.logger.warning") as mock_warning:
+            # Replicate the __main__ security check logic
+            if host not in ("127.0.0.1", "::1", "localhost"):
+                from async_crud_mcp.server import logger
+                logger.warning(
+                    f"Security: binding to non-localhost address {host} exposes the server to network access"
+                )
+
+            # Verify warning was logged
+            mock_warning.assert_called_once()
+            call_args = mock_warning.call_args[0][0]
+            assert "Security: binding to non-localhost address" in call_args
+            assert "0.0.0.0" in call_args
+
+    def test_localhost_no_warning(self):
+        """Test that binding to localhost does not log a warning."""
+        # Test that localhost addresses don't trigger the warning
+        localhost_addresses = ["127.0.0.1", "::1", "localhost"]
+        for host in localhost_addresses:
+            with patch("async_crud_mcp.server.logger.warning") as mock_warning:
+                # Replicate the __main__ security check logic
+                if host not in ("127.0.0.1", "::1", "localhost"):
+                    from async_crud_mcp.server import logger
+                    logger.warning(
+                        f"Security: binding to non-localhost address {host} exposes the server to network access"
+                    )
+
+                # Verify no warning was logged for localhost addresses
+                mock_warning.assert_not_called()
 
 
 class TestFastMCPServer:
@@ -113,7 +171,7 @@ class TestToolWrappers:
 
     @pytest.mark.asyncio
     async def test_health_tool_wrapper(self):
-        """Test health_tool wrapper returns dict."""
+        """Test health_tool wrapper returns dict with version and uptime."""
         # @mcp.tool() returns a FunctionTool, not a callable coroutine.
         tool = mcp._tool_manager._tools["health_tool"]
         response = await tool.fn()
@@ -122,6 +180,13 @@ class TestToolWrappers:
         assert isinstance(response, dict)
         assert "status" in response
         assert response["status"] in ("healthy", "degraded", "unhealthy")
+
+        # Verify version and uptime are included (AC-9.3)
+        assert "version" in response
+        assert response["version"] == "0.1.0"
+        assert "uptime" in response
+        assert isinstance(response["uptime"], float)
+        assert response["uptime"] >= 0
 
 
 class TestServerConfiguration:

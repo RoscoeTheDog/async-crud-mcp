@@ -11,7 +11,13 @@ import os
 import sys
 from pathlib import Path
 
-from ..config import APP_NAME
+# Local APP_NAME constant as fallback (ADR-009 single name convention)
+_APP_NAME_DEFAULT = 'async-crud-mcp'
+
+try:
+    from ..config import APP_NAME
+except ImportError:
+    APP_NAME = _APP_NAME_DEFAULT
 
 __all__ = [
     'APP_NAME',
@@ -19,6 +25,7 @@ __all__ = [
     'get_config_dir',
     'get_logs_dir',
     'get_data_dir',
+    'get_cache_dir',
     'get_shared_dir',
     'get_shared_python_dir',
     'get_shared_uv_dir',
@@ -179,6 +186,30 @@ def get_data_dir() -> Path:
 
     else:  # linux
         return _get_xdg_path('XDG_DATA_HOME', '.local/share')
+
+
+def get_cache_dir() -> Path:
+    """Get platform-appropriate cache directory.
+
+    Returns:
+        Path to cache directory (not created automatically)
+        - Windows: %LOCALAPPDATA%\\async-crud-mcp\\cache
+        - macOS: ~/Library/Caches/async-crud-mcp
+        - Linux: XDG_CACHE_HOME/async-crud-mcp or ~/.cache/async-crud-mcp
+    """
+    platform = _get_platform()
+
+    if platform == 'windows':
+        localappdata = os.environ.get('LOCALAPPDATA')
+        if localappdata:
+            return Path(localappdata) / APP_NAME / 'cache'
+        return Path.home() / 'AppData' / 'Local' / APP_NAME / 'cache'
+
+    elif platform == 'darwin':
+        return Path.home() / 'Library' / 'Caches' / APP_NAME
+
+    else:  # linux
+        return _get_xdg_path('XDG_CACHE_HOME', '.cache')
 
 
 def get_shared_dir() -> Path:

@@ -1,7 +1,8 @@
 {
   "permissions": {
     "deny": [
-      "Task"
+      "Task",
+      "Explore"
     ]
   }
 }

@@ -41,6 +41,7 @@ desktop.ini
 .coverage
 htmlcov/
 .mypy_cache/
+.ruff_cache/
 
 # MCP / Agent tooling
 .serena/

@@ -474,15 +474,22 @@ class SystemdInstaller(InstallerBase):
             return []
 
 
-def get_installer() -> InstallerBase:
+def get_installer(username: str | None = None) -> InstallerBase:
     """Factory function to get the appropriate platform-specific installer.
+
+    Args:
+        username: Optional username for per-user service installation
 
     Returns:
         InstallerBase: Platform-specific installer instance
     """
     if sys.platform == 'win32':
-        return WindowsServiceInstaller()
+        installer = WindowsServiceInstaller()
     elif sys.platform == 'darwin':
-        return LaunchdInstaller()
+        installer = LaunchdInstaller()
     else:
-        return SystemdInstaller()
+        installer = SystemdInstaller()
+
+    # Store username for future use by platform implementations
+    installer._username = username  # type: ignore
+    return installer

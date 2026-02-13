@@ -289,6 +289,7 @@ def generate_default_config(
     log_level: str = "DEBUG",
     config_poll_seconds: int = 3,
     wait_for_session: bool = True,
+    session_poll_seconds: int = 3,
 ) -> dict[str, Any]:
     """Generate default configuration dictionary.
 
@@ -299,6 +300,7 @@ def generate_default_config(
         log_level: Logging level (default: DEBUG).
         config_poll_seconds: Config file poll interval.
         wait_for_session: Wait for user session before starting.
+        session_poll_seconds: Session poll interval.
 
     Returns:
         Configuration dictionary.
@@ -311,6 +313,7 @@ def generate_default_config(
             "transport": transport,
             "log_level": log_level,
             "config_poll_seconds": config_poll_seconds,
+            "session_poll_seconds": session_poll_seconds,
             "wait_for_session": wait_for_session,
         },
         "server": {

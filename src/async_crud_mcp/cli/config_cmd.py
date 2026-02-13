@@ -12,6 +12,7 @@ from rich.json import JSON
 from rich.panel import Panel
 
 from async_crud_mcp.config import get_settings
+from async_crud_mcp.daemon.config_init import get_config_file_path as get_config_file_path_init
 from async_crud_mcp.daemon.config_init import init_config
 from async_crud_mcp.daemon.paths import get_config_file_path
 
@@ -20,10 +21,20 @@ console = Console()
 
 
 @app.command()
-def init(force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config")):
+def init(
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config"),
+    port: int | None = typer.Option(None, "--port", "-p", help="Server port number"),
+    no_interactive: bool = typer.Option(False, "--no-interactive", help="Disable interactive prompts"),
+    username: str | None = typer.Option(None, "--username", "-u", help="Username for multi-user scenarios"),
+):
     """Initialize default configuration."""
     try:
-        config_path = init_config(force=force, interactive=True)
+        config_path = init_config(
+            force=force,
+            port=port,
+            interactive=not no_interactive,
+            username=username,
+        )
         console.print(f"[green]Configuration initialized:[/green] {config_path}")
     except FileExistsError as e:
         console.print(f"[yellow]{e}[/yellow]")
@@ -35,10 +46,16 @@ def init(force: bool = typer.Option(False, "--force", "-f", help="Overwrite exis
 
 
 @app.command()
-def show():
+def show(
+    username: str | None = typer.Option(None, "--username", "-u", help="Username for multi-user scenarios"),
+    json_output: bool = typer.Option(False, "--json", help="Output raw JSON instead of formatted panel"),
+):
     """Show current configuration."""
     try:
-        config_path = get_config_file_path()
+        if username:
+            config_path = get_config_file_path_init(username)
+        else:
+            config_path = get_config_file_path()
 
         if not config_path.exists():
             console.print(f"[yellow]Config file not found:[/yellow] {config_path}")
@@ -48,9 +65,12 @@ def show():
         with open(config_path, "r", encoding="utf-8") as f:
             config_data = json.load(f)
 
-        json_obj = JSON(json.dumps(config_data, indent=2))
-        panel = Panel(json_obj, title=f"Configuration: {config_path}", border_style="cyan")
-        console.print(panel)
+        if json_output:
+            typer.echo(json.dumps(config_data, indent=2))
+        else:
+            json_obj = JSON(json.dumps(config_data, indent=2))
+            panel = Panel(json_obj, title=f"Configuration: {config_path}", border_style="cyan")
+            console.print(panel)
 
     except json.JSONDecodeError as e:
         console.print(f"[red]Invalid JSON in config file:[/red] {e}")
@@ -90,10 +110,15 @@ def edit():
 
 
 @app.command()
-def validate():
+def validate(
+    username: str | None = typer.Option(None, "--username", "-u", help="Username for multi-user scenarios"),
+):
     """Validate configuration file."""
     try:
-        config_path = get_config_file_path()
+        if username:
+            config_path = get_config_file_path_init(username)
+        else:
+            config_path = get_config_file_path()
 
         if not config_path.exists():
             console.print(f"[yellow]Config file not found:[/yellow] {config_path}")

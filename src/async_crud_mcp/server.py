@@ -12,10 +12,13 @@ Referenced by bootstrap_daemon.py and windows/dispatcher.py
 """
 
 import socket
+import sys
 import time
 
 from fastmcp import FastMCP
+from loguru import logger
 
+from async_crud_mcp import __version__
 from async_crud_mcp.config import APP_NAME, get_settings
 from async_crud_mcp.core import HashRegistry, LockManager, PathValidator
 from async_crud_mcp.daemon.health import check_health
@@ -68,17 +71,18 @@ def _check_port_available(host: str, port: int) -> None:
         host: Host address to bind
         port: Port number to test
 
-    Raises:
-        RuntimeError: If port is already in use
+    Exits:
+        With code 48 (EADDRINUSE) if port is already in use
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind((host, port))
     except OSError as e:
-        raise RuntimeError(
+        logger.error(
             f"Port {port} is already in use on {host}. "
             f"Please choose a different port or stop the existing service. Error: {e}"
         )
+        sys.exit(48)
     finally:
         sock.close()
 
@@ -379,9 +383,13 @@ async def health_tool():
     """Check the health status of the daemon.
 
     Returns:
-        Health check results with status, config, logs, and port connectivity
+        Health check results with status, version, uptime, config, logs, and port connectivity
     """
-    return check_health()
+    health_data = check_health()
+    # Enrich response with version and uptime
+    health_data["version"] = __version__
+    health_data["uptime"] = time.time() - server_start_time
+    return health_data
 
 
 # =============================================================================
@@ -392,6 +400,13 @@ if __name__ == "__main__":
     # Port pre-flight check
     host = settings.daemon.host
     port = settings.daemon.port or 8720  # Default to 8720 if None
+
+    # Security warning for non-localhost binding
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        logger.warning(
+            f"Security: binding to non-localhost address {host} exposes the server to network access"
+        )
+
     _check_port_available(host, port)
 
     # Start server with configured transport

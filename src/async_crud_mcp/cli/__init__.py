@@ -19,8 +19,22 @@ app = typer.Typer(
 app.add_typer(bootstrap_cmd.app, name="bootstrap", help="Bootstrap daemon service")
 app.add_typer(daemon_cmd.app, name="daemon", help="Daemon lifecycle management")
 app.add_typer(config_cmd.app, name="config", help="Configuration management")
-app.add_typer(install_cmd.app, name="install", help="Quick installation commands")
-app.add_typer(setup_cmd.app, name="setup", help="Interactive setup wizard")
+
+# Register setup as a top-level command
+app.command(name="setup", help="Interactive setup wizard")(setup_cmd.wizard)
+
+# Register quick-install as a top-level command
+app.command(name="quick-install", help="Run full setup sequence")(install_cmd.quick_install)
+
+# Register uninstall as a top-level command
+app.command(name="uninstall", help="Stop and uninstall the daemon service")(install_cmd.uninstall)
+
+
+@app.command()
+def version():
+    """Show version information."""
+    from async_crud_mcp import __version__
+    typer.echo(f"async-crud-mcp {__version__}")
 
 
 if __name__ == "__main__":

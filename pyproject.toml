@@ -41,6 +41,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/async_crud_mcp"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/.claude",
+    "/docs",
+    "/scripts",
+    "/tests",
+    "/.git",
+    "/.gitignore",
+    "/.ruff_cache",
+    "/coverage.json",
+]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
