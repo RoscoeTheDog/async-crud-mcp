@@ -1,5 +1,7 @@
 """Tests for async_rename tool."""
 
+import os
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -253,30 +255,17 @@ class TestAsyncRenameCrossFilesystem:
         content = "Test content"
         old_path.write_text(content, encoding='utf-8')
 
-        # Mock os.stat to simulate different filesystems
-        import os
-        original_stat = os.stat
+        # Mock safe_rename to simulate cross-filesystem rename.
+        # Directly patching os.stat is unreliable because both source file and
+        # destination directory share the same temp dir prefix, so both stat
+        # calls return the mocked st_dev, making them appear on the same FS.
+        def fake_cross_fs_rename(src, dst):
+            """Perform the actual rename but report it as cross-filesystem."""
+            shutil.copy2(src, dst)
+            os.unlink(src)
+            return True  # Indicate cross-filesystem
 
-        def mock_stat(path):
-            stat_result = original_stat(path)
-            # Make destination directory appear on different filesystem
-            if str(new_path.parent) in str(path):
-                # Create a new stat_result with different st_dev
-                class MockStat:
-                    st_dev = 9999  # Different device number
-                    st_ino = stat_result.st_ino
-                    st_mode = stat_result.st_mode
-                    st_nlink = stat_result.st_nlink
-                    st_uid = stat_result.st_uid
-                    st_gid = stat_result.st_gid
-                    st_size = stat_result.st_size
-                    st_atime = stat_result.st_atime
-                    st_mtime = stat_result.st_mtime
-                    st_ctime = stat_result.st_ctime
-                return MockStat()
-            return stat_result
-
-        with patch('os.stat', side_effect=mock_stat):
+        with patch('async_crud_mcp.tools.async_rename.safe_rename', side_effect=fake_cross_fs_rename):
             request = AsyncRenameRequest(old_path=str(old_path), new_path=str(new_path))
             response = await async_rename(request, path_validator, lock_manager, hash_registry)
 

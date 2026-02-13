@@ -52,7 +52,7 @@ class TestAsyncUpdateContentSuccess:
 
     @pytest.mark.asyncio
     async def test_update_existing_file(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test successful update with full content replacement."""
+        """Test successful update with full content replacement. AC-9.2"""
         file_path = temp_base_dir / "update_test.txt"
         original_content = "Original content"
         new_content = "New content after update"
@@ -76,7 +76,7 @@ class TestAsyncUpdateContentSuccess:
 
     @pytest.mark.asyncio
     async def test_update_returns_previous_and_new_hash(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify previous_hash matches original, hash matches new content."""
+        """Verify previous_hash matches original, hash matches new content. AC-9.2"""
         file_path = temp_base_dir / "hash_test.txt"
         original_content = "Original"
         new_content = "Updated"
@@ -98,7 +98,7 @@ class TestAsyncUpdateContentSuccess:
 
     @pytest.mark.asyncio
     async def test_update_writes_content_to_disk(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify file on disk matches new content after update."""
+        """Verify file on disk matches new content after update. AC-9.2"""
         file_path = temp_base_dir / "disk_test.txt"
         original_content = "Before update"
         new_content = "After update"
@@ -118,7 +118,7 @@ class TestAsyncUpdateContentSuccess:
 
     @pytest.mark.asyncio
     async def test_update_updates_hash_registry(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify HashRegistry is updated with new hash."""
+        """Verify HashRegistry is updated with new hash. AC-9.2"""
         file_path = temp_base_dir / "registry_test.txt"
         original_content = "Registry test original"
         new_content = "Registry test updated"
@@ -139,7 +139,7 @@ class TestAsyncUpdateContentSuccess:
 
     @pytest.mark.asyncio
     async def test_update_bytes_written_correct(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify bytes_written matches encoded content length."""
+        """Verify bytes_written matches encoded content length. AC-9.2"""
         file_path = temp_base_dir / "bytes_test.txt"
         original_content = "Original"
         new_content = "New content with unicode: café ☕"
@@ -164,7 +164,7 @@ class TestAsyncUpdatePatchSuccess:
 
     @pytest.mark.asyncio
     async def test_single_patch_applied(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test single old_string/new_string patch is applied."""
+        """Test single old_string/new_string patch is applied. AC-9.3"""
         file_path = temp_base_dir / "patch_single.txt"
         original_content = "Hello, World!"
 
@@ -184,7 +184,7 @@ class TestAsyncUpdatePatchSuccess:
 
     @pytest.mark.asyncio
     async def test_multiple_patches_applied_sequentially(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test multiple patches applied in order."""
+        """Test multiple patches applied in order. AC-9.3"""
         file_path = temp_base_dir / "patch_multiple.txt"
         original_content = "Line 1\nLine 2\nLine 3"
 
@@ -208,7 +208,7 @@ class TestAsyncUpdatePatchSuccess:
 
     @pytest.mark.asyncio
     async def test_patch_replaces_first_occurrence(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify only first match is replaced per patch."""
+        """Verify only first match is replaced per patch. AC-9.3"""
         file_path = temp_base_dir / "patch_first.txt"
         original_content = "foo bar foo bar"
 
@@ -233,7 +233,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_on_hash_mismatch_content_mode(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test ContentionResponse when file hash doesn't match (content mode)."""
+        """Test ContentionResponse when file hash doesn't match (content mode). AC-9.1, AC-9.4"""
         file_path = temp_base_dir / "contention_content.txt"
         original_content = "Original"
 
@@ -263,7 +263,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_json_diff_format(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify JSON diff structure in contention response."""
+        """Verify JSON diff structure in contention response. AC-9.4"""
         file_path = temp_base_dir / "contention_json.txt"
         original_content = "Line 1\nLine 2"
 
@@ -288,7 +288,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_unified_diff_format(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify unified diff format in contention response."""
+        """Verify unified diff format in contention response. AC-9.4"""
         file_path = temp_base_dir / "contention_unified.txt"
         original_content = "Original line"
 
@@ -313,7 +313,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_patches_applicable_true(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test patches_applicable=True when all patches can still apply."""
+        """Test patches_applicable=True when all patches can still apply. AC-9.5"""
         file_path = temp_base_dir / "contention_patches_ok.txt"
         original_content = "Line 1\nLine 2\nLine 3"
 
@@ -337,7 +337,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_patches_applicable_false(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test patches_applicable=False when patches conflict."""
+        """Test patches_applicable=False when patches conflict. AC-9.5"""
         file_path = temp_base_dir / "contention_patches_conflict.txt"
         original_content = "Line 1\nLine 2"
 
@@ -363,7 +363,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_non_conflicting_patches(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test non_conflicting_patches returns correct indices."""
+        """Test non_conflicting_patches returns correct indices. AC-9.5"""
         file_path = temp_base_dir / "contention_mixed.txt"
         original_content = "Line 1\nLine 2\nLine 3"
 
@@ -394,7 +394,7 @@ class TestAsyncUpdateContention:
 
     @pytest.mark.asyncio
     async def test_contention_does_not_modify_file(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Verify file is unchanged after contention."""
+        """Verify file is unchanged after contention. AC-9.1"""
         file_path = temp_base_dir / "contention_no_modify.txt"
         original_content = "Original"
 
@@ -422,7 +422,7 @@ class TestAsyncUpdateErrors:
 
     @pytest.mark.asyncio
     async def test_file_not_found(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test updating non-existent file returns FILE_NOT_FOUND."""
+        """Test updating non-existent file returns FILE_NOT_FOUND. AC-9.1"""
         file_path = temp_base_dir / "nonexistent.txt"
 
         request = AsyncUpdateRequest(
@@ -438,7 +438,7 @@ class TestAsyncUpdateErrors:
 
     @pytest.mark.asyncio
     async def test_path_outside_base(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test path validation failure."""
+        """Test path validation failure. AC-9.1"""
         file_path = "/etc/passwd"  # Outside base directory
 
         request = AsyncUpdateRequest(
@@ -454,7 +454,7 @@ class TestAsyncUpdateErrors:
 
     @pytest.mark.asyncio
     async def test_invalid_patch_old_string_not_found(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test INVALID_PATCH when old_string not found during update."""
+        """Test INVALID_PATCH when old_string not found during update. AC-9.3"""
         file_path = temp_base_dir / "invalid_patch.txt"
         original_content = "Line 1\nLine 2"
 
@@ -478,7 +478,7 @@ class TestAsyncUpdateErrors:
 
     @pytest.mark.asyncio
     async def test_lock_timeout(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test LOCK_TIMEOUT when lock is held."""
+        """Test LOCK_TIMEOUT when lock is held. AC-9.1"""
         file_path = temp_base_dir / "locked.txt"
         original_content = "Content"
 
@@ -504,7 +504,7 @@ class TestAsyncUpdateErrors:
 
     @pytest.mark.asyncio
     async def test_content_or_patches_required(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test CONTENT_OR_PATCHES_REQUIRED (defense in depth)."""
+        """Test CONTENT_OR_PATCHES_REQUIRED (defense in depth). AC-9.6"""
         # This should be caught by Pydantic validation, but test defense in depth
         # We can't actually construct an invalid request through Pydantic,
         # so this test documents the expected behavior
@@ -526,7 +526,7 @@ class TestAsyncUpdateConcurrency:
 
     @pytest.mark.asyncio
     async def test_exclusive_lock_blocks_concurrent_updates(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test that concurrent updates use exclusive locking."""
+        """Test that concurrent updates use exclusive locking. AC-9.1"""
         file_path = temp_base_dir / "concurrent.txt"
         original_content = "Original"
 

@@ -43,7 +43,7 @@ class TestAsyncAppendSuccess:
         """Test append adds content to existing file."""
         file_path = temp_base_dir / "existing.txt"
         original_content = "Line 1\n"
-        file_path.write_text(original_content, encoding='utf-8')
+        file_path.write_bytes(original_content.encode('utf-8'))
 
         append_content = "Line 2\n"
         request = AsyncAppendRequest(path=str(file_path), content=append_content)
@@ -54,12 +54,12 @@ class TestAsyncAppendSuccess:
         assert response.bytes_appended == len(append_content.encode('utf-8'))
         assert response.hash.startswith("sha256:")
 
-        # Verify file content
-        final_content = file_path.read_text(encoding='utf-8')
-        assert final_content == original_content + append_content
+        # Verify file content (use read_bytes to avoid Windows \r\n translation)
+        final_bytes = file_path.read_bytes()
+        assert final_bytes == (original_content + append_content).encode('utf-8')
 
         # Verify total size
-        assert response.total_size_bytes == len(final_content.encode('utf-8'))
+        assert response.total_size_bytes == len(final_bytes)
 
     @pytest.mark.asyncio
     async def test_append_with_separator(self, temp_base_dir, path_validator, lock_manager, hash_registry):

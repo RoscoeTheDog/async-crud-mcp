@@ -1,13 +1,27 @@
-"""CLI package."""
+"""CLI package for async-crud-mcp."""
 
-# Placeholder for the Typer app (will be implemented in Story 19)
-# For now, define a minimal stub to satisfy the entry point
 import typer
 
-app = typer.Typer()
+from async_crud_mcp.cli import (
+    bootstrap_cmd,
+    config_cmd,
+    daemon_cmd,
+    install_cmd,
+    setup_cmd,
+)
+
+app = typer.Typer(
+    name="async-crud-mcp",
+    help="Async CRUD MCP daemon management CLI",
+    no_args_is_help=True,
+)
+
+app.add_typer(bootstrap_cmd.app, name="bootstrap", help="Bootstrap daemon service")
+app.add_typer(daemon_cmd.app, name="daemon", help="Daemon lifecycle management")
+app.add_typer(config_cmd.app, name="config", help="Configuration management")
+app.add_typer(install_cmd.app, name="install", help="Quick installation commands")
+app.add_typer(setup_cmd.app, name="setup", help="Interactive setup wizard")
 
 
-@app.command()
-def main():
-    """Async CRUD MCP CLI (placeholder)."""
-    typer.echo("async-crud-mcp CLI - not yet implemented")
+if __name__ == "__main__":
+    app()
