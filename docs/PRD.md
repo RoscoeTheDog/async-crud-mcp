@@ -1468,6 +1468,104 @@ Use SINGLE `APP_NAME` constant (`async-crud-mcp`, lowercase-hyphenated) for ALL 
 - Use `CREATE_NEW_PROCESS_GROUP` flag on Windows so the entire child tree can be terminated.
 - On startup, check for and clean up stale processes holding the port.
 
+### 13.10 Cross-Platform: Atomic File Writes
+
+**Problem**: `os.rename()` / `os.replace()` behaves differently across platforms.
+
+| Issue | Platform | Symptom | Fix |
+|-------|----------|---------|-----|
+| **Destination open handle** | Windows | `PermissionError: [WinError 5] Access is denied` when renaming temp file to target while another process has the target open | Retry with exponential backoff (3 attempts, 50/100/200ms). Windows mandatory locking prevents rename while any handle is open. Linux advisory locks allow it. |
+| **Cross-filesystem rename** | All | `OSError: [Errno 18] Invalid cross-device link` | Detect via `os.stat().st_dev` comparison. Fall back to copy + fsync + delete. Mark response with `"cross_filesystem": true`. |
+| **Temp file visibility** | Windows | `NamedTemporaryFile` uses `O_TEMPORARY` flag, preventing other processes from opening it | Use `tempfile.mkstemp()` or `NamedTemporaryFile(delete=False)` and manage cleanup manually. Close the fd before calling `os.replace()`. |
+| **fsync on directory** | Linux | Rename is not durable until parent directory is fsynced | After `os.replace()`, open parent dir with `os.open(dir, os.O_RDONLY)` + `os.fsync(fd)` + `os.close(fd)` for crash safety. Skip on Windows (not needed). |
+
+**Atomic write implementation pattern**:
+```python
+import os, tempfile
+
+def atomic_write(target_path: str, content: bytes) -> None:
+    target_dir = os.path.dirname(target_path)
+    # mkstemp in same dir guarantees same filesystem
+    fd, tmp_path = tempfile.mkstemp(dir=target_dir, prefix=".tmp_")
+    try:
+        os.write(fd, content)
+        os.fsync(fd)
+        os.close(fd)
+        fd = None  # prevent double-close in finally
+        # os.replace is atomic on POSIX, near-atomic on Windows
+        _replace_with_retry(tmp_path, target_path)
+    except BaseException:
+        if fd is not None:
+            os.close(fd)
+        os.unlink(tmp_path)  # clean up on failure
+        raise
+```
+
+### 13.11 Cross-Platform: Path Handling
+
+| Issue | Platform | Symptom | Fix |
+|-------|----------|---------|-----|
+| **MAX_PATH 260 char limit** | Windows | `FileNotFoundError` or `OSError` on deeply nested paths | Prepend `\\?\` prefix for paths >240 chars: `"\\\\?\\" + os.path.abspath(path)`. Or enable `LongPathsEnabled` registry key (Windows 10+). Python 3.6+ handles this for most stdlib calls but NOT for all C-level APIs. |
+| **UNC paths** | Windows | `\\server\share\path` not resolved correctly by `os.path.realpath()` | Use `pathlib.PurePosixPath` / `pathlib.PureWindowsPath` for parsing. Validate UNC paths separately from local paths. |
+| **Symlink resolution** | Linux/macOS | `os.path.realpath()` follows ALL symlinks, potentially escaping base directory | ALWAYS resolve symlinks BEFORE base directory check: `resolved = os.path.realpath(path)` then validate `resolved.startswith(base_dir_resolved)`. |
+| **Case sensitivity** | Windows (case-insensitive) vs Linux (case-sensitive) | Two agents reference `File.py` and `file.py` -- same file on Windows, different on Linux | Normalize paths for hash registry keys: `os.path.normcase(os.path.realpath(path))`. This lowercases on Windows, preserves case on Linux. |
+| **Path separators in hashes** | All | Same file produces different hash registry keys on different platforms | Always normalize separators before registry lookup: `os.path.normpath()` then `os.path.normcase()`. |
+
+### 13.12 Cross-Platform: File Watcher (watchdog)
+
+| Issue | Platform | Symptom | Fix |
+|-------|----------|---------|-----|
+| **inotify watch limit** | Linux | `OSError: [Errno 28] inotify watch limit reached` when monitoring large directory trees | Default limit is 8192 watches. For large projects, log a warning and fall back to `PollingObserver(timeout=2)`. Document sysctl fix: `sudo sysctl fs.inotify.max_user_watches=524288`. |
+| **Network drives / SMB shares** | Windows | `ReadDirectoryChangesW` does not detect changes on network-mounted drives | Detect network paths (`\\server\` or drives mapped from network). Auto-switch to `PollingObserver` for network paths. Log warning: "Using polling observer for network path (less responsive)". |
+| **WSL cross-filesystem** | Windows (WSL) | Watching Windows drives from WSL (`/mnt/c/...`) does not produce events | Not supported. Document limitation. Users should run the server natively on the same filesystem. |
+| **Editor temp-file-then-rename** | All | VS Code, Vim, etc. save via write-to-temp + rename. Produces `DELETE` + `CREATE` events instead of `MODIFY` | Debounce events by path (100ms). Coalesce rapid `DELETE` + `CREATE` on same path into a single `MODIFY` event. |
+| **macOS FSEvents latency** | macOS | FSEvents has inherent latency (typically 0.5-2s) compared to inotify (<10ms) | Set `FSEventsObserver` latency to minimum (0.1s). Document that macOS detection may be slightly delayed compared to Linux. |
+| **Recursive watching depth** | All | Watching deeply nested directories consumes one inotify watch per subdirectory | Only watch `base_directories` configured in the config. Do NOT recursively watch the entire filesystem. Limit recursive depth if needed. |
+
+**Fallback strategy**:
+```python
+from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
+
+def create_observer(path: str) -> Observer:
+    if _is_network_path(path):
+        logger.warning(f"Network path detected ({path}), using polling observer")
+        return PollingObserver(timeout=2)
+    try:
+        obs = Observer()
+        obs.schedule(handler, path, recursive=True)
+        obs.start()
+        return obs
+    except OSError as e:
+        if "inotify" in str(e).lower() or e.errno == 28:
+            logger.warning(f"inotify limit reached, falling back to polling: {e}")
+            return PollingObserver(timeout=2)
+        raise
+```
+
+### 13.13 Cross-Platform: OS-Level File Locking Semantics
+
+The MCP server's lock manager uses **in-process `asyncio.Lock`**, NOT OS-level file locks. This is intentional -- all file access goes through the single server process. However, understanding OS locking differences is important for the file watcher and atomic write interactions.
+
+| Aspect | Windows | Linux/macOS |
+|--------|---------|-------------|
+| **Lock enforcement** | Mandatory (enforced by kernel) | Advisory (cooperative, not enforced) |
+| **Open file rename** | BLOCKED: cannot rename/delete a file with open handles | ALLOWED: rename/delete succeeds, existing handles continue to work on the old inode |
+| **Open file write** | BLOCKED if another handle has exclusive access | ALLOWED: multiple handles can write concurrently |
+| **Implication for atomic writes** | Must close temp file handle BEFORE `os.replace()`. Retry on `PermissionError` if target is open. | No issues; `os.replace()` works even if target has open handles. |
+| **Implication for file watcher** | `ReadDirectoryChangesW` events are reliable for local NTFS | `inotify` events may be missed during high-frequency changes; debounce mitigates. |
+
+**Anti-pattern**: Do NOT use `fcntl.flock()` or `msvcrt.locking()` for cross-platform locking. They have incompatible semantics (advisory vs mandatory), different behavior on NFS, and don't work across processes reliably. The in-process asyncio lock is the correct approach for this server architecture.
+
+### 13.14 Cross-Platform: Content Hashing
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| **Large file memory** | Hashing a 10MB file loads entire content into memory twice (once for read, once for hash) | Use `hashlib.file_digest()` (Python 3.11+) for streaming hash computation. Falls back to chunked reading: `for chunk in iter(lambda: f.read(8192), b"")` |
+| **Line ending normalization** | Same logical content produces different hashes on Windows (`\r\n`) vs Linux (`\n`) if file is transferred between platforms | Do NOT normalize line endings for hashing. Hash raw bytes. The hash tracks the exact file content, not semantic content. If a cross-platform transfer changes line endings, the hash correctly detects the change. |
+| **BOM handling** | UTF-8 BOM (`\xef\xbb\xbf`) at file start produces different hash from same content without BOM | Same as line endings: hash raw bytes. BOM is part of the file content. |
+| **Encoding vs bytes** | `content` in tool params is a string, but hash is computed on bytes | Always encode string to bytes using the file's encoding before hashing. The hash is of the bytes-on-disk, not the decoded string. |
+
 ---
 
 ## 14. Open Questions
