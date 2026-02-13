@@ -1,0 +1,838 @@
+{
+  "spec_path": "docs/PRD.md",
+  "extracted_at": "2026-02-13T01:50:00Z",
+  "deliverables": [
+    {
+      "id": "d1",
+      "path": "pyproject.toml",
+      "description": "Project metadata, dependencies, build configuration per Section 6",
+      "type": "config",
+      "acceptance_criteria": [
+        "name = async-crud-mcp",
+        "requires-python >= 3.12",
+        "All dependencies from Section 6 listed",
+        "Optional dev dependencies listed",
+        "Entry point for python -m async_crud_mcp"
+      ]
+    },
+    {
+      "id": "d2",
+      "path": "scripts/setup.bat",
+      "description": "Windows installer wrapper (thin, delegates to installer.py)",
+      "type": "script",
+      "acceptance_criteria": [
+        "Delegates to scripts/installer.py",
+        "Checks admin privileges",
+        "Uses stdlib only"
+      ]
+    },
+    {
+      "id": "d3",
+      "path": "scripts/setup.sh",
+      "description": "Unix installer wrapper (thin, delegates to installer.py)",
+      "type": "script",
+      "acceptance_criteria": [
+        "Delegates to scripts/installer.py",
+        "Finds python3",
+        "Uses stdlib only"
+      ]
+    },
+    {
+      "id": "d4",
+      "path": "scripts/installer.py",
+      "description": "Stdlib-only Python installer (install/uninstall/menu)",
+      "type": "script",
+      "acceptance_criteria": [
+        "Uses ONLY Python stdlib modules",
+        "Supports install/uninstall/menu modes",
+        "Uses uv venv --managed-python per ADR-010",
+        "Three-stage architecture per Section 13.8"
+      ]
+    },
+    {
+      "id": "d5",
+      "path": "scripts/uninstaller.py",
+      "description": "Stdlib-only Python uninstaller",
+      "type": "script",
+      "acceptance_criteria": [
+        "Uses ONLY Python stdlib modules",
+        "Removes installed components cleanly"
+      ]
+    },
+    {
+      "id": "d6",
+      "path": "scripts/bootstrap_uv.py",
+      "description": "Cross-platform uv bootstrap utility",
+      "type": "script",
+      "acceptance_criteria": [
+        "Bootstraps uv package manager",
+        "Cross-platform (Windows/macOS/Linux)"
+      ]
+    },
+    {
+      "id": "d7",
+      "path": "scripts/build_installer.py",
+      "description": "Python Embedded Bundle builder",
+      "type": "script",
+      "acceptance_criteria": [
+        "Builds standalone installer bundle"
+      ]
+    },
+    {
+      "id": "d8",
+      "path": "scripts/configure_claude_code.py",
+      "description": "Claude Code CLI configuration script",
+      "type": "script",
+      "acceptance_criteria": [
+        "Adds async-crud-mcp to Claude Desktop MCP config per Section 11.1",
+        "Handles platform-specific config paths"
+      ]
+    },
+    {
+      "id": "d9",
+      "path": "scripts/test_server.py",
+      "description": "Post-install server verification",
+      "type": "script",
+      "acceptance_criteria": [
+        "Verifies server starts and responds",
+        "Checks health endpoint"
+      ]
+    },
+    {
+      "id": "d10",
+      "path": "scripts/test_server.bat",
+      "description": "Windows test wrapper for test_server.py",
+      "type": "script",
+      "acceptance_criteria": [
+        "Delegates to test_server.py on Windows"
+      ]
+    },
+    {
+      "id": "d11",
+      "path": "scripts/test_server.sh",
+      "description": "Unix test wrapper for test_server.py",
+      "type": "script",
+      "acceptance_criteria": [
+        "Delegates to test_server.py on Unix"
+      ]
+    },
+    {
+      "id": "d12",
+      "path": "src/async_crud_mcp/__init__.py",
+      "description": "Package init with __version__ and metadata",
+      "type": "module",
+      "acceptance_criteria": [
+        "Exports __version__",
+        "Contains package metadata"
+      ]
+    },
+    {
+      "id": "d13",
+      "path": "src/async_crud_mcp/__main__.py",
+      "description": "Entry point for python -m async_crud_mcp",
+      "type": "module",
+      "acceptance_criteria": [
+        "Supports python -m async_crud_mcp invocation"
+      ]
+    },
+    {
+      "id": "d14",
+      "path": "src/async_crud_mcp/server.py",
+      "description": "FastMCP server setup + tool registration",
+      "type": "module",
+      "acceptance_criteria": [
+        "Uses FastMCP for server creation",
+        "Registers all MCP tools from tools/ package",
+        "SSE transport on configurable port (default 8720)",
+        "Health endpoint at /health per Section 11.2"
+      ]
+    },
+    {
+      "id": "d15",
+      "path": "src/async_crud_mcp/config.py",
+      "description": "pydantic-settings configuration per Section 5",
+      "type": "module",
+      "acceptance_criteria": [
+        "Uses pydantic-settings",
+        "Supports daemon, crud, persistence, watcher config sections",
+        "Environment variable overrides with ASYNC_CRUD_MCP_ prefix",
+        "JSON config file support"
+      ]
+    },
+    {
+      "id": "d16",
+      "path": "src/async_crud_mcp/cli/__init__.py",
+      "description": "Main Typer app with subcommand groups",
+      "type": "module",
+      "acceptance_criteria": [
+        "Typer CLI app",
+        "Subcommand groups for bootstrap, daemon, config, install, setup"
+      ]
+    },
+    {
+      "id": "d17",
+      "path": "src/async_crud_mcp/cli/bootstrap.py",
+      "description": "Bootstrap install/uninstall/start/stop/status/list commands",
+      "type": "module",
+      "acceptance_criteria": [
+        "install, uninstall, start, stop, status, list commands"
+      ]
+    },
+    {
+      "id": "d18",
+      "path": "src/async_crud_mcp/cli/daemon.py",
+      "description": "Daemon start/stop/restart/status/logs commands",
+      "type": "module",
+      "acceptance_criteria": [
+        "start, stop, restart, status, logs commands"
+      ]
+    },
+    {
+      "id": "d19",
+      "path": "src/async_crud_mcp/cli/config_cmd.py",
+      "description": "Config init/show/edit/validate commands",
+      "type": "module",
+      "acceptance_criteria": [
+        "init, show, edit, validate commands"
+      ]
+    },
+    {
+      "id": "d20",
+      "path": "src/async_crud_mcp/cli/install.py",
+      "description": "Quick-install + uninstall commands",
+      "type": "module",
+      "acceptance_criteria": [
+        "quick-install and uninstall CLI commands"
+      ]
+    },
+    {
+      "id": "d21",
+      "path": "src/async_crud_mcp/cli/setup.py",
+      "description": "Per-user setup wizard (no admin)",
+      "type": "module",
+      "acceptance_criteria": [
+        "Setup wizard for per-user configuration",
+        "Does not require admin privileges"
+      ]
+    },
+    {
+      "id": "d22",
+      "path": "src/async_crud_mcp/tools/__init__.py",
+      "description": "Tools package init",
+      "type": "module",
+      "acceptance_criteria": [
+        "Exports all tool registration functions"
+      ]
+    },
+    {
+      "id": "d23",
+      "path": "src/async_crud_mcp/tools/async_read.py",
+      "description": "async_read() MCP tool per Section 3.1",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, offset, limit, encoding",
+        "Shared read lock (concurrent reads allowed)",
+        "Returns content, hash (SHA-256), line info",
+        "Error codes: FILE_NOT_FOUND, ACCESS_DENIED, PATH_OUTSIDE_BASE, ENCODING_ERROR"
+      ]
+    },
+    {
+      "id": "d24",
+      "path": "src/async_crud_mcp/tools/async_write.py",
+      "description": "async_write() MCP tool per Section 3.2",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, content, encoding, create_dirs, timeout",
+        "Fails if file already exists",
+        "Exclusive write lock with FIFO queue",
+        "Atomic write (temp file + rename)",
+        "Error codes: FILE_EXISTS, ACCESS_DENIED, PATH_OUTSIDE_BASE, LOCK_TIMEOUT, WRITE_ERROR"
+      ]
+    },
+    {
+      "id": "d25",
+      "path": "src/async_crud_mcp/tools/async_update.py",
+      "description": "async_update() MCP tool per Section 3.3",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, expected_hash, content|patches, encoding, timeout, diff_format",
+        "Hash comparison for contention detection",
+        "Diff-based contention response (JSON or unified format)",
+        "Patch applicability reporting",
+        "Supports full content replacement or patch mode",
+        "Error codes: FILE_NOT_FOUND, ACCESS_DENIED, PATH_OUTSIDE_BASE, LOCK_TIMEOUT, INVALID_PATCH, CONTENT_OR_PATCHES_REQUIRED"
+      ]
+    },
+    {
+      "id": "d26",
+      "path": "src/async_crud_mcp/tools/async_delete.py",
+      "description": "async_delete() MCP tool per Section 3.4",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, expected_hash (optional), timeout, diff_format",
+        "Optional contention check via expected_hash",
+        "Exclusive write lock with FIFO",
+        "Error codes: FILE_NOT_FOUND, ACCESS_DENIED, PATH_OUTSIDE_BASE, LOCK_TIMEOUT, DELETE_ERROR"
+      ]
+    },
+    {
+      "id": "d27",
+      "path": "src/async_crud_mcp/tools/async_rename.py",
+      "description": "async_rename() MCP tool per Section 3.9",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: old_path, new_path, expected_hash, overwrite, create_dirs, timeout, diff_format",
+        "Dual exclusive write lock (alphabetical order for deadlock prevention)",
+        "Cross-filesystem fallback to copy+delete",
+        "Error codes: FILE_NOT_FOUND, FILE_EXISTS, ACCESS_DENIED, PATH_OUTSIDE_BASE, LOCK_TIMEOUT, RENAME_ERROR"
+      ]
+    },
+    {
+      "id": "d28",
+      "path": "src/async_crud_mcp/tools/async_append.py",
+      "description": "async_append() MCP tool per Section 3.11",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, content, encoding, create_if_missing, create_dirs, separator, timeout",
+        "No contention detection (appends are additive)",
+        "Exclusive write lock with FIFO",
+        "Error codes: FILE_NOT_FOUND, ACCESS_DENIED, PATH_OUTSIDE_BASE, LOCK_TIMEOUT, WRITE_ERROR, FILE_TOO_LARGE"
+      ]
+    },
+    {
+      "id": "d29",
+      "path": "src/async_crud_mcp/tools/async_list.py",
+      "description": "async_list() MCP tool per Section 3.8",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path, pattern, recursive, include_hashes",
+        "Glob filtering support",
+        "No lock acquisition",
+        "Cached hash attachment for tracked files",
+        "Error codes: DIR_NOT_FOUND, ACCESS_DENIED, PATH_OUTSIDE_BASE"
+      ]
+    },
+    {
+      "id": "d30",
+      "path": "src/async_crud_mcp/tools/async_status.py",
+      "description": "async_status() MCP tool per Section 3.5",
+      "type": "module",
+      "acceptance_criteria": [
+        "Parameters: path (optional)",
+        "Global status: version, uptime, transport, tracked files, active locks, queue depth",
+        "Per-file status: hash, lock state, queue depth, active readers, pending requests"
+      ]
+    },
+    {
+      "id": "d31",
+      "path": "src/async_crud_mcp/tools/async_batch.py",
+      "description": "async_batch_read/write/update() MCP tools per Sections 3.6, 3.7, 3.10",
+      "type": "module",
+      "acceptance_criteria": [
+        "batch_read: multiple files in single call",
+        "batch_write: multiple new files in single call",
+        "batch_update: multiple updates with per-file contention",
+        "NOT transactional (per-file status reporting)",
+        "Summary with total/succeeded/failed/contention counts"
+      ]
+    },
+    {
+      "id": "d32",
+      "path": "src/async_crud_mcp/core/__init__.py",
+      "description": "Core package init",
+      "type": "module",
+      "acceptance_criteria": [
+        "Exports core components"
+      ]
+    },
+    {
+      "id": "d33",
+      "path": "src/async_crud_mcp/core/lock_manager.py",
+      "description": "File lock manager with FIFO queue per Section 4.1",
+      "type": "module",
+      "acceptance_criteria": [
+        "Per-file read/write locking",
+        "FIFO queue semantics",
+        "Shared reads, exclusive writes",
+        "Timeout handling with LOCK_TIMEOUT",
+        "Starvation prevention (reads queue behind pending write)",
+        "TTL-based expiry for persistence mode",
+        "Alphabetical lock ordering for rename dual-lock"
+      ]
+    },
+    {
+      "id": "d34",
+      "path": "src/async_crud_mcp/core/file_io.py",
+      "description": "Atomic file operations + hashing per Section 4.2",
+      "type": "module",
+      "acceptance_criteria": [
+        "Atomic writes via temp file + fsync + rename",
+        "SHA-256 content hashing (sha256:<hex> format)",
+        "Cross-platform atomic write per Section 13.10",
+        "Retry with backoff for Windows PermissionError",
+        "Cross-filesystem rename fallback",
+        "Uses mkstemp for temp files (not NamedTemporaryFile)"
+      ]
+    },
+    {
+      "id": "d35",
+      "path": "src/async_crud_mcp/core/diff_engine.py",
+      "description": "Diff computation per Section 4.3",
+      "type": "module",
+      "acceptance_criteria": [
+        "JSON diff format with change regions (added/removed/modified)",
+        "Unified diff format (standard git diff style)",
+        "Context lines before/after each region",
+        "Summary with line counts and region count",
+        "Uses Python difflib"
+      ]
+    },
+    {
+      "id": "d36",
+      "path": "src/async_crud_mcp/core/path_validator.py",
+      "description": "Path validation and access control per Section 4.4",
+      "type": "module",
+      "acceptance_criteria": [
+        "Base directory whitelist enforcement",
+        "Absolute path resolution",
+        "Symlink resolution before validation",
+        "Reject .. traversal after resolution",
+        "Cross-platform path handling per Section 13.11"
+      ]
+    },
+    {
+      "id": "d37",
+      "path": "src/async_crud_mcp/core/file_watcher.py",
+      "description": "OS filesystem watcher using watchdog per Section 4.6",
+      "type": "module",
+      "acceptance_criteria": [
+        "Uses watchdog library",
+        "Monitors base_directories for create/modify/delete events",
+        "Updates hash registry on external changes",
+        "Debounce events (100ms default)",
+        "Coalesces DELETE+CREATE into MODIFY for editor saves",
+        "Fallback to PollingObserver for network paths and inotify limit per Section 13.12"
+      ]
+    },
+    {
+      "id": "d38",
+      "path": "src/async_crud_mcp/core/persistence.py",
+      "description": "Optional state persistence per Section 4.5",
+      "type": "module",
+      "acceptance_criteria": [
+        "Persists file hash registry and pending queue entries",
+        "JSON storage in DATA_DIR/state.json",
+        "TTL-based purge on startup",
+        "Re-validates hashes against disk on startup",
+        "Debounced writes (at most once per second)"
+      ]
+    },
+    {
+      "id": "d39",
+      "path": "src/async_crud_mcp/models/__init__.py",
+      "description": "Models package init",
+      "type": "module",
+      "acceptance_criteria": [
+        "Exports request and response models"
+      ]
+    },
+    {
+      "id": "d40",
+      "path": "src/async_crud_mcp/models/requests.py",
+      "description": "Pydantic request models",
+      "type": "module",
+      "acceptance_criteria": [
+        "Pydantic models for all MCP tool parameters",
+        "Patch model with old_string/new_string",
+        "BatchReadItem, BatchWriteItem, BatchUpdateItem models",
+        "Validation constraints (mutually exclusive content/patches)"
+      ]
+    },
+    {
+      "id": "d41",
+      "path": "src/async_crud_mcp/models/responses.py",
+      "description": "Pydantic response models",
+      "type": "module",
+      "acceptance_criteria": [
+        "Pydantic models for all MCP tool responses",
+        "Success, error, and contention response types",
+        "Diff models (JSON and unified format)",
+        "Batch response with summary"
+      ]
+    },
+    {
+      "id": "d42",
+      "path": "src/async_crud_mcp/daemon/__init__.py",
+      "description": "Daemon package init",
+      "type": "module",
+      "acceptance_criteria": [
+        "Exports daemon components"
+      ]
+    },
+    {
+      "id": "d43",
+      "path": "src/async_crud_mcp/daemon/paths.py",
+      "description": "Cross-platform path resolution from daemon-service template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Config, logs, data directory resolution",
+        "Cross-platform (Windows/macOS/Linux)",
+        "APP_NAME = async-crud-mcp per Section 13.6"
+      ]
+    },
+    {
+      "id": "d44",
+      "path": "src/async_crud_mcp/daemon/bootstrap_daemon.py",
+      "description": "Session-aware bootstrap loop from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Session-aware start/stop",
+        "Bootstrap lifecycle management"
+      ]
+    },
+    {
+      "id": "d45",
+      "path": "src/async_crud_mcp/daemon/config_watcher.py",
+      "description": "Debounced config file watching from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Debounced config reads (1.0s default per Section 13.7)",
+        "Last-known-good config fallback"
+      ]
+    },
+    {
+      "id": "d46",
+      "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
+      "description": "Graceful MCP server shutdown from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Graceful shutdown with await logger.complete()",
+        "Resource cleanup"
+      ]
+    },
+    {
+      "id": "d47",
+      "path": "src/async_crud_mcp/daemon/logging_setup.py",
+      "description": "Loguru setup from template per Section 12",
+      "type": "module",
+      "acceptance_criteria": [
+        "Uses loguru with enqueue=True",
+        "Rotation 10MB, retention 7 days, compression gz",
+        "Logging fallback chain for Windows service context per Section 12.2"
+      ]
+    },
+    {
+      "id": "d48",
+      "path": "src/async_crud_mcp/daemon/session_detector.py",
+      "description": "Cross-platform session detection from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Detects active user login session"
+      ]
+    },
+    {
+      "id": "d49",
+      "path": "src/async_crud_mcp/daemon/config_init.py",
+      "description": "Config generation and find_available_port() from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Config file generation",
+        "find_available_port() for port 8720-8819 range",
+        "Dynamic port assignment by username hash per Section 11.3"
+      ]
+    },
+    {
+      "id": "d50",
+      "path": "src/async_crud_mcp/daemon/installer.py",
+      "description": "ABC factory installer pattern from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Abstract base class for platform installers",
+        "Factory pattern"
+      ]
+    },
+    {
+      "id": "d51",
+      "path": "src/async_crud_mcp/daemon/health.py",
+      "description": "Application health check + port listening from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Health check endpoint logic",
+        "Port listening detection",
+        "Three-layer port conflict detection per Section 13.5"
+      ]
+    },
+    {
+      "id": "d52",
+      "path": "src/async_crud_mcp/daemon/windows/__init__.py",
+      "description": "Windows daemon package init",
+      "type": "module",
+      "acceptance_criteria": [
+        "Windows-specific daemon exports"
+      ]
+    },
+    {
+      "id": "d53",
+      "path": "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
+      "description": "pywin32 Windows Service per Section 13.1-13.2",
+      "type": "module",
+      "acceptance_criteria": [
+        "ReportServiceStatus(SERVICE_RUNNING) as FIRST line of SvcDoRun (BUG-01)",
+        "WindowsSelectorEventLoopPolicy + manual event loop (ADR-011, BUG-02/10)",
+        "Multi-candidate python search (BUG-03)",
+        "subprocess.DEVNULL for pipes (BUG-04)",
+        "Try/except with servicemanager.LogErrorMsg backstop (BUG-07)"
+      ]
+    },
+    {
+      "id": "d54",
+      "path": "src/async_crud_mcp/daemon/windows/dispatcher.py",
+      "description": "Multi-User Dispatcher (ADR-008, ADR-012) from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Multi-user dispatch",
+        "Port conflict detection per Section 13.5",
+        "CREATE_NEW_PROCESS_GROUP per Section 13.9"
+      ]
+    },
+    {
+      "id": "d55",
+      "path": "src/async_crud_mcp/daemon/windows/session_detector.py",
+      "description": "WTS API session detection from template",
+      "type": "module",
+      "acceptance_criteria": [
+        "Windows Terminal Services API session detection"
+      ]
+    },
+    {
+      "id": "d56",
+      "path": "src/async_crud_mcp/daemon/macos/launchd.plist",
+      "description": "LaunchAgent template for macOS",
+      "type": "config",
+      "acceptance_criteria": [
+        "Valid launchd plist format",
+        "Points to async-crud-mcp executable"
+      ]
+    },
+    {
+      "id": "d57",
+      "path": "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+      "description": "macOS service installer",
+      "type": "script",
+      "acceptance_criteria": [
+        "Installs LaunchAgent plist",
+        "Manages launchctl load/unload"
+      ]
+    },
+    {
+      "id": "d58",
+      "path": "src/async_crud_mcp/daemon/linux/systemd.service",
+      "description": "systemd user service unit for Linux",
+      "type": "config",
+      "acceptance_criteria": [
+        "Valid systemd service unit",
+        "User-level service (not system)"
+      ]
+    },
+    {
+      "id": "d59",
+      "path": "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+      "description": "Linux service installer",
+      "type": "script",
+      "acceptance_criteria": [
+        "Installs systemd user service",
+        "Manages systemctl enable/start"
+      ]
+    },
+    {
+      "id": "d60",
+      "path": "tests/__init__.py",
+      "description": "Tests package init",
+      "type": "test",
+      "acceptance_criteria": [
+        "Valid Python package init"
+      ]
+    },
+    {
+      "id": "d61",
+      "path": "tests/conftest.py",
+      "description": "Pytest configuration and shared fixtures",
+      "type": "test",
+      "acceptance_criteria": [
+        "Shared test fixtures",
+        "Temp directory fixtures for file operations",
+        "Lock manager fixtures"
+      ]
+    },
+    {
+      "id": "d62",
+      "path": "tests/test_lock_manager.py",
+      "description": "Lock manager unit tests per Section 10.1",
+      "type": "test",
+      "acceptance_criteria": [
+        "Lock semantics tests",
+        "FIFO ordering tests",
+        "Timeout tests",
+        "TTL expiry tests",
+        "Dual-lock ordering tests (rename)"
+      ]
+    },
+    {
+      "id": "d63",
+      "path": "tests/test_file_io.py",
+      "description": "File I/O unit tests per Section 10.1",
+      "type": "test",
+      "acceptance_criteria": [
+        "Atomic write tests",
+        "Hash computation tests",
+        "Encoding tests",
+        "Append operation tests"
+      ]
+    },
+    {
+      "id": "d64",
+      "path": "tests/test_diff_engine.py",
+      "description": "Diff engine unit tests per Section 10.1",
+      "type": "test",
+      "acceptance_criteria": [
+        "JSON diff tests",
+        "Unified diff tests",
+        "Edge cases (empty file, single line)",
+        "Patch applicability tests"
+      ]
+    },
+    {
+      "id": "d65",
+      "path": "tests/test_file_watcher.py",
+      "description": "File watcher unit tests per Section 10.1",
+      "type": "test",
+      "acceptance_criteria": [
+        "Event debouncing tests",
+        "Hash registry update tests",
+        "Create/modify/delete event tests"
+      ]
+    },
+    {
+      "id": "d66",
+      "path": "tests/test_tools/test_async_read.py",
+      "description": "async_read tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for all async_read parameters and error codes"
+      ]
+    },
+    {
+      "id": "d67",
+      "path": "tests/test_tools/test_async_write.py",
+      "description": "async_write tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for all async_write parameters and error codes"
+      ]
+    },
+    {
+      "id": "d68",
+      "path": "tests/test_tools/test_async_update.py",
+      "description": "async_update tool tests including contention",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for all async_update parameters and error codes",
+        "Contention detection tests",
+        "Diff format tests (JSON and unified)",
+        "Patch applicability tests"
+      ]
+    },
+    {
+      "id": "d69",
+      "path": "tests/test_tools/test_async_delete.py",
+      "description": "async_delete tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for all async_delete parameters and error codes",
+        "Contention detection tests"
+      ]
+    },
+    {
+      "id": "d70",
+      "path": "tests/test_tools/test_async_rename.py",
+      "description": "async_rename tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for dual-lock ordering",
+        "Cross-filesystem fallback tests"
+      ]
+    },
+    {
+      "id": "d71",
+      "path": "tests/test_tools/test_async_append.py",
+      "description": "async_append tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for all async_append parameters and error codes"
+      ]
+    },
+    {
+      "id": "d72",
+      "path": "tests/test_tools/test_async_list.py",
+      "description": "async_list tool tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for glob filtering",
+        "Tests for hash attachment"
+      ]
+    },
+    {
+      "id": "d73",
+      "path": "tests/test_tools/test_async_batch.py",
+      "description": "Batch operations tests",
+      "type": "test",
+      "acceptance_criteria": [
+        "Tests for batch read/write/update",
+        "Partial failure handling tests"
+      ]
+    },
+    {
+      "id": "d74",
+      "path": "tests/test_integration/test_concurrent_agents.py",
+      "description": "Concurrent agent integration tests per Section 10.2",
+      "type": "test",
+      "acceptance_criteria": [
+        "Multiple simultaneous reads",
+        "Read-write contention",
+        "Write-write contention FIFO ordering"
+      ]
+    },
+    {
+      "id": "d75",
+      "path": "tests/test_integration/test_contention.py",
+      "description": "Contention resolution integration tests per Section 10.2",
+      "type": "test",
+      "acceptance_criteria": [
+        "Diff accuracy verification",
+        "Patch applicability tests",
+        "Agent workflow on contention"
+      ]
+    },
+    {
+      "id": "d76",
+      "path": "tests/test_integration/test_external_modification.py",
+      "description": "External modification integration tests per Section 10.2",
+      "type": "test",
+      "acceptance_criteria": [
+        "File edited outside server detected by watcher",
+        "Hash updated, next update gets contention"
+      ]
+    },
+    {
+      "id": "d77",
+      "path": "tests/test_integration/test_persistence.py",
+      "description": "Persistence round-trip integration tests per Section 10.2",
+      "type": "test",
+      "acceptance_criteria": [
+        "Server restart with pending queue",
+        "TTL purge on restart",
+        "Hash re-validation"
+      ]
+    }
+  ]
+}

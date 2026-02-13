@@ -1,0 +1,366 @@
+{
+  "stories": [
+    {
+      "id": "1",
+      "title": "Project scaffold and pyproject.toml",
+      "type": "feature",
+      "description": "Create pyproject.toml with all dependencies, package metadata, entry points, and the base package structure (__init__.py, __main__.py, package inits for all subpackages).",
+      "acceptance_criteria": [
+        {"id": "AC-1.1", "text": "pyproject.toml has name=async-crud-mcp, requires-python>=3.12"},
+        {"id": "AC-1.2", "text": "All runtime dependencies from PRD Section 6 listed"},
+        {"id": "AC-1.3", "text": "Dev dependencies in optional-dependencies"},
+        {"id": "AC-1.4", "text": "src/async_crud_mcp/__init__.py exports __version__"},
+        {"id": "AC-1.5", "text": "src/async_crud_mcp/__main__.py supports python -m invocation"},
+        {"id": "AC-1.6", "text": "All subpackage __init__.py files created (tools, core, models, daemon, cli, daemon/windows)"}
+      ],
+      "depends_on": [],
+      "files": ["pyproject.toml", "src/async_crud_mcp/__init__.py", "src/async_crud_mcp/__main__.py", "src/async_crud_mcp/tools/__init__.py", "src/async_crud_mcp/core/__init__.py", "src/async_crud_mcp/models/__init__.py", "src/async_crud_mcp/daemon/__init__.py", "src/async_crud_mcp/daemon/windows/__init__.py", "src/async_crud_mcp/cli/__init__.py"]
+    },
+    {
+      "id": "2",
+      "title": "Configuration system (pydantic-settings)",
+      "type": "feature",
+      "description": "Implement the pydantic-settings configuration model with daemon, crud, persistence, and watcher sections. Support JSON config files and environment variable overrides.",
+      "acceptance_criteria": [
+        {"id": "AC-2.1", "text": "Config model has daemon, crud, persistence, watcher sections per PRD Section 5"},
+        {"id": "AC-2.2", "text": "Environment variable overrides with ASYNC_CRUD_MCP_ prefix work"},
+        {"id": "AC-2.3", "text": "Default values match PRD (port 8720, timeout 30s, etc.)"},
+        {"id": "AC-2.4", "text": "JSON config file loading supported"}
+      ],
+      "depends_on": ["1"],
+      "files": ["src/async_crud_mcp/config.py"]
+    },
+    {
+      "id": "3",
+      "title": "Pydantic request and response models",
+      "type": "feature",
+      "description": "Create all Pydantic models for MCP tool parameters (requests) and responses, including Patch, BatchReadItem, BatchWriteItem, BatchUpdateItem, diff models, and contention response.",
+      "acceptance_criteria": [
+        {"id": "AC-3.1", "text": "Request models for all 11 MCP tools with proper validation"},
+        {"id": "AC-3.2", "text": "Patch model with old_string/new_string"},
+        {"id": "AC-3.3", "text": "Response models for success, error, and contention"},
+        {"id": "AC-3.4", "text": "Diff models for JSON and unified format"},
+        {"id": "AC-3.5", "text": "Batch response with summary (total/succeeded/failed/contention)"},
+        {"id": "AC-3.6", "text": "Mutually exclusive content/patches validation on update models"}
+      ],
+      "depends_on": ["1"],
+      "files": ["src/async_crud_mcp/models/requests.py", "src/async_crud_mcp/models/responses.py"]
+    },
+    {
+      "id": "4",
+      "title": "Path validator with base directory enforcement",
+      "type": "feature",
+      "description": "Implement path validation with base directory whitelist, symlink resolution, traversal rejection, and cross-platform path handling per PRD Section 4.4 and 13.11.",
+      "acceptance_criteria": [
+        {"id": "AC-4.1", "text": "Base directory whitelist enforcement on every operation"},
+        {"id": "AC-4.2", "text": "Absolute path resolution"},
+        {"id": "AC-4.3", "text": "Symlink resolution BEFORE base directory check"},
+        {"id": "AC-4.4", "text": "Reject .. traversal after resolution"},
+        {"id": "AC-4.5", "text": "Cross-platform path normalization (case, separators) per Section 13.11"}
+      ],
+      "depends_on": ["2"],
+      "files": ["src/async_crud_mcp/core/path_validator.py"]
+    },
+    {
+      "id": "5",
+      "title": "Lock manager with FIFO queue",
+      "type": "feature",
+      "description": "Implement the per-file read/write lock manager with FIFO queue semantics, shared reads, exclusive writes, timeout handling, starvation prevention, and TTL-based expiry per PRD Section 4.1.",
+      "acceptance_criteria": [
+        {"id": "AC-5.1", "text": "Per-file asyncio-based read/write locking"},
+        {"id": "AC-5.2", "text": "FIFO queue ordering per file"},
+        {"id": "AC-5.3", "text": "Concurrent reads allowed (shared lock)"},
+        {"id": "AC-5.4", "text": "Exclusive writes block reads and other writes"},
+        {"id": "AC-5.5", "text": "Timeout handling returns LOCK_TIMEOUT"},
+        {"id": "AC-5.6", "text": "Starvation prevention: reads queue behind pending write"},
+        {"id": "AC-5.7", "text": "TTL-based expiry for persistence mode"},
+        {"id": "AC-5.8", "text": "Alphabetical lock ordering for dual-lock (rename)"}
+      ],
+      "depends_on": ["1"],
+      "files": ["src/async_crud_mcp/core/lock_manager.py"]
+    },
+    {
+      "id": "6",
+      "title": "Atomic file I/O with content hashing",
+      "type": "feature",
+      "description": "Implement atomic file operations (write via temp+fsync+rename) and SHA-256 content hashing with cross-platform guardrails per PRD Section 4.2, 13.10, and 13.14.",
+      "acceptance_criteria": [
+        {"id": "AC-6.1", "text": "Atomic writes via mkstemp + fsync + os.replace"},
+        {"id": "AC-6.2", "text": "SHA-256 hashing in sha256:<hex> format"},
+        {"id": "AC-6.3", "text": "Retry with backoff for Windows PermissionError on rename"},
+        {"id": "AC-6.4", "text": "Cross-filesystem rename fallback (copy+fsync+delete)"},
+        {"id": "AC-6.5", "text": "fsync on parent directory for Linux crash safety"},
+        {"id": "AC-6.6", "text": "Hash raw bytes (no line ending normalization) per Section 13.14"}
+      ],
+      "depends_on": ["4"],
+      "files": ["src/async_crud_mcp/core/file_io.py"]
+    },
+    {
+      "id": "7",
+      "title": "Diff engine (JSON and unified formats)",
+      "type": "feature",
+      "description": "Implement diff computation between file versions for contention responses. Support both JSON structured format and unified diff format per PRD Section 4.3.",
+      "acceptance_criteria": [
+        {"id": "AC-7.1", "text": "JSON diff with change regions (added/removed/modified)"},
+        {"id": "AC-7.2", "text": "Unified diff format (standard git diff style)"},
+        {"id": "AC-7.3", "text": "Configurable context lines before/after each region"},
+        {"id": "AC-7.4", "text": "Summary with lines_added, lines_removed, lines_modified, regions_changed"},
+        {"id": "AC-7.5", "text": "Uses Python difflib"}
+      ],
+      "depends_on": ["1"],
+      "files": ["src/async_crud_mcp/core/diff_engine.py"]
+    },
+    {
+      "id": "8",
+      "title": "Core MCP tools: async_read and async_write",
+      "type": "feature",
+      "description": "Implement async_read() and async_write() MCP tools with lock coordination, hash computation, and error handling per PRD Sections 3.1 and 3.2.",
+      "acceptance_criteria": [
+        {"id": "AC-8.1", "text": "async_read: path validation, shared read lock, content+hash+line info response"},
+        {"id": "AC-8.2", "text": "async_read: offset/limit support for partial reads"},
+        {"id": "AC-8.3", "text": "async_write: fails if file exists (FILE_EXISTS error)"},
+        {"id": "AC-8.4", "text": "async_write: exclusive write lock with FIFO queue"},
+        {"id": "AC-8.5", "text": "async_write: atomic write via file_io layer"},
+        {"id": "AC-8.6", "text": "async_write: create_dirs support"}
+      ],
+      "depends_on": ["3", "4", "5", "6"],
+      "files": ["src/async_crud_mcp/tools/async_read.py", "src/async_crud_mcp/tools/async_write.py"]
+    },
+    {
+      "id": "9",
+      "title": "Core MCP tool: async_update with contention resolution",
+      "type": "feature",
+      "description": "Implement async_update() with hash-based contention detection, diff-based contention response, and patch applicability reporting per PRD Section 3.3.",
+      "acceptance_criteria": [
+        {"id": "AC-9.1", "text": "Hash comparison for contention detection"},
+        {"id": "AC-9.2", "text": "Full content replacement mode"},
+        {"id": "AC-9.3", "text": "Patch mode with old_string/new_string pairs"},
+        {"id": "AC-9.4", "text": "Contention response with JSON or unified diff"},
+        {"id": "AC-9.5", "text": "patches_applicable, conflicts, non_conflicting_patches fields"},
+        {"id": "AC-9.6", "text": "CONTENT_OR_PATCHES_REQUIRED error when neither provided"}
+      ],
+      "depends_on": ["7", "8"],
+      "files": ["src/async_crud_mcp/tools/async_update.py"]
+    },
+    {
+      "id": "10",
+      "title": "MCP tools: async_delete, async_rename, async_append",
+      "type": "feature",
+      "description": "Implement async_delete(), async_rename(), and async_append() MCP tools per PRD Sections 3.4, 3.9, and 3.11.",
+      "acceptance_criteria": [
+        {"id": "AC-10.1", "text": "async_delete: optional contention check via expected_hash"},
+        {"id": "AC-10.2", "text": "async_rename: dual-lock in alphabetical order"},
+        {"id": "AC-10.3", "text": "async_rename: cross-filesystem fallback with cross_filesystem flag"},
+        {"id": "AC-10.4", "text": "async_append: no contention detection, additive semantics"},
+        {"id": "AC-10.5", "text": "async_append: create_if_missing and separator support"}
+      ],
+      "depends_on": ["8"],
+      "files": ["src/async_crud_mcp/tools/async_delete.py", "src/async_crud_mcp/tools/async_rename.py", "src/async_crud_mcp/tools/async_append.py"]
+    },
+    {
+      "id": "11",
+      "title": "MCP tools: async_list and async_status",
+      "type": "feature",
+      "description": "Implement async_list() for directory listing with glob filtering and async_status() for server/file status per PRD Sections 3.5 and 3.8.",
+      "acceptance_criteria": [
+        {"id": "AC-11.1", "text": "async_list: glob pattern filtering, recursive option"},
+        {"id": "AC-11.2", "text": "async_list: include_hashes attaches cached hashes"},
+        {"id": "AC-11.3", "text": "async_list: no lock acquisition"},
+        {"id": "AC-11.4", "text": "async_status: global status (version, uptime, locks, queue)"},
+        {"id": "AC-11.5", "text": "async_status: per-file status (hash, lock state, queue depth)"}
+      ],
+      "depends_on": ["8"],
+      "files": ["src/async_crud_mcp/tools/async_list.py", "src/async_crud_mcp/tools/async_status.py"]
+    },
+    {
+      "id": "12",
+      "title": "MCP tools: batch operations",
+      "type": "feature",
+      "description": "Implement async_batch_read(), async_batch_write(), async_batch_update() for multi-file operations per PRD Sections 3.6, 3.7, 3.10.",
+      "acceptance_criteria": [
+        {"id": "AC-12.1", "text": "batch_read: multiple files in single call with per-file results"},
+        {"id": "AC-12.2", "text": "batch_write: multiple new files with per-file status"},
+        {"id": "AC-12.3", "text": "batch_update: per-file contention resolution"},
+        {"id": "AC-12.4", "text": "NOT transactional: partial failures reported per-file"},
+        {"id": "AC-12.5", "text": "Summary with total/succeeded/failed/contention counts"}
+      ],
+      "depends_on": ["9", "10"],
+      "files": ["src/async_crud_mcp/tools/async_batch.py"]
+    },
+    {
+      "id": "13",
+      "title": "FastMCP server setup and tool registration",
+      "type": "feature",
+      "description": "Create the FastMCP server with SSE transport, register all MCP tools, and add the /health endpoint per PRD Section 2.2 and 11.2.",
+      "acceptance_criteria": [
+        {"id": "AC-13.1", "text": "FastMCP server created with SSE transport"},
+        {"id": "AC-13.2", "text": "All 11 MCP tools registered"},
+        {"id": "AC-13.3", "text": "Health endpoint at /health returns status, version, uptime"},
+        {"id": "AC-13.4", "text": "Configurable port (default 8720)"},
+        {"id": "AC-13.5", "text": "Port pre-flight socket.bind() test per Section 13.5"}
+      ],
+      "depends_on": ["2", "12"],
+      "files": ["src/async_crud_mcp/server.py"]
+    },
+    {
+      "id": "14",
+      "title": "File watcher (watchdog integration)",
+      "type": "feature",
+      "description": "Implement OS filesystem watcher using watchdog to detect external file modifications and update the hash registry per PRD Section 4.6 and 13.12.",
+      "acceptance_criteria": [
+        {"id": "AC-14.1", "text": "Watches configured base_directories"},
+        {"id": "AC-14.2", "text": "Updates hash registry on create/modify/delete events"},
+        {"id": "AC-14.3", "text": "100ms debounce for editor save patterns"},
+        {"id": "AC-14.4", "text": "Coalesces DELETE+CREATE into MODIFY"},
+        {"id": "AC-14.5", "text": "PollingObserver fallback for network paths and inotify limit"},
+        {"id": "AC-14.6", "text": "Configurable via watcher config section"}
+      ],
+      "depends_on": ["6"],
+      "files": ["src/async_crud_mcp/core/file_watcher.py"]
+    },
+    {
+      "id": "15",
+      "title": "Persistence layer",
+      "type": "feature",
+      "description": "Implement optional state persistence for hash registry and pending queue entries per PRD Section 4.5.",
+      "acceptance_criteria": [
+        {"id": "AC-15.1", "text": "Persists file hash registry to DATA_DIR/state.json"},
+        {"id": "AC-15.2", "text": "Persists pending queue entries (metadata only)"},
+        {"id": "AC-15.3", "text": "TTL-based purge of expired entries on startup"},
+        {"id": "AC-15.4", "text": "Re-validates hashes against disk files on startup"},
+        {"id": "AC-15.5", "text": "Debounced writes (at most once per second)"},
+        {"id": "AC-15.6", "text": "Enabled/disabled via configuration"}
+      ],
+      "depends_on": ["5", "6"],
+      "files": ["src/async_crud_mcp/core/persistence.py"]
+    },
+    {
+      "id": "16",
+      "title": "Daemon infrastructure (paths, logging, shutdown, session, health)",
+      "type": "feature",
+      "description": "Implement daemon support modules from template: paths, logging_setup, graceful_shutdown, session_detector, config_init, config_watcher, health, installer, bootstrap_daemon per PRD Sections 2.1, 12, 13.",
+      "acceptance_criteria": [
+        {"id": "AC-16.1", "text": "paths.py: Cross-platform config/logs/data dir resolution"},
+        {"id": "AC-16.2", "text": "logging_setup.py: loguru with enqueue=True, rotation, fallback chain"},
+        {"id": "AC-16.3", "text": "graceful_shutdown.py: await logger.complete() in finally"},
+        {"id": "AC-16.4", "text": "session_detector.py: Cross-platform session detection"},
+        {"id": "AC-16.5", "text": "config_init.py: Config generation, find_available_port()"},
+        {"id": "AC-16.6", "text": "config_watcher.py: Debounced config reads, last-known-good fallback"},
+        {"id": "AC-16.7", "text": "health.py: Health check, port listening detection"},
+        {"id": "AC-16.8", "text": "installer.py: ABC factory installer pattern"},
+        {"id": "AC-16.9", "text": "bootstrap_daemon.py: Session-aware bootstrap loop"}
+      ],
+      "depends_on": ["2"],
+      "files": ["src/async_crud_mcp/daemon/paths.py", "src/async_crud_mcp/daemon/logging_setup.py", "src/async_crud_mcp/daemon/graceful_shutdown.py", "src/async_crud_mcp/daemon/session_detector.py", "src/async_crud_mcp/daemon/config_init.py", "src/async_crud_mcp/daemon/config_watcher.py", "src/async_crud_mcp/daemon/health.py", "src/async_crud_mcp/daemon/installer.py", "src/async_crud_mcp/daemon/bootstrap_daemon.py"]
+    },
+    {
+      "id": "17",
+      "title": "Windows service support",
+      "type": "feature",
+      "description": "Implement Windows-specific daemon modules: bootstrap_service (pywin32), dispatcher, session_detector per PRD Sections 13.1-13.4.",
+      "acceptance_criteria": [
+        {"id": "AC-17.1", "text": "bootstrap_service.py: BUG-01 (ReportServiceStatus first), ADR-011 (manual event loop)"},
+        {"id": "AC-17.2", "text": "bootstrap_service.py: BUG-07 (try/except with LogErrorMsg)"},
+        {"id": "AC-17.3", "text": "dispatcher.py: Multi-user dispatch, port conflict detection"},
+        {"id": "AC-17.4", "text": "dispatcher.py: CREATE_NEW_PROCESS_GROUP per Section 13.9"},
+        {"id": "AC-17.5", "text": "session_detector.py: WTS API session detection"}
+      ],
+      "depends_on": ["16"],
+      "files": ["src/async_crud_mcp/daemon/windows/bootstrap_service.py", "src/async_crud_mcp/daemon/windows/dispatcher.py", "src/async_crud_mcp/daemon/windows/session_detector.py"]
+    },
+    {
+      "id": "18",
+      "title": "macOS and Linux service support",
+      "type": "feature",
+      "description": "Create macOS LaunchAgent plist + installer and Linux systemd service unit + installer per PRD Section 2.3.",
+      "acceptance_criteria": [
+        {"id": "AC-18.1", "text": "macOS: Valid launchd plist pointing to async-crud-mcp"},
+        {"id": "AC-18.2", "text": "macOS: launchd_installer.sh manages launchctl load/unload"},
+        {"id": "AC-18.3", "text": "Linux: Valid systemd user service unit"},
+        {"id": "AC-18.4", "text": "Linux: systemd_installer.sh manages systemctl enable/start"}
+      ],
+      "depends_on": ["16"],
+      "files": ["src/async_crud_mcp/daemon/macos/launchd.plist", "src/async_crud_mcp/daemon/macos/launchd_installer.sh", "src/async_crud_mcp/daemon/linux/systemd.service", "src/async_crud_mcp/daemon/linux/systemd_installer.sh"]
+    },
+    {
+      "id": "19",
+      "title": "CLI commands (Typer)",
+      "type": "feature",
+      "description": "Implement the Typer CLI with subcommand groups: bootstrap, daemon, config, install, setup per PRD Section 2.3.",
+      "acceptance_criteria": [
+        {"id": "AC-19.1", "text": "bootstrap: install/uninstall/start/stop/status/list commands"},
+        {"id": "AC-19.2", "text": "daemon: start/stop/restart/status/logs commands"},
+        {"id": "AC-19.3", "text": "config: init/show/edit/validate commands"},
+        {"id": "AC-19.4", "text": "install: quick-install and uninstall commands"},
+        {"id": "AC-19.5", "text": "setup: Per-user setup wizard (no admin)"}
+      ],
+      "depends_on": ["16"],
+      "files": ["src/async_crud_mcp/cli/bootstrap.py", "src/async_crud_mcp/cli/daemon.py", "src/async_crud_mcp/cli/config_cmd.py", "src/async_crud_mcp/cli/install.py", "src/async_crud_mcp/cli/setup.py"]
+    },
+    {
+      "id": "20",
+      "title": "Installation scripts (setup.bat, setup.sh, installer.py, etc.)",
+      "type": "feature",
+      "description": "Create platform installer scripts: shell wrappers, stdlib installer, uninstaller, uv bootstrap, build_installer, configure_claude_code, test_server per PRD Section 2.3 and 13.8.",
+      "acceptance_criteria": [
+        {"id": "AC-20.1", "text": "setup.bat: Windows wrapper delegating to installer.py"},
+        {"id": "AC-20.2", "text": "setup.sh: Unix wrapper delegating to installer.py"},
+        {"id": "AC-20.3", "text": "installer.py: stdlib-only, install/uninstall/menu, uv venv per ADR-010"},
+        {"id": "AC-20.4", "text": "uninstaller.py: stdlib-only cleanup"},
+        {"id": "AC-20.5", "text": "bootstrap_uv.py: Cross-platform uv bootstrap"},
+        {"id": "AC-20.6", "text": "build_installer.py: Python Embedded Bundle builder"},
+        {"id": "AC-20.7", "text": "configure_claude_code.py: Adds to Claude Desktop MCP config"},
+        {"id": "AC-20.8", "text": "test_server.py/bat/sh: Post-install verification"}
+      ],
+      "depends_on": ["13"],
+      "files": ["scripts/setup.bat", "scripts/setup.sh", "scripts/installer.py", "scripts/uninstaller.py", "scripts/bootstrap_uv.py", "scripts/build_installer.py", "scripts/configure_claude_code.py", "scripts/test_server.py", "scripts/test_server.bat", "scripts/test_server.sh"]
+    },
+    {
+      "id": "21",
+      "title": "Unit tests: core components",
+      "type": "test",
+      "description": "Create unit tests for lock_manager, file_io, diff_engine, file_watcher, and path_validator per PRD Section 10.1.",
+      "acceptance_criteria": [
+        {"id": "AC-21.1", "text": "conftest.py with shared fixtures (temp dirs, lock manager)"},
+        {"id": "AC-21.2", "text": "test_lock_manager.py: lock semantics, FIFO, timeout, TTL, dual-lock"},
+        {"id": "AC-21.3", "text": "test_file_io.py: atomic writes, hash, encoding, append"},
+        {"id": "AC-21.4", "text": "test_diff_engine.py: JSON diff, unified diff, edge cases, patch applicability"},
+        {"id": "AC-21.5", "text": "test_file_watcher.py: debouncing, hash registry, create/modify/delete events"}
+      ],
+      "depends_on": ["5", "6", "7", "14"],
+      "files": ["tests/__init__.py", "tests/conftest.py", "tests/test_lock_manager.py", "tests/test_file_io.py", "tests/test_diff_engine.py", "tests/test_file_watcher.py"]
+    },
+    {
+      "id": "22",
+      "title": "Unit tests: MCP tools",
+      "type": "test",
+      "description": "Create unit tests for all individual MCP tools per PRD Section 10.1.",
+      "acceptance_criteria": [
+        {"id": "AC-22.1", "text": "test_async_read.py: all parameters and error codes"},
+        {"id": "AC-22.2", "text": "test_async_write.py: all parameters and error codes"},
+        {"id": "AC-22.3", "text": "test_async_update.py: contention, diff formats, patch applicability"},
+        {"id": "AC-22.4", "text": "test_async_delete.py: with and without contention check"},
+        {"id": "AC-22.5", "text": "test_async_rename.py: dual-lock, cross-filesystem"},
+        {"id": "AC-22.6", "text": "test_async_append.py: all parameters and error codes"},
+        {"id": "AC-22.7", "text": "test_async_list.py: glob filtering, hash attachment"},
+        {"id": "AC-22.8", "text": "test_async_batch.py: batch read/write/update, partial failures"}
+      ],
+      "depends_on": ["12"],
+      "files": ["tests/test_tools/test_async_read.py", "tests/test_tools/test_async_write.py", "tests/test_tools/test_async_update.py", "tests/test_tools/test_async_delete.py", "tests/test_tools/test_async_rename.py", "tests/test_tools/test_async_append.py", "tests/test_tools/test_async_list.py", "tests/test_tools/test_async_batch.py"]
+    },
+    {
+      "id": "23",
+      "title": "Integration tests",
+      "type": "test",
+      "description": "Create integration tests for concurrent agents, contention resolution, external modification, and persistence per PRD Section 10.2.",
+      "acceptance_criteria": [
+        {"id": "AC-23.1", "text": "test_concurrent_agents.py: simultaneous reads, read-write/write-write contention"},
+        {"id": "AC-23.2", "text": "test_contention.py: diff accuracy, patch applicability, agent workflow"},
+        {"id": "AC-23.3", "text": "test_external_modification.py: watcher detects edits, hash updated"},
+        {"id": "AC-23.4", "text": "test_persistence.py: restart, TTL purge, hash re-validation"}
+      ],
+      "depends_on": ["13", "14", "15"],
+      "files": ["tests/test_integration/test_concurrent_agents.py", "tests/test_integration/test_contention.py", "tests/test_integration/test_external_modification.py", "tests/test_integration/test_persistence.py"]
+    }
+  ]
+}

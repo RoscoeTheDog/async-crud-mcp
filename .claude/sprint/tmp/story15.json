@@ -1,0 +1,1 @@
+{"id": "15", "title": "Add .ruff_cache to .gitignore", "type": "feature", "description": "The .gitignore is missing the .ruff_cache/ pattern specified in the acceptance criteria. All other required patterns are present.", "acceptance_criteria": [{"id": "AC-15.1", "text": ".gitignore includes .ruff_cache/ pattern"}], "depends_on": [], "files": [".gitignore"]}
