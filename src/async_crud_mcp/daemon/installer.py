@@ -122,7 +122,7 @@ class WindowsServiceInstaller(InstallerBase):
     def install(self, **kwargs) -> None:
         """Install the Windows service.
 
-        Delegates to windows_service.install_service() which uses
+        Delegates to windows.bootstrap_service.install_service() which uses
         direct win32service.CreateService() API.
 
         Args:
@@ -132,7 +132,7 @@ class WindowsServiceInstaller(InstallerBase):
             OSError: If installation fails (typically ACCESS_DENIED)
             ImportError: If pywin32 is not installed
         """
-        from .windows_service import install_service
+        from .windows.bootstrap_service import install_service
         install_service(**kwargs)
 
     def uninstall(self) -> None:
@@ -142,7 +142,7 @@ class WindowsServiceInstaller(InstallerBase):
             OSError: If uninstallation fails
             ImportError: If pywin32 is not installed
         """
-        from .windows_service import uninstall_service
+        from .windows.bootstrap_service import uninstall_service
         uninstall_service()
 
     def start(self) -> None:
@@ -219,55 +219,259 @@ class WindowsServiceInstaller(InstallerBase):
 
 
 class LaunchdInstaller(InstallerBase):
-    """macOS launchd implementation skeleton for future development.
+    """macOS launchd implementation using launchctl.
 
-    Will manage the daemon using macOS launchd by creating plist files
-    in ~/Library/LaunchAgents and using launchctl commands.
+    Manages the daemon using macOS launchd by delegating to the
+    launchd_installer.sh script located in the macos subdirectory.
+    The script creates plist files in ~/Library/LaunchAgents and uses
+    launchctl commands for service management.
     """
 
+    def _get_script_path(self) -> str:
+        """Get the absolute path to the launchd_installer.sh script."""
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(script_dir, 'macos', 'launchd_installer.sh')
+
+    def _run_script(self, command: str) -> subprocess.CompletedProcess:
+        """Run the launchd installer script with the given command.
+
+        Args:
+            command: Command to pass to the script (install, uninstall, etc.)
+
+        Returns:
+            CompletedProcess with the result
+
+        Raises:
+            subprocess.CalledProcessError: If the script fails
+            FileNotFoundError: If the script doesn't exist
+        """
+        script_path = self._get_script_path()
+        return subprocess.run(
+            ['bash', script_path, command],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
     def install(self, **kwargs) -> None:
-        raise NotImplementedError("macOS launchd support is not yet implemented")
+        """Install the macOS LaunchAgent.
+
+        Delegates to launchd_installer.sh which will:
+        - Detect the async-crud-mcp bootstrap path
+        - Create required directories
+        - Generate the plist file with resolved paths
+        - Load the LaunchAgent using launchctl
+
+        Raises:
+            subprocess.CalledProcessError: If installation fails
+        """
+        self._run_script('install')
 
     def uninstall(self) -> None:
-        raise NotImplementedError("macOS launchd support is not yet implemented")
+        """Uninstall the macOS LaunchAgent.
+
+        Delegates to launchd_installer.sh which will:
+        - Unload the LaunchAgent using launchctl
+        - Remove the plist file
+
+        Raises:
+            subprocess.CalledProcessError: If uninstallation fails
+        """
+        self._run_script('uninstall')
 
     def start(self) -> None:
-        raise NotImplementedError("macOS launchd support is not yet implemented")
+        """Start the macOS LaunchAgent.
+
+        Delegates to launchd_installer.sh which will load the plist.
+
+        Raises:
+            subprocess.CalledProcessError: If start fails
+        """
+        self._run_script('start')
 
     def stop(self) -> None:
-        raise NotImplementedError("macOS launchd support is not yet implemented")
+        """Stop the macOS LaunchAgent.
+
+        Delegates to launchd_installer.sh which will unload the plist.
+
+        Raises:
+            subprocess.CalledProcessError: If stop fails
+        """
+        self._run_script('stop')
 
     def status(self) -> str:
-        return "SKELETON_IMPLEMENTATION"
+        """Get the current status of the macOS LaunchAgent.
+
+        Returns:
+            str: 'RUNNING', 'STOPPED', or 'UNKNOWN'
+        """
+        try:
+            result = self._run_script('status')
+            if 'RUNNING' in result.stdout:
+                return 'RUNNING'
+            elif 'STOPPED' in result.stdout:
+                return 'STOPPED'
+            return 'UNKNOWN'
+        except subprocess.CalledProcessError:
+            return 'UNKNOWN'
 
     def list(self) -> list[str]:
-        return []
+        """List all LaunchAgents matching APP_NAME.
+
+        Returns:
+            list[str]: List of matching LaunchAgent labels
+        """
+        try:
+            result = subprocess.run(
+                ['launchctl', 'list'],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            agents = []
+            for line in result.stdout.splitlines():
+                if APP_NAME in line:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        agents.append(parts[2])
+            return agents
+        except subprocess.CalledProcessError:
+            return []
 
 
 class SystemdInstaller(InstallerBase):
-    """Linux systemd implementation skeleton for future development.
+    """Linux systemd implementation using systemctl --user.
 
-    Will manage the daemon using systemd user services by creating
-    unit files in ~/.config/systemd/user/ and using systemctl --user.
+    Manages the daemon using systemd user services by delegating to the
+    systemd_installer.sh script located in the linux subdirectory.
+    The script creates unit files in ~/.config/systemd/user/ and uses
+    systemctl --user commands for service management.
     """
 
+    def _get_script_path(self) -> str:
+        """Get the absolute path to the systemd_installer.sh script."""
+        import os
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(script_dir, 'linux', 'systemd_installer.sh')
+
+    def _run_script(self, command: str) -> subprocess.CompletedProcess:
+        """Run the systemd installer script with the given command.
+
+        Args:
+            command: Command to pass to the script (install, uninstall, etc.)
+
+        Returns:
+            CompletedProcess with the result
+
+        Raises:
+            subprocess.CalledProcessError: If the script fails
+            FileNotFoundError: If the script doesn't exist
+        """
+        script_path = self._get_script_path()
+        return subprocess.run(
+            ['bash', script_path, command],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def _service_name(self) -> str:
+        """Get the systemd unit name."""
+        return f'{SERVICE_NAME}.service'
+
     def install(self, **kwargs) -> None:
-        raise NotImplementedError("Linux systemd support is not yet implemented")
+        """Install the systemd user service.
+
+        Delegates to systemd_installer.sh which will:
+        - Detect the async-crud-mcp bootstrap path
+        - Create required XDG-compliant directories
+        - Generate the service unit file with resolved paths
+        - Reload systemd, enable and start the service
+
+        Raises:
+            subprocess.CalledProcessError: If installation fails
+        """
+        self._run_script('install')
 
     def uninstall(self) -> None:
-        raise NotImplementedError("Linux systemd support is not yet implemented")
+        """Uninstall the systemd user service.
+
+        Delegates to systemd_installer.sh which will:
+        - Stop the service if running
+        - Disable the service
+        - Remove the unit file
+        - Reload systemd
+
+        Raises:
+            subprocess.CalledProcessError: If uninstallation fails
+        """
+        self._run_script('uninstall')
 
     def start(self) -> None:
-        raise NotImplementedError("Linux systemd support is not yet implemented")
+        """Start the systemd user service.
+
+        Delegates to systemd_installer.sh which uses systemctl --user start.
+
+        Raises:
+            subprocess.CalledProcessError: If start fails
+        """
+        self._run_script('start')
 
     def stop(self) -> None:
-        raise NotImplementedError("Linux systemd support is not yet implemented")
+        """Stop the systemd user service.
+
+        Delegates to systemd_installer.sh which uses systemctl --user stop.
+
+        Raises:
+            subprocess.CalledProcessError: If stop fails
+        """
+        self._run_script('stop')
 
     def status(self) -> str:
-        return "SKELETON_IMPLEMENTATION"
+        """Get the current status of the systemd user service.
+
+        Returns:
+            str: 'RUNNING', 'STOPPED', or 'UNKNOWN'
+        """
+        try:
+            result = subprocess.run(
+                ['systemctl', '--user', 'is-active', self._service_name()],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            status = result.stdout.strip()
+            if status == 'active':
+                return 'RUNNING'
+            elif status in ('inactive', 'failed'):
+                return 'STOPPED'
+            return 'UNKNOWN'
+        except subprocess.CalledProcessError:
+            return 'UNKNOWN'
 
     def list(self) -> list[str]:
-        return []
+        """List all systemd user services matching APP_NAME.
+
+        Returns:
+            list[str]: List of matching service unit names
+        """
+        try:
+            result = subprocess.run(
+                ['systemctl', '--user', 'list-units', '--all', '--no-pager', '--no-legend'],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            services = []
+            for line in result.stdout.splitlines():
+                if APP_NAME in line and '.service' in line:
+                    parts = line.split()
+                    if parts:
+                        services.append(parts[0])
+            return services
+        except subprocess.CalledProcessError:
+            return []
 
 
 def get_installer() -> InstallerBase:
