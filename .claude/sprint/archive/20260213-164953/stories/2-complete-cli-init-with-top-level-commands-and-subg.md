@@ -5,8 +5,8 @@ title: Complete CLI init with top-level commands and subgroups
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:16:35.149275+00:00'
-updated_at: '2026-02-14T01:16:35.149275+00:00'
+created_at: '2026-02-13T07:53:17.643536+00:00'
+updated_at: '2026-02-13T07:53:17.643536+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

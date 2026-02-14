@@ -5,9 +5,10 @@ title: Add config_init DEFAULT_PORT alignment and session_poll_seconds
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:22:22.634702+00:00'
-updated_at: '2026-02-14T01:22:22.634702+00:00'
-depends_on: []
+created_at: '2026-02-13T07:54:46.408913+00:00'
+updated_at: '2026-02-13T08:05:02.224333+00:00'
+depends_on:
+- '8'
 blocks: []
 cross_story_impact: []
 affected_by: []

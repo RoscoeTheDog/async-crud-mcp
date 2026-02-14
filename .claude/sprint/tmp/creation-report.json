@@ -10,7 +10,7 @@
     {"id": "8", "file_path": ".claude/sprint/stories/8-add-port-validation-and-fromfile-class-method-to-c.md", "queued": true},
     {"id": "9", "file_path": ".claude/sprint/stories/9-add-port-pre-flight-exit-code-and-security-logging.md", "queued": true},
     {"id": "10", "file_path": ".claude/sprint/stories/10-align-pathspy-appname-import-with-adr-009.md", "queued": true},
-    {"id": "11", "file_path": ".claude/sprint/stories/11-enhance-installerpy-with-full-spec-features.md", "queued": true},
+    {"id": "11", "file_path": ".claude/sprint/stories/11-fix-installer-service-install-and-add-post-install.md", "queued": true},
     {"id": "12", "file_path": ".claude/sprint/stories/12-add-configinit-defaultport-alignment-and-sessionpo.md", "queued": true},
     {"id": "13", "file_path": ".claude/sprint/stories/13-add---port---skip-logs---log-age-to-testserverpy.md", "queued": true},
     {"id": "14", "file_path": ".claude/sprint/stories/14-enhance-readme-with-full-spec-documentation.md", "queued": true},

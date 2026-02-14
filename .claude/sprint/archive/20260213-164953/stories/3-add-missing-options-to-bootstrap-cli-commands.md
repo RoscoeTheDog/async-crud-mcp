@@ -5,8 +5,8 @@ title: Add missing options to bootstrap CLI commands
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:17:02.559396+00:00'
-updated_at: '2026-02-14T01:17:02.559396+00:00'
+created_at: '2026-02-13T07:53:22.871523+00:00'
+updated_at: '2026-02-13T07:53:22.871523+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

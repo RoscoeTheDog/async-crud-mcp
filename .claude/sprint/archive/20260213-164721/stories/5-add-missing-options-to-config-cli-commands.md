@@ -5,8 +5,8 @@ title: Add missing options to config CLI commands
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:18:23.374077+00:00'
-updated_at: '2026-02-14T01:18:23.374077+00:00'
+created_at: '2026-02-13T07:53:32.793234+00:00'
+updated_at: '2026-02-13T07:53:32.793234+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

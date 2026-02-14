@@ -181,22 +181,20 @@
     },
     {
       "id": "11",
-      "title": "Enhance installer.py with full spec features",
+      "title": "Fix installer service install and add post-install steps",
       "type": "feature",
-      "description": "The installer.py (scripts/) is a simplified version compared to the spec's ~1100 line requirement. Missing: (1) install subcommand --force/--port options; (2) uninstall subcommand --all option; (3) Privilege checks (admin on Windows); (4) Preflight checks (Python version >= 3.10, disk space, permissions); (5) uv venv --managed-python (ADR-010); (6) pywin32 DLL configuration for Windows Service (GAP-5); (7) Direct CreateService API for service install (GAP-4); (8) Setup wizard and server tests post-install; (9) Exit codes: 0=success, 1=failed, 130=cancelled.",
+      "description": "The installer.py install_service() looks for a non-existent service_installer.bat. Per template spec, it should use venv python to call CLI 'bootstrap install' (same pattern as template's step_install_service). Also missing post-install steps: running setup wizard and server tests. NOTE: Several spec ACs are ALREADY DONE from earlier fixes: privileges check, preflight checks, uv venv --managed-python, pywin32 DLL config, exit codes, menu (4 options), error handling, uv pip install.",
       "acceptance_criteria": [
-        {"id": "AC-11.1", "text": "install subcommand with --force, --port options"},
-        {"id": "AC-11.2", "text": "uninstall subcommand with --all option"},
-        {"id": "AC-11.3", "text": "Checks privileges (admin on Windows)"},
-        {"id": "AC-11.4", "text": "Preflight checks (Python version >= 3.10, disk space, permissions)"},
-        {"id": "AC-11.5", "text": "Creates venv with uv venv --managed-python (ADR-010)"},
-        {"id": "AC-11.6", "text": "Configures pywin32 DLLs for Windows Service (GAP-5)"},
-        {"id": "AC-11.7", "text": "Exit codes: 0=success, 1=failed, 130=cancelled"}
+        {"id": "AC-11.1", "text": "install_service() uses venv python -m async_crud_mcp bootstrap install instead of non-existent service_installer.bat"},
+        {"id": "AC-11.2", "text": "Runs setup wizard post-install via venv python -m async_crud_mcp setup --no-interactive"},
+        {"id": "AC-11.3", "text": "Runs server tests post-install via test_server.py"},
+        {"id": "AC-11.4", "text": "Logging to installer.log file for debugging"},
+        {"id": "AC-11.5", "text": "InstallerContext or step tracking for clear progress reporting"}
       ],
       "files": ["scripts/installer.py"],
       "depends_on": [],
       "risk": "high",
-      "points": 5,
+      "points": 4,
       "gap_sources": ["d28"]
     },
     {

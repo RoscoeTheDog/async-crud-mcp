@@ -1,0 +1,82 @@
+{
+  "$schema": "sprint-config-v4",
+  "parallelization": {
+    "enabled": true,
+    "max_concurrent": 3,
+    "conflict_threshold": 0.5
+  },
+  "models": {
+    "gate1": {
+      "orphan_cleanup": "haiku",
+      "pending_merge_recovery": "haiku",
+      "schema_migration_check": "haiku",
+      "scope_detection_static": "haiku",
+      "scope_detection_semantic": "opus",
+      "scope_detection_conflict": "opus",
+      "batch_formation": "sonnet"
+    },
+    "gate2": {
+      "planning": "opus",
+      "implementation": "sonnet",
+      "micro_verification": "sonnet",
+      "blast_radius_analysis": "sonnet",
+      "testing": "haiku"
+    },
+    "gate3": {
+      "run_test_suite": "haiku"
+    },
+    "gate4": {
+      "structural_checks": "haiku",
+      "error_signature_extraction": "haiku",
+      "convergence_analysis": "haiku",
+      "semantic_validation": "sonnet",
+      "remediation_story_creation": "haiku"
+    },
+    "gate5": {
+      "aggregate_findings": "haiku",
+      "deduplicate": "haiku",
+      "prioritize": "haiku",
+      "remediation_creation": "haiku"
+    },
+    "gate6": {
+      "finalize": "sonnet"
+    }
+  },
+  "timeout": {
+    "gate2": {
+      "planning": 1200,
+      "implementation": 1200,
+      "testing": 1200
+    },
+    "gate3": {
+      "integration_testing": 1200
+    },
+    "gate4": {
+      "structural_checks": 600,
+      "semantic_validation": 1200
+    }
+  },
+  "batch_reconciliation": {
+    "gate2": false,
+    "gate4": true
+  },
+  "convergence": {
+    "max_remediations_per_story": 3,
+    "stall_threshold": 3,
+    "oscillation_min_history": 6
+  },
+  "migration": {
+    "default_model": "opus",
+    "fast_model": "sonnet",
+    "batch_size": {
+      "haiku": 10,
+      "sonnet": 25,
+      "opus": 50
+    },
+    "max_retries": 2,
+    "auto_migrate": true
+  },
+  "logging": {
+    "tail_lines": 50
+  }
+}

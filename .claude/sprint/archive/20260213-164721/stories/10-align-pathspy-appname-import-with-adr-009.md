@@ -5,8 +5,8 @@ title: Align paths.py APP_NAME import with ADR-009
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:21:08.252229+00:00'
-updated_at: '2026-02-14T01:21:08.252229+00:00'
+created_at: '2026-02-13T07:54:20.359422+00:00'
+updated_at: '2026-02-13T07:54:20.359422+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

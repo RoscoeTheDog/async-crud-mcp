@@ -5,8 +5,8 @@ title: Add port validation and from_file class method to config
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:19:48.660496+00:00'
-updated_at: '2026-02-14T01:19:48.660496+00:00'
+created_at: '2026-02-13T07:54:06.826823+00:00'
+updated_at: '2026-02-13T07:54:06.826823+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

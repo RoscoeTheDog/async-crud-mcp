@@ -5,8 +5,8 @@ title: Align install commands with spec options
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:19:16.610781+00:00'
-updated_at: '2026-02-14T01:19:16.610781+00:00'
+created_at: '2026-02-13T07:53:58.735695+00:00'
+updated_at: '2026-02-13T07:53:58.735695+00:00'
 depends_on: []
 blocks: []
 cross_story_impact: []

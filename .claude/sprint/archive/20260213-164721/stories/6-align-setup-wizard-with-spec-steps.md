@@ -5,9 +5,11 @@ title: Align setup wizard with spec steps
 type: feature
 status: queued
 parent: null
-created_at: '2026-02-14T01:18:50.539806+00:00'
-updated_at: '2026-02-14T01:18:50.539806+00:00'
-depends_on: []
+created_at: '2026-02-13T07:53:55.059007+00:00'
+updated_at: '2026-02-13T08:05:03.581721+00:00'
+depends_on:
+- '2'
+- '8'
 blocks: []
 cross_story_impact: []
 affected_by: []
