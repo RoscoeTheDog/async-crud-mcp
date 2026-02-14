@@ -1,0 +1,21 @@
+{
+  "story_id": "10",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T12:00:00Z",
+  "planning_output": {
+    "implementation_plan": "Story 10 requires two changes to src/async_crud_mcp/daemon/paths.py:\n\n1. **AC-10.2 (APP_NAME fallback)**: Add a local APP_NAME constant as fallback. The current code imports APP_NAME from ..config (line 14). Per ADR-009 and PRD 13.6, APP_NAME should be available as a local constant so paths.py remains functional even if config import fails. The approach: define a module-level _APP_NAME_DEFAULT = 'async-crud-mcp', then wrap the import in try/except and fall back to the local constant.\n\n2. **AC-10.1 (XDG_CACHE_HOME)**: Add a get_cache_dir() function. The spec-manifest requires XDG compliance including XDG_CACHE_HOME. The shell installer (systemd_installer.sh) already uses XDG_CACHE_HOME -> ~/.cache/async-crud-mcp. The Python paths.py supports XDG_CONFIG_HOME, XDG_DATA_HOME, and XDG_STATE_HOME via _get_xdg_path() but is missing XDG_CACHE_HOME. Add get_cache_dir() following the same pattern as other functions: Windows -> LOCALAPPDATA/APP_NAME/cache, macOS -> ~/Library/Caches/APP_NAME, Linux -> _get_xdg_path('XDG_CACHE_HOME', '.cache').\n\nAlso update daemon/__init__.py to re-export get_cache_dir in the public API, and add get_cache_dir to paths.py __all__.",
+    "files_to_modify": [
+      "src/async_crud_mcp/daemon/paths.py",
+      "src/async_crud_mcp/daemon/__init__.py",
+      "tests/test_daemon_paths.py"
+    ],
+    "estimated_complexity": "low",
+    "ac_breakdown": {
+      "AC-10.1": "Add get_cache_dir() function to paths.py that returns platform-appropriate cache directory path. Windows: %LOCALAPPDATA%\\async-crud-mcp\\cache. macOS: ~/Library/Caches/async-crud-mcp. Linux: XDG_CACHE_HOME/async-crud-mcp (default ~/.cache/async-crud-mcp). Uses existing _get_xdg_path() helper for Linux. Add to __all__ list, add to daemon/__init__.py re-exports. This aligns with systemd_installer.sh which already defines CACHE_DIR=${XDG_CACHE_HOME}/${APP_NAME}.",
+      "AC-10.2": "Change the APP_NAME import in paths.py to use a try/except with local fallback. Define _APP_NAME_DEFAULT = 'async-crud-mcp' at module level, then try to import APP_NAME from ..config. If the import fails, set APP_NAME = _APP_NAME_DEFAULT. This ensures paths.py is self-contained per ADR-009 single name convention while still preferring the canonical config source. The re-export of APP_NAME in __all__ and daemon/__init__.py remains unchanged."
+    },
+    "testing_strategy": "Create tests/test_daemon_paths.py with tests for:\n1. get_cache_dir() returns correct path on each platform (mock sys.platform and env vars)\n2. Linux: get_cache_dir() respects XDG_CACHE_HOME env var\n3. Linux: get_cache_dir() falls back to ~/.cache/APP_NAME when XDG_CACHE_HOME unset\n4. Windows: get_cache_dir() uses LOCALAPPDATA\n5. macOS: get_cache_dir() uses ~/Library/Caches/\n6. APP_NAME is 'async-crud-mcp' (verify the constant value regardless of import path)\n7. Verify APP_NAME fallback works when config import would fail (mock import error scenario)",
+    "dependencies": []
+  }
+}

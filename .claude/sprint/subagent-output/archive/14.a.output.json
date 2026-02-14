@@ -1,0 +1,20 @@
+{
+  "story_id": "14",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:15:00Z",
+  "planning_output": {
+    "implementation_plan": "Replace the current minimal README.md with comprehensive documentation covering installation (setup.bat/setup.sh scripts + manual uv-based install), usage examples for all 5 CLI command groups (bootstrap, daemon, config, setup, quick-install/uninstall), and an architecture overview explaining the two-layer design (bootstrap daemon layer that manages the MCP server layer). The README currently has 38 lines with basic clone/install/run instructions. The enhanced version will add 3 major sections corresponding to the 3 acceptance criteria. All content derives from existing source code - no external research needed.",
+    "files_to_modify": [
+      "README.md"
+    ],
+    "estimated_complexity": "low",
+    "ac_breakdown": {
+      "AC-14.1": "Installation instructions (quick install, setup.bat/setup.sh). Add a new 'Installation' section with two paths: (1) Quick Install using platform scripts - reference `scripts/setup.bat` for Windows and `scripts/setup.sh` for macOS/Linux, which auto-detect Python 3.12+ and delegate to installer.py; (2) Manual Install using uv (clone, uv sync, uv run). Include prerequisites (Python 3.12+, uv). The quick-install CLI command (`async-crud-mcp quick-install --yes`) should also be documented as the post-install one-liner.",
+      "AC-14.2": "Usage examples for CLI commands. Add a 'Usage' section documenting all 5 CLI groups with example invocations: (1) `async-crud-mcp setup` - interactive wizard (prompts for port, host, transport, log level, then offers daemon install); (2) `async-crud-mcp quick-install` - non-interactive full setup with flags (--yes, --force, --port, --no-start); (3) `async-crud-mcp uninstall` - stop and remove daemon (--yes, --remove-config, --remove-logs); (4) `async-crud-mcp config {init,show,edit,validate}` - config management with key flags (--force, --port, --json, --username); (5) `async-crud-mcp daemon {start,stop,restart,status,logs}` - daemon lifecycle with flags (--background, --follow); (6) `async-crud-mcp bootstrap {install,uninstall,start,stop,status,list}` - service management with flags (--force, --use-task-scheduler, --username, --json). Each group gets a brief description and 1-2 representative CLI examples.",
+      "AC-14.3": "Architecture overview with two-layer design. Add an 'Architecture' section explaining: Layer 1 = Bootstrap Daemon (`daemon/bootstrap_daemon.py`) - monitors user session state and config changes, manages MCP server process lifecycle (start/stop/restart), platform-specific service integration (Windows Service/Task Scheduler, macOS launchd, Linux systemd); Layer 2 = MCP Server (`server.py`) - FastMCP-based server exposing 11 CRUD tools (write, read, update, delete, append, rename, list, status, batch_write, batch_read, batch_update) over SSE/stdio transport, with shared core components (PathValidator, LockManager, HashRegistry). Include supporting subsystems: config management (Pydantic Settings), health checks, graceful shutdown, config file watcher, session detection, structured logging (loguru). A simple text-based diagram showing the two layers would be valuable."
+    },
+    "testing_strategy": "This is a documentation-only change (README.md). No automated tests needed. Manual verification: (1) Confirm all referenced CLI commands and flags match the actual source code; (2) Confirm setup.bat/setup.sh paths are correct; (3) Confirm architecture description matches the actual module structure. All CLI commands and flags were verified against source during planning.",
+    "dependencies": []
+  }
+}

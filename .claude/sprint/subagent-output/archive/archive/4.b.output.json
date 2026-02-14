@@ -1,0 +1,58 @@
+{
+  "story_id": "4",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:30:00Z",
+  "implementation_output": {
+    "files_modified": [
+      "src/async_crud_mcp/cli/daemon_cmd.py",
+      "tests/test_cli/test_daemon_cmd.py"
+    ],
+    "changes_summary": "Refactored daemon CLI commands to use config mutation pattern per ADR-003. Removed direct process control (subprocess.Popen, BootstrapDaemon) and replaced with atomic config file writes. Added --username, --all, --json options to status command and --lines, --username, --user options to logs command. All 13 tests passing.",
+    "lines_changed": 187
+  },
+  "micro_verification": {
+    "elements_checked": 4,
+    "passed": 4,
+    "failed": 0,
+    "results": [
+      {
+        "location": "src/async_crud_mcp/cli/daemon_cmd.py:80",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "Config file read with proper existence check before json.loads"
+      },
+      {
+        "location": "src/async_crud_mcp/cli/daemon_cmd.py:150",
+        "risk_type": "resource_management",
+        "outcome": "passed",
+        "details": "Socket created and closed properly in _check_user_health helper"
+      },
+      {
+        "location": "tests/test_cli/test_daemon_cmd.py",
+        "risk_type": "type_safety",
+        "outcome": "passed",
+        "details": "Mypy type check passed with no errors"
+      },
+      {
+        "location": "all modified files",
+        "risk_type": "lint_compliance",
+        "outcome": "passed",
+        "details": "Ruff linter passed with no issues"
+      }
+    ],
+    "context_for_testing": {
+      "failures": [],
+      "notes": [
+        "All 13 unit tests passing including new tests for config mutation pattern",
+        "Test coverage includes: start/stop/restart config mutation, status --username/--all/--json, logs --lines/--username",
+        "Fixed test issue where mocking time module caused config dict mutation side effects"
+      ]
+    }
+  },
+  "blast_radius": {
+    "analyzed": false,
+    "is_remediation": false,
+    "impacts": []
+  }
+}

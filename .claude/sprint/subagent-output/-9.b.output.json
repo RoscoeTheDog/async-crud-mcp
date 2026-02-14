@@ -1,0 +1,51 @@
+{
+  "story_id": "9",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T10:41:43.267470+00:00",
+  "semantic_checks": {
+    "code_exists": true,
+    "alignment_score": 1.0,
+    "recency_ok": true,
+    "test_coverage_ok": true
+  },
+  "design_validation": {
+    "pattern_correctness": true,
+    "fix_quality": "good",
+    "regression_risk": "low"
+  },
+  "diff_verification": {
+    "files_modified": [
+      "src/async_crud_mcp/server.py",
+      "tests/test_server.py"
+    ],
+    "expected_files_touched": true,
+    "change_magnitude": "sufficient"
+  },
+  "ac_results": {
+    "AC-9.1": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true
+    },
+    "AC-9.2": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true
+    },
+    "AC-9.3": {
+      "passed": true,
+      "code_exists": true,
+      "alignment": 1.0,
+      "recent": true,
+      "has_tests": true
+    }
+  },
+  "failed_acs": [],
+  "issues": [],
+  "remediation_needed": false
+}

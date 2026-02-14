@@ -1,0 +1,25 @@
+{
+  "story_id": "2",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T08:15:00Z",
+  "planning_output": {
+    "implementation_plan": "Restructure CLI __init__.py to match spec d18: (1) Change setup from a subgroup (add_typer) to a direct top-level command using app.command() that delegates to the existing wizard logic in setup_cmd.py. (2) Register quick-install and uninstall as top-level commands on the main app rather than nesting them under the 'install' subgroup. (3) Add a new 'version' top-level command that imports and prints __version__ from async_crud_mcp.__init__. The install_cmd module retains its functions but they get registered directly on the main app instead of via add_typer. The setup_cmd module's wizard function gets wrapped or imported as a direct command. Existing test files need updates to test via the main app rather than submodule apps for the promoted commands.",
+    "files_to_modify": [
+      "src/async_crud_mcp/cli/__init__.py",
+      "src/async_crud_mcp/cli/setup_cmd.py",
+      "src/async_crud_mcp/cli/install_cmd.py",
+      "tests/test_cli/test_install_cmd.py",
+      "tests/test_cli/test_setup_cmd.py"
+    ],
+    "estimated_complexity": "medium",
+    "ac_breakdown": {
+      "AC-2.1": "Change setup from add_typer(setup_cmd.app, name='setup') to a direct top-level command. Two approaches: (A) Use app.command(name='setup') decorator on a function in __init__.py that calls the wizard logic, or (B) keep the wizard function in setup_cmd.py but register it directly via app.command(). Approach B is cleaner -- import the wizard function from setup_cmd and register it as: app.command(name='setup', help='Interactive setup wizard')(setup_cmd.wizard). The setup_cmd module can still define its own Typer app for standalone testing, but the main registration uses app.command(). This means 'async-crud-mcp setup' runs the wizard directly instead of requiring 'async-crud-mcp setup wizard'.",
+      "AC-2.2": "Register quick-install as a top-level command. Currently quick_install lives in install_cmd.py as @app.command() on install_cmd's local Typer app. Change __init__.py to import the function and register it: app.command(name='quick-install', help='Run full setup sequence')(install_cmd.quick_install). Remove the add_typer(install_cmd.app, name='install') line. The install_cmd module keeps its functions but they get registered on the main app.",
+      "AC-2.3": "Register uninstall as a top-level command. Same approach as AC-2.2: app.command(name='uninstall', help='Stop and uninstall the daemon service')(install_cmd.uninstall). This makes 'async-crud-mcp uninstall' work directly.",
+      "AC-2.4": "Add a version command. Create a simple function in __init__.py: @app.command() def version(): import from async_crud_mcp import __version__; typer.echo(f'async-crud-mcp {__version__}'). Alternatively use typer's built-in version callback, but a standalone command is clearer and matches the spec ('version command exists showing __version__')."
+    },
+    "testing_strategy": "Update test_install_cmd.py to test quick-install and uninstall via the main app (from async_crud_mcp.cli import app) instead of the install_cmd subapp, since commands are now top-level. Similarly update test_setup_cmd.py to invoke 'setup' as a direct command on the main app. Add a new test for the version command verifying it outputs the __version__ string. Tests can go in an existing test file or a small addition to the CLI test suite. Use CliRunner with the main app for all top-level command tests.",
+    "dependencies": []
+  }
+}

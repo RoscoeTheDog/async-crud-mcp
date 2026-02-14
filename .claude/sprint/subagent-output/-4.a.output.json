@@ -1,0 +1,45 @@
+{
+  "story_id": "4",
+  "validation_id": "-4",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:23:10Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "ValidationError:story_4:check_C:P0_acceptance_criteria_without_test_coverage:AC-4.1,AC-4.2,AC-4.3,AC-4.4,AC-4.5,AC-4.6",
+    "ValidationError:story_4:check_D:missing_test_output_for_validation",
+    "ValidationError:story_4:check_J:coverage_below_threshold:0.0% < 80%"
+  ],
+  "convergence": null
+}

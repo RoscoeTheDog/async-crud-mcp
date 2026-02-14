@@ -1,0 +1,78 @@
+{
+  "story_id": "3",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:30:00Z",
+  "implementation_output": {
+    "files_modified": [
+      "src/async_crud_mcp/cli/bootstrap_cmd.py",
+      "src/async_crud_mcp/daemon/installer.py",
+      "tests/test_cli/test_bootstrap_cmd.py"
+    ],
+    "changes_summary": "Added all missing CLI options to bootstrap commands per spec: --force and --use-task-scheduler for install; --username and --force for uninstall; --username for start/stop; --username and --json for status; enhanced list with username/status columns. Added admin privilege check using ctypes on Windows and os.geteuid() on Unix. Added username parameter to get_installer() factory. Updated tests to mock admin check and handle new list command output.",
+    "lines_changed": 142
+  },
+  "micro_verification": {
+    "elements_checked": 8,
+    "passed": 8,
+    "failed": 0,
+    "results": [
+      {
+        "location": "src/async_crud_mcp/cli/bootstrap_cmd.py:18",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "_check_admin() has proper exception handling"
+      },
+      {
+        "location": "src/async_crud_mcp/cli/bootstrap_cmd.py:38",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "install() checks admin before proceeding"
+      },
+      {
+        "location": "src/async_crud_mcp/cli/bootstrap_cmd.py:56",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "uninstall() checks admin and confirmation"
+      },
+      {
+        "location": "src/async_crud_mcp/cli/bootstrap_cmd.py:95",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "status() handles json_output flag correctly"
+      },
+      {
+        "location": "src/async_crud_mcp/cli/bootstrap_cmd.py:129",
+        "risk_type": "null_handling",
+        "outcome": "passed",
+        "details": "list() has exception handling for status calls"
+      },
+      {
+        "location": "src/async_crud_mcp/daemon/installer.py:477",
+        "risk_type": "type_safety",
+        "outcome": "passed",
+        "details": "get_installer() properly stores username on instance"
+      },
+      {
+        "location": "tests/test_cli/test_bootstrap_cmd.py:12",
+        "risk_type": "test_coverage",
+        "outcome": "passed",
+        "details": "All existing tests pass with admin check mocked"
+      },
+      {
+        "location": "tests/test_cli/test_bootstrap_cmd.py:77",
+        "risk_type": "test_coverage",
+        "outcome": "passed",
+        "details": "List test updated to mock status call"
+      }
+    ],
+    "context_for_testing": {
+      "failures": []
+    }
+  },
+  "blast_radius": {
+    "analyzed": false,
+    "is_remediation": false,
+    "impacts": []
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "story_id": "1",
+  "validation_id": "-1",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:09:47Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": false,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": true,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": ["D"],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "ValidationError:test_coverage:story_1:AC-1.1:P0 acceptance criteria without test coverage"
+  ],
+  "convergence": null
+}

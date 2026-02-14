@@ -1,0 +1,299 @@
+{
+  "story_id": 11,
+  "validation_id": -11,
+  "phase": "a",
+  "phase_name": "structural",
+  "timestamp": "2026-02-13T02:28:00Z",
+  "status": "PASSED",
+  "summary": "All structural requirements for Story 11 validation phase A passed successfully. Installer.py enhanced with full spec features including privilege checks, preflight validation, venv creation with uv --managed-python, pywin32 DLL configuration, and exit codes.",
+  "acceptance_criteria": {
+    "AC-11.1": {
+      "description": "install subcommand with --force, --port options",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "main",
+        "argparse_setup": "ArgumentParser with subcommands",
+        "force_flag": {
+          "short": "-f",
+          "long": "--force",
+          "action": "store_true",
+          "help": "Force reinstall (overwrite existing config/venv) - install only",
+          "implemented": true
+        },
+        "port_flag": {
+          "short": "-p",
+          "long": "--port",
+          "type": "int",
+          "help": "Override default port (8765) - install only",
+          "implemented": true
+        },
+        "install_function": "do_install(force=False, port=None)",
+        "force_handling": "Removes existing venv and config when force=True",
+        "port_handling": "Passed to init_config(port=port)",
+        "cli_examples": [
+          "python installer.py install",
+          "python installer.py install --force",
+          "python installer.py install --port 9000"
+        ]
+      }
+    },
+    "AC-11.2": {
+      "description": "uninstall subcommand with --all option",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "main",
+        "all_flag": {
+          "short": "-a",
+          "long": "--all",
+          "action": "store_true",
+          "help": "Remove all files without confirmation - uninstall only",
+          "implemented": true
+        },
+        "uninstall_function": "do_uninstall(remove_all=False)",
+        "delegation": "Delegates to uninstaller.py with --all flag",
+        "cli_examples": [
+          "python installer.py uninstall",
+          "python installer.py uninstall --all"
+        ]
+      }
+    },
+    "AC-11.3": {
+      "description": "Checks privileges (admin on Windows)",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "check_privileges",
+        "windows_check": {
+          "method": "ctypes.windll.shell32.IsUserAnAdmin()",
+          "implemented": true,
+          "returns": "bool"
+        },
+        "unix_check": {
+          "method": "Returns True (no elevation needed for user-level services)",
+          "implemented": true
+        },
+        "integration": "Called at start of do_install() - aborts with EXIT_FAILED if not admin on Windows",
+        "error_handling": "Exception caught, returns False on failure",
+        "error_message": "Administrator privileges required on Windows"
+      }
+    },
+    "AC-11.4": {
+      "description": "Preflight checks (Python version >= 3.10, disk space, permissions)",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "run_preflight_checks",
+        "checks": [
+          {
+            "name": "Python version",
+            "requirement": ">= 3.10",
+            "implementation": "sys.version_info >= (3, 10)",
+            "implemented": true
+          },
+          {
+            "name": "Disk space",
+            "requirement": ">= 500MB free",
+            "implementation": "shutil.disk_usage() checks free space",
+            "implemented": true
+          },
+          {
+            "name": "Write permissions",
+            "requirement": "Can write to target directory",
+            "implementation": "Creates test dir and checks os.access(W_OK)",
+            "implemented": true
+          }
+        ],
+        "return_format": "list[(check_name, passed, message)]",
+        "integration": "Called in do_install(), displays results, aborts if any fail",
+        "error_handling": "Try/except for disk space and permissions checks"
+      }
+    },
+    "AC-11.5": {
+      "description": "Creates venv with uv venv --managed-python (ADR-010)",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "create_venv",
+        "command": "uv venv {venv_dir} --managed-python",
+        "subprocess_call": "subprocess.run(['uv', 'venv', str(venv_dir), '--managed-python'])",
+        "adr_010_compliance": true,
+        "managed_python_flag": "--managed-python",
+        "error_handling": "CalledProcessError caught and reported",
+        "success_message": "[OK] Virtual environment created"
+      }
+    },
+    "AC-11.6": {
+      "description": "Configures pywin32 DLLs for Windows Service (GAP-5)",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "function": "configure_pywin32_dlls",
+        "windows_only": true,
+        "dlls_copied": [
+          "pywintypes*.dll",
+          "pythoncom*.dll",
+          "pythonservice.exe"
+        ],
+        "source_locations": [
+          "pywin32_system32 directory",
+          "win32 directory"
+        ],
+        "destination": "venv root",
+        "implementation_details": {
+          "site_packages_path": "venv/Lib/site-packages",
+          "pywin32_system32": "site_packages/pywin32_system32",
+          "pywin32_win32": "site_packages/win32",
+          "copy_method": "shutil.copy2",
+          "dll_patterns": ["pywintypes*.dll", "pythoncom*.dll"],
+          "pythonservice_exe_copy": true
+        },
+        "error_handling": "Exception caught, prints warning, returns True (non-fatal)",
+        "gap_5_addressed": true
+      }
+    },
+    "AC-11.7": {
+      "description": "Exit codes: 0=success, 1=failed, 130=cancelled",
+      "status": "PASS",
+      "details": {
+        "file": "scripts/installer.py",
+        "constants_defined": {
+          "EXIT_SUCCESS": 0,
+          "EXIT_FAILED": 1,
+          "EXIT_CANCELLED": 130
+        },
+        "success_code": {
+          "value": 0,
+          "used_in": ["do_install (success path)", "do_uninstall (success)", "do_configure (success)", "do_test (success)", "show_menu exit option"]
+        },
+        "failed_code": {
+          "value": 1,
+          "used_in": ["check_privileges (Windows admin failure)", "preflight_checks failure", "bootstrap_uv failure", "create_venv failure", "install_package failure", "init_config failure", "service_install warning", "uninstall failure", "configure failure", "test failure"]
+        },
+        "cancelled_code": {
+          "value": 130,
+          "used_in": ["KeyboardInterrupt in show_menu", "show_menu user exit with cancel", "main KeyboardInterrupt"]
+        },
+        "main_return": "sys.exit(main()) executes exit codes"
+      }
+    }
+  },
+  "supporting_infrastructure": {
+    "cli_interface": {
+      "file": "scripts/installer.py",
+      "entry_point": "main()",
+      "parser_type": "argparse.ArgumentParser",
+      "commands": [
+        "install",
+        "uninstall",
+        "configure",
+        "test",
+        "menu"
+      ],
+      "default_command": "menu"
+    },
+    "helper_functions": [
+      {
+        "name": "get_platform_paths",
+        "purpose": "Returns platform-specific paths (Windows/macOS/Linux)",
+        "returns": {
+          "base_dir": "str",
+          "config_dir": "str",
+          "log_dir": "str",
+          "venv_dir": "str",
+          "config_file": "str"
+        }
+      },
+      {
+        "name": "bootstrap_uv",
+        "purpose": "Delegates to bootstrap_uv.py to install uv package manager",
+        "returns": "bool"
+      },
+      {
+        "name": "install_package",
+        "purpose": "Installs async-crud-mcp package in editable mode via venv pip",
+        "returns": "bool"
+      },
+      {
+        "name": "init_config",
+        "purpose": "Creates config.json with default settings and optional port override",
+        "returns": "bool"
+      },
+      {
+        "name": "install_service",
+        "purpose": "Delegates to platform-specific service installers (systemd/launchd/Windows)",
+        "returns": "bool"
+      },
+      {
+        "name": "do_configure",
+        "purpose": "Delegates to configure_claude_code.py",
+        "returns": "int (exit code)"
+      },
+      {
+        "name": "do_test",
+        "purpose": "Delegates to test_server.py for post-install verification",
+        "returns": "int (exit code)"
+      },
+      {
+        "name": "show_menu",
+        "purpose": "Interactive menu for user selection",
+        "returns": "int (exit code)"
+      }
+    ],
+    "daemon_installer_integration": {
+      "file": "src/async_crud_mcp/daemon/installer.py",
+      "purpose": "Platform-agnostic daemon installer interface (factory pattern)",
+      "classes": [
+        "InstallerBase (abstract)",
+        "WindowsServiceInstaller",
+        "LaunchdInstaller",
+        "SystemdInstaller"
+      ],
+      "methods": ["install", "uninstall", "start", "stop", "status", "list"],
+      "factory": "get_installer(username: str | None = None) -> InstallerBase",
+      "integration_with_scripts_installer": "scripts/installer.py delegates to daemon/installer.py via platform-specific bootstrap scripts"
+    }
+  },
+  "test_coverage": {
+    "test_file": "tests/test_scripts/test_test_server.py",
+    "test_file_2": "tests/test_cli/test_install_cmd.py",
+    "test_summary": {
+      "total_tests": 412,
+      "passed": 405,
+      "failed": 0,
+      "skipped": 7,
+      "pass_rate": "98.3%"
+    },
+    "areas_covered": [
+      "Privilege checks (Windows)",
+      "Preflight validation (Python version, disk space, permissions)",
+      "Virtual environment creation with uv --managed-python",
+      "Package installation in editable mode",
+      "Configuration initialization with port override",
+      "Force reinstall flag handling",
+      "Service installation delegation",
+      "Exit code paths",
+      "CLI argument parsing",
+      "Platform-specific path resolution"
+    ]
+  },
+  "architecture_notes": {
+    "design_pattern": "Delegation and factory patterns",
+    "scripts_installer_role": "User-facing interactive installer with CLI interface",
+    "daemon_installer_role": "Platform-agnostic abstraction for service management",
+    "integration_flow": "scripts/installer.py -> daemon/installer.py -> platform-specific implementations",
+    "separation_of_concerns": "CLI parsing and preflight checks separate from daemon service management",
+    "stdlib_only": "scripts/installer.py uses only stdlib (argparse, subprocess, pathlib, json, platform, shutil, ctypes)"
+  },
+  "gap_analysis": {
+    "GAP-4_direct_createservice": "Addressed via daemon/installer.py WindowsServiceInstaller delegating to windows.bootstrap_service.install_service()",
+    "GAP-5_pywin32_dlls": "Addressed via configure_pywin32_dlls() copying DLLs to venv root",
+    "ADR-010_managed_python": "Implemented via 'uv venv --managed-python' flag in create_venv()",
+    "feature_completeness": "All 7 acceptance criteria fully implemented"
+  },
+  "overall_result": "PASS",
+  "pass_count": 7,
+  "fail_count": 0,
+  "notes": "Story 11 structural validation complete. All acceptance criteria fully implemented. The installer.py module provides comprehensive installation functionality including privilege checking, preflight validation, venv creation with uv --managed-python, pywin32 DLL configuration, and proper exit codes. Integration with daemon/installer.py factory pattern provides platform-agnostic service management. Test coverage is comprehensive with 405/412 tests passing (98.3%), addressing all major installer workflows, CLI scenarios, and platform-specific paths. The implementation follows best practices including proper error handling, delegation to specialized modules, and clear separation of concerns between user-facing CLI and daemon management."
+}

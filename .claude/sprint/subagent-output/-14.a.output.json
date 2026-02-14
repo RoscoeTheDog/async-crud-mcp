@@ -1,0 +1,53 @@
+{
+  "story_id": "14",
+  "validation_id": "-14",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:34:45Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "failed_checks": [
+    "C",
+    "J"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "TestCoverageError:story:14:AC validation:P0 acceptance criteria without test coverage (AC-14.1, AC-14.2, AC-14.3)",
+    "CoverageError:story:14:scope validation:Coverage 0.0% below threshold 80%"
+  ],
+  "convergence": {
+    "pattern": "healthy",
+    "action": "continue",
+    "history_length": 0
+  },
+  "notes": "Check D is blocked due to missing story-specific test output (no story-14 tests were executed). Check C failed: P0 acceptance criteria AC-14.1, AC-14.2, AC-14.3 lack test traceability. Check J failed: README.md has 0% coverage (documentation file), below 80% threshold. Story cannot proceed through Gate 4 until test output data is made available for story-specific validation."
+}

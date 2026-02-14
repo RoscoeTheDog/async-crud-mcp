@@ -1,0 +1,180 @@
+{
+  "validation_id": "-3.a",
+  "story_id": "3",
+  "phase": "a",
+  "model": "haiku",
+  "executed_at": "2026-02-14T02:40:18.000000+00:00",
+  "status": "blocked",
+  "structural_checks": {
+    "A": {
+      "check_id": "A",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "data": {
+        "file_path": "C:\\Users\\Admin\\Documents\\GitHub\\async-crud-mcp\\.claude\\sprint\\stories\\3-add-missing-options-to-bootstrap-cli-commands.md",
+        "fields_found": [
+          "$schema",
+          "id",
+          "title",
+          "type",
+          "status",
+          "parent",
+          "created_at",
+          "updated_at",
+          "depends_on",
+          "blocks",
+          "cross_story_impact",
+          "affected_by",
+          "deferred_reason",
+          "deferred_at",
+          "validation"
+        ],
+        "status": "queued",
+        "type": "feature"
+      },
+      "missing_data": null
+    },
+    "B": {
+      "check_id": "B",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "data": {
+        "acs_found": 6,
+        "acs_with_priority": 6,
+        "acs_with_checkbox": 6,
+        "priority_distribution": {
+          "P0": 6,
+          "P1": 0,
+          "P2": 0
+        },
+        "auto_repaired": []
+      },
+      "missing_data": null
+    },
+    "C": {
+      "check_id": "C",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-3.1, AC-3.2, AC-3.3, AC-3.4, AC-3.5, AC-3.6"
+      ],
+      "warnings": [],
+      "data": {
+        "acs_total": 6,
+        "acs_with_tests": 0,
+        "acs_missing_tests": [
+          "AC-3.1",
+          "AC-3.2",
+          "AC-3.3",
+          "AC-3.4",
+          "AC-3.5",
+          "AC-3.6"
+        ],
+        "p0_missing_tests": [
+          "AC-3.1",
+          "AC-3.2",
+          "AC-3.3",
+          "AC-3.4",
+          "AC-3.5",
+          "AC-3.6"
+        ],
+        "p1_missing_tests": [],
+        "p2_missing_tests": [],
+        "test_files_found": [
+          "tests\\test_tools\\test_async_list.py",
+          "tests\\test_tools\\test_async_update.py",
+          "tests\\test_scripts\\test_test_server.py",
+          "tests\\test_daemon_paths.py",
+          "tests\\test_cli\\test_setup_cmd.py",
+          "tests\\test_cli\\test_bootstrap_cmd.py",
+          "tests\\test_lock_manager.py",
+          "tests\\test_persistence.py",
+          "tests\\test_cli\\test_config_cmd.py",
+          "tests\\test_tools\\test_async_rename.py",
+          "tests\\test_tools\\test_async_write.py",
+          "tests\\test_file_watcher.py",
+          "tests\\test_tools\\test_async_status.py",
+          "tests\\test_server.py",
+          "tests\\test_tools\\test_async_batch_read.py",
+          "tests\\test_path_validator.py",
+          "tests\\test_cli\\test_install_cmd.py",
+          "tests\\test_tools\\test_async_read.py",
+          "tests\\test_tools\\test_async_delete.py",
+          "tests\\test_tools\\test_async_append.py",
+          "tests\\test_config.py",
+          "tests\\test_tools\\test_async_batch_write.py",
+          "tests\\test_diff_engine.py",
+          "tests\\test_cli\\test_daemon_cmd.py",
+          "tests\\test_tools\\test_async_batch_update.py",
+          "tests\\test_file_io.py"
+        ],
+        "traceability_map": {
+          "AC-3.1": [],
+          "AC-3.2": [],
+          "AC-3.3": [],
+          "AC-3.4": [],
+          "AC-3.5": [],
+          "AC-3.6": []
+        }
+      },
+      "missing_data": null
+    },
+    "D": {
+      "check_id": "D",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "errors": [
+        "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+      ],
+      "warnings": [],
+      "data": {},
+      "missing_data": "test_output"
+    },
+    "J": {
+      "check_id": "J",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "Coverage 0.0% below threshold 80% (scope: scoped)"
+      ],
+      "warnings": [],
+      "data": {
+        "threshold": 0.8,
+        "scope": "scoped",
+        "coverage": 0.0,
+        "touched_files": [
+          "src/async_crud_mcp/daemon/installer.py",
+          "src/async_crud_mcp/cli/bootstrap_cmd.py"
+        ],
+        "module": null,
+        "meets_threshold": false,
+        "coverage_format": "json",
+        "coverage_report_path": "coverage.json"
+      },
+      "missing_data": null
+    }
+  },
+  "blocked_reason": "check_D_blocked_missing_test_output",
+  "error_signatures": [],
+  "convergence": {
+    "status": "passed",
+    "action": "done",
+    "reason": null,
+    "run_count": 0,
+    "failure_trend": "none"
+  },
+  "decision": {
+    "phase_a_passes": false,
+    "phase_b_dispatched": false,
+    "reason": "Check D blocked: missing test output - required data unavailable"
+  }
+}

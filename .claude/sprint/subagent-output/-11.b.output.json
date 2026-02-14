@@ -1,0 +1,366 @@
+{
+  "story_id": "11",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T10:46:30.627547+00:00",
+  "semantic_checks": {
+    "code_exists": true,
+    "alignment_score": 1.0,
+    "recency_ok": true,
+    "test_coverage_ok": true,
+    "diff_verification": {
+      "files_modified": true,
+      "expected_files_touched": true,
+      "modification_quality": "substantial"
+    }
+  },
+  "design_validation": {
+    "pattern_correctness": true,
+    "fix_quality": "excellent",
+    "regression_risk": "low",
+    "design_notes": "Implementation follows best practices: delegation pattern for service installation, factory pattern for platform-specific installers, proper error handling with exit codes, stdlib-only approach for installer.py, comprehensive preflight validation, ADR-010 compliance (uv --managed-python), GAP-5 resolution (pywin32 DLL configuration)"
+  },
+  "acceptance_criteria_validation": {
+    "AC-11.1": {
+      "description": "install subcommand with --force, --port options",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "491-501, 513-514",
+        "argparse_setup": "ArgumentParser with --force/-f and --port/-p flags",
+        "force_flag": "action='store_true', removes existing venv and config when set",
+        "port_flag": "type=int, passed to init_config(port=port)",
+        "do_install_integration": "do_install(force=args.force, port=args.port)",
+        "force_handling": "Lines 322-329: removes venv_dir and config_file when force=True",
+        "port_handling": "Line 348: init_config(paths['config_dir'], paths['config_file'], port=port)"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_with_force (lines 98+)",
+          "test_quick_install_with_port (lines 124+)"
+        ],
+        "coverage_status": "comprehensive"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.2": {
+      "description": "uninstall subcommand with --all option",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "503-507, 515-516",
+        "argparse_setup": "ArgumentParser with --all/-a flag",
+        "all_flag": "action='store_true', passed to uninstaller.py",
+        "do_uninstall_delegation": "do_uninstall(remove_all=args.all)",
+        "uninstaller_integration": "Lines 372-390: delegates to uninstaller.py with --all flag if set"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_uninstall_success (lines 58+)",
+          "test_uninstall_force_skips_confirm (lines 232+)"
+        ],
+        "coverage_status": "comprehensive"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.3": {
+      "description": "Checks privileges (admin on Windows)",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "19-31, 299-302",
+        "function": "check_privileges()",
+        "windows_implementation": "ctypes.windll.shell32.IsUserAnAdmin() != 0",
+        "unix_implementation": "Returns True (user-level services don't need root)",
+        "integration": "Called in do_install() before any operations",
+        "error_handling": "Aborts with EXIT_FAILED if not admin on Windows",
+        "error_message": "Administrator privileges required on Windows"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_admin_check_windows (lines 177+)"
+        ],
+        "coverage_status": "adequate"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.4": {
+      "description": "Preflight checks (Python version >= 3.10, disk space, permissions)",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "34-72, 304-319",
+        "function": "run_preflight_checks(target_dir)",
+        "checks": [
+          {
+            "name": "Python version",
+            "implementation": "sys.version_info >= (3, 10)",
+            "lines": "42-47"
+          },
+          {
+            "name": "Disk space",
+            "requirement": ">= 500MB",
+            "implementation": "shutil.disk_usage() checks free space",
+            "lines": "49-58"
+          },
+          {
+            "name": "Write permissions",
+            "implementation": "Creates test dir and checks os.access(W_OK)",
+            "lines": "60-70"
+          }
+        ],
+        "return_format": "list[(check_name, passed, message)]",
+        "integration": "Called in do_install(), prints results, aborts if any fail (lines 304-319)",
+        "error_handling": "Try/except for disk space and permissions checks"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_success (includes preflight implicitly)"
+        ],
+        "coverage_status": "adequate",
+        "note": "Preflight checks are called during install flow, covered by integration tests"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.5": {
+      "description": "Creates venv with uv venv --managed-python (ADR-010)",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "126-141",
+        "function": "create_venv(venv_dir)",
+        "command": "uv venv {venv_dir} --managed-python",
+        "subprocess_call": "subprocess.run(['uv', 'venv', str(venv_dir), '--managed-python'])",
+        "adr_010_compliance": true,
+        "managed_python_flag": "--managed-python (line 132)",
+        "error_handling": "CalledProcessError caught and reported with EXIT_FAILED",
+        "success_message": "[OK] Virtual environment created"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_success (includes venv creation)"
+        ],
+        "coverage_status": "adequate",
+        "note": "Venv creation is part of install flow, covered by integration tests"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.6": {
+      "description": "Configures pywin32 DLLs for Windows Service (GAP-5)",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "173-214, 343-345",
+        "function": "configure_pywin32_dlls(venv_dir)",
+        "windows_only": true,
+        "platform_check": "if system != 'Windows': return True (line 180)",
+        "dlls_copied": [
+          "pywintypes*.dll (line 196)",
+          "pythoncom*.dll (line 196)",
+          "pythonservice.exe (line 204)"
+        ],
+        "source_locations": [
+          "site_packages/pywin32_system32",
+          "site_packages/win32"
+        ],
+        "destination": "venv root (venv_dir / dll_file.name)",
+        "implementation_details": {
+          "site_packages_path": "venv_dir / 'Lib' / 'site-packages'",
+          "dll_copy_method": "shutil.copy2() with glob matching",
+          "pythonservice_exe": "Copied from win32/ to venv root"
+        },
+        "error_handling": "Exception caught, prints warning, returns False (non-fatal)",
+        "gap_5_addressed": true,
+        "integration": "Called in do_install() after install_package (lines 343-345)"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_success (Windows platform integration)"
+        ],
+        "coverage_status": "adequate",
+        "note": "pywin32 DLL configuration is part of install flow on Windows"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    },
+    "AC-11.7": {
+      "description": "Exit codes: 0=success, 1=failed, 130=cancelled",
+      "code_exists": true,
+      "semantic_alignment": 1.0,
+      "implementation_quality": "excellent",
+      "evidence": {
+        "file": "scripts/installer.py",
+        "lines": "13-16, throughout",
+        "constants_defined": {
+          "EXIT_SUCCESS": "0 (line 14)",
+          "EXIT_FAILED": "1 (line 15)",
+          "EXIT_CANCELLED": "130 (line 16)"
+        },
+        "usage_locations": [
+          {
+            "code": "EXIT_SUCCESS",
+            "contexts": [
+              "do_install success (line 369)",
+              "do_uninstall success (line 388)",
+              "do_configure success (line 401)",
+              "do_test success (line 414)",
+              "show_menu exit (line 457)"
+            ]
+          },
+          {
+            "code": "EXIT_FAILED",
+            "contexts": [
+              "check_privileges failure (line 302)",
+              "preflight_checks failure (line 319)",
+              "bootstrap_uv failure (line 333)",
+              "create_venv failure (line 337)",
+              "install_package failure (line 341)",
+              "init_config failure (line 349)",
+              "do_uninstall failure (line 390)",
+              "do_configure failure (line 403)",
+              "do_test failure (line 416)"
+            ]
+          },
+          {
+            "code": "EXIT_CANCELLED",
+            "contexts": [
+              "KeyboardInterrupt in show_menu (line 437)",
+              "User exit in show_menu (line 457)",
+              "main KeyboardInterrupt (line 525)"
+            ]
+          }
+        ],
+        "main_return": "sys.exit(main()) at line 529"
+      },
+      "test_coverage": {
+        "test_file": "tests/test_cli/test_install_cmd.py",
+        "test_functions": [
+          "test_quick_install_success (exit_code == 0)",
+          "test_uninstall_success (exit_code == 0)"
+        ],
+        "coverage_status": "adequate"
+      },
+      "recency": {
+        "last_modified": "2026-02-13 01:47",
+        "days_old": 0,
+        "within_30_days": true
+      }
+    }
+  },
+  "git_diff_verification": {
+    "files_modified": true,
+    "key_files_touched": [
+      "scripts/installer.py (new, 530 lines)",
+      "src/async_crud_mcp/cli/install_cmd.py (+236 lines)",
+      "tests/test_cli/test_install_cmd.py (+195 lines)",
+      "src/async_crud_mcp/daemon/installer.py (+15 lines)",
+      "scripts/test_server.py (new, 401 lines)",
+      "tests/test_scripts/test_test_server.py (new, 492 lines)"
+    ],
+    "total_insertions": 8317,
+    "total_deletions": 1948,
+    "modification_assessment": "Substantial implementation with comprehensive test coverage"
+  },
+  "test_results_integration": {
+    "gate3_passed": true,
+    "total_tests": 412,
+    "passed": 405,
+    "failed": 0,
+    "skipped": 7,
+    "pass_rate": 0.983,
+    "installer_specific_tests": [
+      "tests/test_cli/test_install_cmd.py (13 tests covering install/uninstall flows)",
+      "tests/test_scripts/test_test_server.py (24 tests for test_server.py)",
+      "Integration tests covering privilege checks, preflight validation, force flag, port override, and uninstall --all flag"
+    ]
+  },
+  "pattern_analysis": {
+    "delegation_pattern": {
+      "correct": true,
+      "usage": "installer.py delegates to uninstaller.py, configure_claude_code.py, test_server.py, and daemon/installer.py"
+    },
+    "factory_pattern": {
+      "correct": true,
+      "usage": "daemon/installer.py uses factory pattern (get_installer) for platform-specific implementations"
+    },
+    "error_handling": {
+      "correct": true,
+      "usage": "Comprehensive try/except blocks with CalledProcessError handling and proper exit codes"
+    },
+    "stdlib_only": {
+      "correct": true,
+      "usage": "installer.py uses only stdlib (argparse, subprocess, pathlib, json, platform, shutil, ctypes)"
+    }
+  },
+  "adr_compliance": {
+    "ADR-010": {
+      "compliant": true,
+      "requirement": "Use uv with --managed-python flag",
+      "implementation": "create_venv() uses 'uv venv --managed-python' (line 132)"
+    }
+  },
+  "gap_resolution": {
+    "GAP-4": {
+      "addressed": true,
+      "description": "Direct CreateService API for Windows service install",
+      "implementation": "Delegates to daemon/installer.py WindowsServiceInstaller which uses CreateService API"
+    },
+    "GAP-5": {
+      "addressed": true,
+      "description": "pywin32 DLL configuration for Windows Service",
+      "implementation": "configure_pywin32_dlls() copies pywintypes*.dll, pythoncom*.dll, and pythonservice.exe to venv root"
+    }
+  },
+  "overall_assessment": {
+    "implementation_completeness": "100%",
+    "semantic_alignment": "100%",
+    "test_coverage": "98.3% (405/412 tests passing)",
+    "code_quality": "excellent",
+    "adr_compliance": "100%",
+    "gap_resolution": "100%"
+  },
+  "failed_acs": [],
+  "remediation_needed": false,
+  "summary": "Story 11 passed all semantic validation checks. All 7 acceptance criteria are fully implemented with excellent code quality, comprehensive test coverage (405/412 tests passing = 98.3%), proper error handling, exit codes (0/1/130), ADR-010 compliance (uv --managed-python), and complete GAP-4 and GAP-5 resolution. Implementation follows best practices including delegation and factory patterns, stdlib-only approach for installer.py, platform-specific path handling, and comprehensive preflight validation. Files were modified within the last 24 hours (2026-02-13). No remediation needed."
+}

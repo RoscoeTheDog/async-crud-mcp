@@ -1,0 +1,55 @@
+{
+  "validation_id": "-2",
+  "phase": "a",
+  "structural_checks": {
+    "A": {
+      "passed": false,
+      "blocked": true,
+      "errors": [
+        "Story file not found for ID: -2"
+      ],
+      "missing_data": "story_file"
+    },
+    "B": {
+      "passed": false,
+      "blocked": true,
+      "errors": [
+        "Cannot proceed - Check A blocked"
+      ],
+      "missing_data": "story_file"
+    },
+    "C": {
+      "passed": false,
+      "blocked": true,
+      "errors": [
+        "Cannot proceed - Check A blocked"
+      ],
+      "missing_data": "story_file"
+    },
+    "D": {
+      "passed": false,
+      "blocked": true,
+      "errors": [
+        "Cannot proceed - Check A blocked"
+      ],
+      "missing_data": "story_file"
+    },
+    "J": {
+      "passed": false,
+      "blocked": true,
+      "errors": [
+        "Cannot proceed - Check A blocked"
+      ],
+      "missing_data": "story_file"
+    }
+  },
+  "convergence_analysis": {
+    "pattern": "blocked",
+    "action": "block",
+    "reason": "story_file_missing"
+  },
+  "status": "blocked",
+  "blocked_reason": "story_file_not_found",
+  "phase_outcome": "blocked",
+  "executed_at": "2026-02-14T02:39:12.948843+00:00"
+}

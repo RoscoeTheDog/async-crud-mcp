@@ -1,0 +1,63 @@
+{
+  "story_id": "6",
+  "validation_id": "-6",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:22:47Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-6.1, AC-6.2, AC-6.3, AC-6.4, AC-6.5, AC-6.6, AC-6.7"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "failed_checks": [
+    "C",
+    "J"
+  ],
+  "blocked_reason": "test_output_missing - Check D cannot validate without test output from Gate 2",
+  "error_signatures": [
+    "ValidationError:story_6:gate_4_phase_a:missing_test_output",
+    "AssertionError:story_6:gate_4_phase_a:p0_acs_missing_test_coverage",
+    "AssertionError:story_6:gate_4_phase_a:coverage_below_threshold"
+  ],
+  "convergence": {
+    "pattern": "healthy",
+    "action": "continue_with_warnings",
+    "history_length": 1,
+    "note": "First validation run. Blocking check D is blocked (missing data). Check C and J failures require story remediation."
+  },
+  "gate4_phase_a_summary": {
+    "narrative": "Story 6 validation encountered critical issues during structural checks. Check D (Test Pass Rates) cannot proceed because test output data is unavailable - this indicates Gate 2 Phase C (test execution) either did not run or did not populate the required test output metadata. Additionally, Check C (AC Traceability) found that all 7 P0 acceptance criteria lack associated test coverage. Check J (Coverage Validation) shows 0% coverage on the touched file (src/async_crud_mcp/cli/setup_cmd.py), well below the 80% threshold.",
+    "remediation_path": "Story 6 requires re-execution of Gate 2 to ensure test output is captured, and P0 acceptance criteria must be traced to specific test cases.",
+    "can_proceed_to_phase_b": false,
+    "recommended_action": "block"
+  }
+}

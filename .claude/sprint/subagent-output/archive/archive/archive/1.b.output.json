@@ -1,0 +1,25 @@
+{
+  "story_id": "1",
+  "phase": "b",
+  "status": "passed",
+  "completed_at": "2026-02-13T08:30:00Z",
+  "implementation_summary": "Successfully aligned pyproject.toml with spec build layout requirements by adding sdist target configuration with exclusion patterns for non-essential files. The wheel target was already correctly configured with src layout (packages = ['src/async_crud_mcp']). The implementation adds [tool.hatch.build.targets.sdist] with 9 exclusion patterns to ensure clean source distributions while keeping the wheel configuration intact.",
+  "changes_made": [
+    {
+      "file": "pyproject.toml",
+      "type": "modification",
+      "description": "Added [tool.hatch.build.targets.sdist] section with exclude patterns for /.github, /.claude, /docs, /scripts, /tests, /.git, /.gitignore, /.ruff_cache, and /coverage.json to ensure clean source distributions"
+    }
+  ],
+  "verification_results": {
+    "pyproject_toml_syntax": "valid",
+    "build_backend": "hatchling.build",
+    "wheel_packages": ["src/async_crud_mcp"],
+    "sdist_excludes_count": 9,
+    "configuration_verified": true
+  },
+  "acceptance_criteria_status": {
+    "AC-1.1": "passed - Build system configured for hatchling with explicit src layout. Wheel target has packages = ['src/async_crud_mcp'], and sdist target now includes exclusion patterns for non-essential files. Configuration verified via TOML parsing and structure validation."
+  },
+  "notes": "The python build module is not installed in the dev environment, but the hatchling configuration has been verified to be syntactically correct and properly structured. The wheel target already correctly implements the src layout as required by the spec. The added sdist exclusions will ensure source distributions only include essential project files."
+}

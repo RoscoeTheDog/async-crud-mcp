@@ -1,0 +1,74 @@
+{
+  "validation_id": "-1",
+  "phase": "a",
+  "story_id": "-1",
+  "structural_checks": {
+    "A": {
+      "check_id": "A",
+      "story_id": "-1",
+      "passed": false,
+      "blocking": false,
+      "blocked": true,
+      "errors": ["Story file not found for ID: -1"],
+      "warnings": [],
+      "missing_data": "story_file",
+      "executed_at": "2026-02-14T02:33:00+00:00"
+    },
+    "B": {
+      "check_id": "B",
+      "story_id": "-1",
+      "passed": false,
+      "blocking": false,
+      "blocked": true,
+      "errors": ["Story file not found for ID: -1"],
+      "warnings": [],
+      "missing_data": "story_file",
+      "executed_at": "2026-02-14T02:33:03+00:00"
+    },
+    "C": {
+      "check_id": "C",
+      "story_id": "-1",
+      "passed": false,
+      "blocking": false,
+      "blocked": true,
+      "errors": ["Story file not found for ID: -1"],
+      "warnings": [],
+      "missing_data": "story_file",
+      "executed_at": "2026-02-14T02:33:25+00:00"
+    },
+    "D": {
+      "check_id": "D",
+      "story_id": "-1",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "errors": ["Story file not found for ID: -1"],
+      "warnings": [],
+      "missing_data": "story_file",
+      "executed_at": "2026-02-14T02:33:35+00:00"
+    },
+    "J": {
+      "check_id": "J",
+      "story_id": "-1",
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "errors": ["Story file not found for ID: -1"],
+      "warnings": [],
+      "missing_data": "story_file",
+      "executed_at": "2026-02-14T02:33:40+00:00"
+    }
+  },
+  "error_signatures": [],
+  "convergence_analysis": {
+    "pattern": "blocked",
+    "action": "no_phase_b",
+    "reason": "Meta-validation story has no corresponding story file"
+  },
+  "status": "blocked",
+  "blocked_reason": "story_file_missing",
+  "phase_outcome": "blocked",
+  "skip_phase_b": true,
+  "executed_at": "2026-02-14T02:33:45.123456+00:00",
+  "notes": "Story -1 is a meta-validation task without a corresponding story file. All structural checks blocked with exit code 3. Phase B dispatch skipped."
+}

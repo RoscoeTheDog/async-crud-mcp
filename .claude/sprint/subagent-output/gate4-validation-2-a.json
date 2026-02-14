@@ -1,0 +1,55 @@
+{
+  "story_id": "2",
+  "validation_id": "-2",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T10:15:00Z",
+  "validation_type": "structural",
+  "acceptance_criteria": {
+    "AC-2.1": {
+      "description": "setup is a direct top-level command (not a subcommand group)",
+      "status": "passed",
+      "evidence": "app.command(name='setup', help='Interactive setup wizard')(setup_cmd.wizard) at src/async_crud_mcp/cli/__init__.py:24"
+    },
+    "AC-2.2": {
+      "description": "quick-install is a top-level command",
+      "status": "passed",
+      "evidence": "app.command(name='quick-install', help='Run full setup sequence')(install_cmd.quick_install) at src/async_crud_mcp/cli/__init__.py:27"
+    },
+    "AC-2.3": {
+      "description": "uninstall is a top-level command",
+      "status": "passed",
+      "evidence": "app.command(name='uninstall', help='Stop and uninstall the daemon service')(install_cmd.uninstall) at src/async_crud_mcp/cli/__init__.py:30"
+    },
+    "AC-2.4": {
+      "description": "version command exists showing __version__ from __init__.py",
+      "status": "passed",
+      "evidence": "Decorated version() function at src/async_crud_mcp/cli/__init__.py:33-37 imports __version__ from async_crud_mcp.__init__.py:7"
+    }
+  },
+  "test_results": {
+    "total": 412,
+    "passed": 405,
+    "failed": 0,
+    "skipped": 7,
+    "exit_code": 0,
+    "artifact": ".claude/sprint/subagent-output/gate3-test-output.txt"
+  },
+  "structural_checks": {
+    "top_level_commands": [
+      "setup",
+      "quick-install",
+      "uninstall",
+      "version"
+    ],
+    "subgroups_preserved": [
+      "bootstrap",
+      "daemon",
+      "config"
+    ],
+    "no_test_regressions": true,
+    "cli_init_file_valid": true
+  },
+  "summary": "All 4 acceptance criteria satisfied. CLI successfully restructured to match specification. Commands promoted to top-level via app.command(). Version command added with __version__ import. No test regressions detected.",
+  "recommendation": "APPROVED FOR PHASE B"
+}

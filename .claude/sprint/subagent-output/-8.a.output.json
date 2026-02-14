@@ -1,0 +1,43 @@
+{
+  "story_id": "8",
+  "validation_id": "-8",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:26:30Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [
+    "Coverage:src/async_crud_mcp/config.py:0.0%:below_threshold_80%"
+  ],
+  "convergence": null
+}

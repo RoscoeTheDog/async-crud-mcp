@@ -1,0 +1,45 @@
+{
+  "story_id": "12",
+  "validation_id": "-12",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:30:46Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "failed_checks": [
+    "J"
+  ],
+  "blocked_reason": "missing_test_output",
+  "error_signatures": [],
+  "convergence": null,
+  "notes": "Check D is blocked due to missing story-specific test output data (gate3 tests provide consolidated results only). Check J failed with 0.0% coverage on config_init.py (below 80% threshold). Story cannot proceed through Gate 4 until test output data is made available for story-specific validation."
+}

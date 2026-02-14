@@ -1,0 +1,21 @@
+{
+  "story_id": "9",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:15:00Z",
+  "planning_output": {
+    "implementation_plan": "Story 9 addresses three gaps in server.py: (1) Exit code 48 on EADDRINUSE, (2) security warning when binding to non-localhost, (3) health endpoint returning status/version/uptime.\n\nAC-9.1: The _check_port_available() function at server.py:64 currently raises RuntimeError on OSError. Change this to call sys.exit(48) instead. Add `import sys` and `from loguru import logger` imports. In the except OSError block, log the error at ERROR level, then call sys.exit(48). The exit code 48 is the BSD convention for EADDRINUSE.\n\nAC-9.2: In the __main__ block (server.py:391), after resolving host/port but before _check_port_available(), add a security check: if host is not '127.0.0.1' and not '::1' and not 'localhost', log a WARNING via loguru that binding to a non-localhost address exposes the server to network access. This is a security advisory log only - it does not block startup.\n\nAC-9.3: The health_tool currently delegates to daemon.health.check_health() which returns config/port health info but NOT status/version/uptime as the spec requires. Modify the health_tool wrapper to enrich the check_health() response with: 'version' from __version__ (already in __init__.py as '0.1.0'), 'uptime' computed from server_start_time (already module-level), and ensure 'status' is present (it already is from check_health()). This avoids modifying the health.py module - the enrichment happens in server.py's health_tool wrapper.",
+    "files_to_modify": [
+      "src/async_crud_mcp/server.py",
+      "tests/test_server.py"
+    ],
+    "estimated_complexity": "low",
+    "ac_breakdown": {
+      "AC-9.1": "Modify _check_port_available() in server.py to call sys.exit(48) instead of raising RuntimeError on OSError. Add `import sys` and `from loguru import logger` to server.py imports. In the except OSError block: (1) log an ERROR message with port/host/error details, (2) call sys.exit(48). Update test_port_already_in_use in test_server.py to use pytest.raises(SystemExit) checking exit code == 48 instead of pytest.raises(RuntimeError).",
+      "AC-9.2": "In server.py __main__ block, after host/port resolution (line ~393-394), before _check_port_available() call: add a check `if host not in ('127.0.0.1', '::1', 'localhost'):` and log `logger.warning('Security: binding to non-localhost address {host} exposes the server to network access')`. Add a test in test_server.py that patches loguru logger.warning and verifies it's called when host is a non-localhost value like '0.0.0.0'.",
+      "AC-9.3": "Modify health_tool() wrapper in server.py to enrich the check_health() dict with 'version' (from async_crud_mcp.__version__) and 'uptime' (time.time() - server_start_time). Add `from async_crud_mcp import __version__` import. Update test_health_tool_wrapper in test_server.py to assert 'version' and 'uptime' keys are present in the response, and that 'uptime' is a non-negative float."
+    },
+    "testing_strategy": "Update existing test_server.py tests:\n1. TestPortPreflightCheck.test_port_already_in_use: Change from pytest.raises(RuntimeError) to pytest.raises(SystemExit) and verify exc.value.code == 48\n2. Add TestPortPreflightCheck.test_port_in_use_logs_error: Verify loguru logger.error is called with port info on EADDRINUSE\n3. Add TestSecurityWarning class with test_non_localhost_warning: Mock __main__ execution or test the warning logic directly via a helper, checking logger.warning is called for non-localhost hosts\n4. Add TestSecurityWarning.test_localhost_no_warning: Verify no warning for 127.0.0.1\n5. Update TestToolWrappers.test_health_tool_wrapper: Assert response contains 'version' == '0.1.0' and 'uptime' >= 0",
+    "dependencies": []
+  }
+}

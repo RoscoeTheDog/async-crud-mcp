@@ -1,0 +1,50 @@
+{
+  "story_id": "10",
+  "validation_id": "-10",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:30:25Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-10.1, AC-10.2"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story"
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80%"
+    }
+  },
+  "blocked_checks": [
+    "C",
+    "D",
+    "J"
+  ],
+  "blocked_reason": "p0_acs_without_tests_and_test_output_missing_and_coverage_below_threshold",
+  "error_signatures": [
+    "TestFailure:AC-10.1:missing_test_coverage",
+    "TestFailure:AC-10.2:missing_test_coverage",
+    "CoverageError:scoped:coverage_0_percent_below_80_percent"
+  ],
+  "convergence": null
+}

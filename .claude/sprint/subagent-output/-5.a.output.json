@@ -1,0 +1,45 @@
+{
+  "story_id": "5",
+  "validation_id": "-5",
+  "phase": "a",
+  "status": "blocked",
+  "completed_at": "2026-02-13T10:22:59.950443+00:00",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3"
+    },
+    "D": {
+      "passed": false,
+      "blocking": true,
+      "blocked": true,
+      "missing_data": "test_output",
+      "error": "No test output available for this story. Tests must be run before validation (Gate 2 Phase C or direct test execution)."
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [
+    "D"
+  ],
+  "blocked_reason": "test_output_missing",
+  "error_signatures": [],
+  "convergence": null,
+  "notes": "Story 5 cannot proceed through Gate 4. Check D is blocked due to missing test output. Checks C and J also failed on coverage metrics, but the blocking issue is the missing test output required for validation. The story must be re-run through Gate 2 Phase C to generate test output before validation can proceed."
+}
