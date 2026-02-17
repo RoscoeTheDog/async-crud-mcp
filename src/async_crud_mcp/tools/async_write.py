@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
+    AccessDeniedError,
     HashRegistry,
     LockManager,
     LockTimeout,
@@ -35,9 +36,15 @@ async def async_write(
         WriteSuccessResponse with metadata, or ErrorResponse on failure
     """
     try:
-        # 1. Validate path using PathValidator
+        # 1. Validate path and access policy
         try:
-            validated_path = path_validator.validate(request.path)
+            validated_path = path_validator.validate_operation(request.path, "write")
+        except AccessDeniedError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ACCESS_DENIED,
+                message=str(e),
+                path=request.path,
+            )
         except PathValidationError as e:
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,

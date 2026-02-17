@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from async_crud_mcp.core.path_validator import PathValidationError, PathValidator
+from async_crud_mcp.config import PathRule
+from async_crud_mcp.core.path_validator import AccessDeniedError, PathValidationError, PathValidator
 
 
 class TestBasicValidation:
@@ -393,3 +394,218 @@ class TestEdgeCases:
         except PathValidationError:
             # Expected if home is not under base_dir
             pass
+
+
+class TestAccessRules:
+    """Test access rule evaluation in validate_operation()."""
+
+    def _make_rule(self, path, operations, action, priority=0):
+        return PathRule(path=path, operations=operations, action=action, priority=priority)
+
+    def test_allow_rule_permits_operation(self, tmp_path):
+        """An allow rule for a matching path and operation permits the operation."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        output_dir = base_dir / "output"
+        output_dir.mkdir()
+        file_path = output_dir / "result.json"
+        file_path.touch()
+
+        rules = [self._make_rule(str(output_dir), ["write"], "allow", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="deny",
+        )
+
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+    def test_deny_rule_blocks_operation(self, tmp_path):
+        """A deny rule for a matching path and operation blocks the operation."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        src_dir = base_dir / "src"
+        src_dir.mkdir()
+        file_path = src_dir / "main.py"
+        file_path.touch()
+
+        rules = [self._make_rule(str(src_dir), ["write"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError, match="denied"):
+            validator.validate_operation(str(file_path), "write")
+
+    def test_default_policy_deny_blocks_unmatched_path(self, tmp_path):
+        """Default deny policy blocks operations when no rule matches."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        # No rules that match this path
+        rules = [self._make_rule(str(base_dir / "other"), ["write"], "allow", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="deny",
+        )
+
+        with pytest.raises(AccessDeniedError, match="no matching access rule"):
+            validator.validate_operation(str(file_path), "write")
+
+    def test_default_policy_allow_permits_unmatched_path(self, tmp_path):
+        """Default allow policy permits operations when no rule matches."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(base_dir / "other"), ["write"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+    def test_priority_ordering_higher_wins(self, tmp_path):
+        """Higher priority rule wins over lower priority rule for same path."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        dir_a = base_dir / "src"
+        dir_a.mkdir()
+        file_path = dir_a / "file.py"
+        file_path.touch()
+
+        rules = [
+            self._make_rule(str(dir_a), ["write"], "deny", priority=50),
+            self._make_rule(str(dir_a), ["write"], "allow", priority=100),
+        ]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="deny",
+        )
+
+        # Higher priority allow should win
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+    def test_wildcard_operation_matches_any(self, tmp_path):
+        """Wildcard '*' in operations matches any operation type."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        protected = base_dir / "protected"
+        protected.mkdir()
+        file_path = protected / "secret.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(protected), ["*"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "write")
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "delete")
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "update")
+
+    def test_operation_type_mismatch_skips_rule(self, tmp_path):
+        """Rule with non-matching operation type is skipped."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        # Deny delete but not write
+        rules = [self._make_rule(str(base_dir), ["delete"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        # Write should pass (rule only applies to delete)
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+        # Delete should fail
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "delete")
+
+    def test_no_rules_with_deny_default_blocks_all(self, tmp_path):
+        """No access rules with deny default blocks all destructive operations."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=[],
+            default_destructive_policy="deny",
+        )
+
+        with pytest.raises(AccessDeniedError, match="no access rules configured"):
+            validator.validate_operation(str(file_path), "write")
+
+    def test_no_rules_with_allow_default_permits_all(self, tmp_path):
+        """No access rules with allow default permits all destructive operations."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=[],
+            default_destructive_policy="allow",
+        )
+
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+    def test_backward_compat_no_access_config(self, tmp_path):
+        """PathValidator without access config behaves identically to before."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        # Default constructor: no access_rules, default_destructive_policy="allow"
+        validator = PathValidator([str(base_dir)])
+
+        # validate_operation should behave like validate()
+        result = validator.validate_operation(str(file_path), "write")
+        assert result.is_absolute()
+
+    def test_base_directory_still_enforced(self, tmp_path):
+        """validate_operation still enforces base directory before access rules."""
+        base_dir = tmp_path / "allowed"
+        base_dir.mkdir()
+        forbidden_dir = tmp_path / "forbidden"
+        forbidden_dir.mkdir()
+        file_path = forbidden_dir / "file.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(forbidden_dir), ["write"], "allow", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        # Should fail with PathValidationError (base dir), not AccessDeniedError
+        with pytest.raises(PathValidationError, match="outside allowed base directories"):
+            validator.validate_operation(str(file_path), "write")

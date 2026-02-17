@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
+    AccessDeniedError,
     HashRegistry,
     LockManager,
     LockTimeout,
@@ -43,15 +44,35 @@ async def async_rename(
         or ErrorResponse on failure
     """
     try:
-        # 1. Validate both paths using PathValidator
+        # 1. Validate both paths with operation-specific access checks
         try:
-            validated_old = path_validator.validate(request.old_path)
-            validated_new = path_validator.validate(request.new_path)
+            validated_old = path_validator.validate_operation(request.old_path, "delete")
+        except AccessDeniedError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ACCESS_DENIED,
+                message=str(e),
+                path=request.old_path,
+            )
         except PathValidationError as e:
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,
                 message=str(e),
                 path=request.old_path,
+            )
+
+        try:
+            validated_new = path_validator.validate_operation(request.new_path, "write")
+        except AccessDeniedError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ACCESS_DENIED,
+                message=str(e),
+                path=request.new_path,
+            )
+        except PathValidationError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.PATH_OUTSIDE_BASE,
+                message=str(e),
+                path=request.new_path,
             )
 
         # 2. Check old_path exists

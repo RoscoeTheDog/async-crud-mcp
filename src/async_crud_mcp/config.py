@@ -65,6 +65,21 @@ class DaemonConfig(BaseModel):
         return v
 
 
+class PathRule(BaseModel):
+    """A single access control rule for path-based operation restrictions.
+
+    Rules are evaluated in priority order (highest first, first-match-wins).
+    """
+
+    path: str = Field(..., description="Path prefix to match against (resolved relative to cwd)")
+    operations: list[str] = Field(
+        ...,
+        description='Operation types this rule applies to: "write", "update", "delete", "rename", or "*" for all',
+    )
+    action: Literal["allow", "deny"] = Field(..., description="Whether to allow or deny the operation")
+    priority: int = Field(default=0, description="Rule priority (higher = evaluated first)")
+
+
 class CrudConfig(BaseModel):
     """CRUD operations configuration section."""
 
@@ -74,6 +89,9 @@ class CrudConfig(BaseModel):
     default_encoding: str = "utf-8"
     diff_context_lines: int = 3
     max_file_size_bytes: int = 10_485_760  # 10MB
+    access_rules: list[PathRule] = Field(default_factory=list)
+    access_policy_file: str | None = None
+    default_destructive_policy: Literal["allow", "deny"] = "allow"
 
 
 class PersistenceConfig(BaseModel):
@@ -202,6 +220,28 @@ def get_settings(config_path: Path | str | None = None, *, _force_reload: bool =
             _json_config_file = None  # Reset after use
     else:
         settings = Settings()
+
+    # Load and merge external access policy file if configured
+    if settings.crud.access_policy_file:
+        policy_path = Path(settings.crud.access_policy_file)
+        if not policy_path.is_absolute():
+            policy_path = Path.cwd() / policy_path
+        if policy_path.exists():
+            raw = json.loads(policy_path.read_text(encoding="utf-8"))
+            cleaned = _strip_comment_fields(raw)
+            policy_rules = [PathRule(**r) for r in cleaned.get("access_rules", [])]
+            policy_default = cleaned.get(
+                "default_destructive_policy",
+                settings.crud.default_destructive_policy,
+            )
+            # Merge: policy file rules extend (not replace) any rules from env/config
+            merged_rules = list(settings.crud.access_rules) + policy_rules
+            settings.crud = settings.crud.model_copy(
+                update={
+                    "access_rules": merged_rules,
+                    "default_destructive_policy": policy_default,
+                }
+            )
 
     # Cache the settings if no config_path was provided
     if config_path is None:

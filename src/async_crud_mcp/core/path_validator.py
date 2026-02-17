@@ -15,6 +15,11 @@ class PathValidationError(Exception):
     pass
 
 
+class AccessDeniedError(PathValidationError):
+    """Raised when a path is denied by an access policy rule."""
+    pass
+
+
 class PathValidator:
     """Validates file paths against a whitelist of base directories.
 
@@ -35,14 +40,31 @@ class PathValidator:
         validator.validate('/etc/passwd')  # Raises PathValidationError
     """
 
-    def __init__(self, base_directories: Optional[List[str]] = None):
-        """Initialize validator with allowed base directories.
+    def __init__(
+        self,
+        base_directories: Optional[List[str]] = None,
+        access_rules: Optional[List] = None,
+        default_destructive_policy: str = "allow",
+    ):
+        """Initialize validator with allowed base directories and access rules.
 
         Args:
             base_directories: List of directory paths to whitelist.
                 Each is resolved to absolute and symlinks are followed.
+            access_rules: List of PathRule objects for per-operation access control.
+                Rules are evaluated in priority order (highest first, first-match-wins).
+            default_destructive_policy: Fallback policy when no access rule matches.
+                Either "allow" or "deny". Defaults to "allow" for backward compatibility.
         """
         self._base_directories = base_directories or []
+        self._default_destructive_policy = default_destructive_policy
+
+        # Pre-sort access rules by priority descending for first-match-wins evaluation
+        self._access_rules = sorted(
+            access_rules or [],
+            key=lambda r: r.priority,
+            reverse=True,
+        )
 
         # Resolve and normalize base directories at init time
         self._resolved_bases: List[str] = []
@@ -52,6 +74,16 @@ class PathValidator:
             # Apply case normalization for Windows
             normalized = os.path.normcase(normalized)
             self._resolved_bases.append(normalized)
+
+        # Pre-resolve access rule paths for efficient matching
+        self._resolved_rules: List[tuple] = []
+        for rule in self._access_rules:
+            rule_path = rule.path
+            if not os.path.isabs(rule_path):
+                rule_path = os.path.join(os.getcwd(), rule_path)
+            resolved = os.path.realpath(os.path.expanduser(rule_path))
+            normalized = os.path.normcase(os.path.normpath(resolved))
+            self._resolved_rules.append((normalized, rule))
 
     def validate(self, path: str) -> Path:
         """Validate a path against the base directory whitelist.
@@ -131,3 +163,62 @@ class PathValidator:
     def resolved_base_directories(self) -> List[str]:
         """Get the resolved and normalized base directories used for validation."""
         return self._resolved_bases.copy()
+
+    def validate_operation(self, path: str, op_type: str) -> Path:
+        """Validate a path for a specific operation type against access rules.
+
+        First checks base directory containment via validate(), then evaluates
+        access rules in priority order (first-match-wins). Read operations are
+        not subject to access rules.
+
+        Args:
+            path: Path to validate (can be relative or absolute)
+            op_type: Operation type ("write", "update", "delete", "rename")
+
+        Returns:
+            Validated Path object (absolute, resolved)
+
+        Raises:
+            PathValidationError: If path is outside allowed base directories
+            AccessDeniedError: If an access rule denies the operation
+        """
+        # Step 1: Base directory validation (unchanged behavior)
+        validated = self.validate(path)
+
+        # Step 2: If no access rules configured, skip rule evaluation
+        if not self._resolved_rules:
+            if self._default_destructive_policy == "deny":
+                raise AccessDeniedError(
+                    f"Operation '{op_type}' denied on {path}: "
+                    f"no access rules configured and default policy is 'deny'"
+                )
+            return validated
+
+        # Step 3: Normalize the validated path for rule matching
+        normalized = os.path.normcase(os.path.normpath(str(validated)))
+
+        # Step 4: Evaluate rules in priority order (first match wins)
+        for rule_path, rule in self._resolved_rules:
+            # Check if operation type matches this rule
+            if "*" not in rule.operations and op_type not in rule.operations:
+                continue
+
+            # Check if path matches this rule (prefix match)
+            rule_with_sep = rule_path if rule_path.endswith(os.sep) else rule_path + os.sep
+            normalized_with_sep = normalized if normalized.endswith(os.sep) else normalized + os.sep
+
+            if normalized == rule_path or normalized_with_sep.startswith(rule_with_sep):
+                if rule.action == "deny":
+                    raise AccessDeniedError(
+                        f"Operation '{op_type}' denied on {path}: "
+                        f"blocked by access rule for '{rule.path}'"
+                    )
+                return validated
+
+        # Step 5: No rule matched, apply default policy
+        if self._default_destructive_policy == "deny":
+            raise AccessDeniedError(
+                f"Operation '{op_type}' denied on {path}: "
+                f"no matching access rule and default policy is 'deny'"
+            )
+        return validated

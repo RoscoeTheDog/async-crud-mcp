@@ -58,7 +58,11 @@ mcp = FastMCP(APP_NAME)
 
 # Module-level shared dependencies (initialized once before tool registration)
 settings = get_settings()
-path_validator = PathValidator(base_directories=settings.crud.base_directories)
+path_validator = PathValidator(
+    base_directories=settings.crud.base_directories,
+    access_rules=settings.crud.access_rules,
+    default_destructive_policy=settings.crud.default_destructive_policy,
+)
 lock_manager = LockManager(ttl_multiplier=settings.persistence.ttl_multiplier)
 hash_registry = HashRegistry()
 server_start_time = time.time()  # Monotonic timestamp for async_status
