@@ -245,3 +245,79 @@ def test_logs_display(mock_file, mock_get_logs_dir):
     result = runner.invoke(app, ["logs"])
 
     assert result.exit_code == 0
+
+
+@patch("async_crud_mcp.cli.daemon_cmd.get_logs_dir")
+@patch("builtins.open", new_callable=mock_open, read_data="Service log content\n")
+def test_logs_programdata_fallback_on_windows(mock_file, mock_get_logs_dir):
+    """Test logs command falls back to ProgramData path on Windows when primary log is missing."""
+    from pathlib import Path
+    from unittest.mock import call
+
+    primary_mock = MagicMock(spec=Path)
+    primary_mock.exists.return_value = False
+
+    fallback_mock = MagicMock(spec=Path)
+    fallback_mock.exists.return_value = True
+
+    mock_path = MagicMock()
+    mock_path.__truediv__ = lambda self, other: primary_mock
+    mock_get_logs_dir.return_value = mock_path
+
+    with patch("async_crud_mcp.cli.daemon_cmd.sys") as mock_sys, \
+         patch("async_crud_mcp.cli.daemon_cmd.os") as mock_os, \
+         patch("async_crud_mcp.cli.daemon_cmd.Path") as mock_path_cls:
+        mock_sys.platform = "win32"
+        mock_os.environ.get.return_value = "C:\\ProgramData"
+        mock_path_cls.return_value.__truediv__ = lambda self, other: mock_path_cls.return_value
+        mock_path_cls.return_value.exists.return_value = True
+
+        result = runner.invoke(app, ["logs"])
+
+    assert result.exit_code == 0
+    mock_os.environ.get.assert_called_once_with("PROGRAMDATA", "C:\\ProgramData")
+
+
+@patch("async_crud_mcp.cli.daemon_cmd.get_logs_dir")
+def test_logs_no_fallback_on_non_windows(mock_get_logs_dir):
+    """Test logs command does not attempt ProgramData fallback on non-Windows."""
+    mock_path = MagicMock()
+    primary_mock = MagicMock()
+    primary_mock.exists.return_value = False
+    mock_path.__truediv__ = lambda self, other: primary_mock
+    mock_get_logs_dir.return_value = mock_path
+
+    with patch("async_crud_mcp.cli.daemon_cmd.sys") as mock_sys, \
+         patch("async_crud_mcp.cli.daemon_cmd.os") as mock_os:
+        mock_sys.platform = "linux"
+
+        result = runner.invoke(app, ["logs"])
+
+    assert result.exit_code == 0
+    assert "not found" in result.stdout.lower()
+    mock_os.environ.get.assert_not_called()
+
+
+@patch("async_crud_mcp.cli.daemon_cmd.get_logs_dir")
+def test_logs_programdata_fallback_not_found(mock_get_logs_dir):
+    """Test logs command shows 'not found' when both primary and ProgramData paths are missing."""
+    mock_path = MagicMock()
+    primary_mock = MagicMock()
+    primary_mock.exists.return_value = False
+    mock_path.__truediv__ = lambda self, other: primary_mock
+    mock_get_logs_dir.return_value = mock_path
+
+    with patch("async_crud_mcp.cli.daemon_cmd.sys") as mock_sys, \
+         patch("async_crud_mcp.cli.daemon_cmd.os") as mock_os, \
+         patch("async_crud_mcp.cli.daemon_cmd.Path") as mock_path_cls:
+        mock_sys.platform = "win32"
+        mock_os.environ.get.return_value = "C:\\ProgramData"
+        fallback_mock = MagicMock()
+        fallback_mock.exists.return_value = False
+        mock_path_cls.return_value.__truediv__ = lambda self, other: mock_path_cls.return_value
+        mock_path_cls.return_value.exists.return_value = False
+
+        result = runner.invoke(app, ["logs"])
+
+    assert result.exit_code == 0
+    assert "not found" in result.stdout.lower()

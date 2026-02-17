@@ -17,6 +17,8 @@ import time
 
 from fastmcp import FastMCP
 from loguru import logger
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from async_crud_mcp import __version__
 from async_crud_mcp.config import APP_NAME, get_settings
@@ -394,6 +396,20 @@ async def health_tool():
     health_data["version"] = __version__
     health_data["uptime"] = time.time() - server_start_time
     return health_data
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_http_endpoint(request: Request) -> JSONResponse:
+    """HTTP GET /health endpoint for plain HTTP health checks.
+
+    Returns JSON with status, version, uptime, and daemon health fields.
+    HTTP 200 for healthy/degraded status, HTTP 503 for unhealthy.
+    """
+    health_data = check_health()
+    health_data["version"] = __version__
+    health_data["uptime"] = time.time() - server_start_time
+    status_code = 503 if health_data.get("status") == "unhealthy" else 200
+    return JSONResponse(health_data, status_code=status_code)
 
 
 # =============================================================================

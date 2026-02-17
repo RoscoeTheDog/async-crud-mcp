@@ -212,6 +212,89 @@ class TestServerConfiguration:
         assert settings.daemon.transport == "sse"
 
 
+class TestHealthEndpoint:
+    """Test HTTP GET /health endpoint (AC-2.1, AC-2.2, AC-2.3, AC-2.4)."""
+
+    def test_health_route_registered(self):
+        """Test that /health custom route is registered on the FastMCP instance."""
+        routes = mcp._additional_http_routes
+        health_routes = [r for r in routes if getattr(r, "path", None) == "/health"]
+        assert len(health_routes) == 1, "/health route not found in _additional_http_routes"
+
+    @pytest.mark.asyncio
+    async def test_health_endpoint_healthy_returns_200(self):
+        """Test that healthy status returns HTTP 200 with correct fields."""
+        from unittest.mock import MagicMock
+
+        from async_crud_mcp.server import health_http_endpoint
+
+        mock_request = MagicMock()
+        with patch("async_crud_mcp.server.check_health") as mock_check:
+            mock_check.return_value = {
+                "status": "healthy",
+                "config_readable": True,
+                "daemon_enabled": True,
+                "logs_dir_exists": True,
+                "port_listening": True,
+                "host": "127.0.0.1",
+                "port": 8720,
+                "message": "All checks passed",
+            }
+            response = await health_http_endpoint(mock_request)
+
+        assert response.status_code == 200
+        import json
+        body = json.loads(response.body)
+        assert body["status"] == "healthy"
+        assert "version" in body
+        assert "uptime" in body
+        assert isinstance(body["uptime"], float)
+
+    @pytest.mark.asyncio
+    async def test_health_endpoint_degraded_returns_200(self):
+        """Test that degraded status returns HTTP 200."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        with patch("async_crud_mcp.server.check_health") as mock_check:
+            mock_check.return_value = {
+                "status": "degraded",
+                "config_readable": True,
+                "daemon_enabled": True,
+                "logs_dir_exists": False,
+                "port_listening": True,
+                "host": "127.0.0.1",
+                "port": 8720,
+                "message": "Some checks failed",
+            }
+            from async_crud_mcp.server import health_http_endpoint
+            response = await health_http_endpoint(mock_request)
+
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_health_endpoint_unhealthy_returns_503(self):
+        """Test that unhealthy status returns HTTP 503."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        with patch("async_crud_mcp.server.check_health") as mock_check:
+            mock_check.return_value = {
+                "status": "unhealthy",
+                "config_readable": False,
+                "daemon_enabled": False,
+                "logs_dir_exists": False,
+                "port_listening": False,
+                "host": "127.0.0.1",
+                "port": 8720,
+                "message": "Service unavailable",
+            }
+            from async_crud_mcp.server import health_http_endpoint
+            response = await health_http_endpoint(mock_request)
+
+        assert response.status_code == 503
+
+
 class TestSharedDependencies:
     """Test shared dependency initialization."""
 

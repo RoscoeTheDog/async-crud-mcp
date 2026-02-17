@@ -3,7 +3,7 @@
 This package provides Windows-specific daemon functionality using Windows Services
 and the pywin32 library. The main components are:
 
-- bootstrap_service: Windows Service wrapper with install/uninstall/start/stop
+- windows_service: Windows Service wrapper with install/uninstall/start/stop
 - dispatcher: Multi-user dispatcher for managing per-user MCP server workers
 - session_detector: WTS API session detection utilities
 
@@ -16,8 +16,8 @@ Public API:
     MultiUserDispatcher: Per-user worker process manager
 """
 
-# Import public API from bootstrap_service
-from .bootstrap_service import (
+# Import public API from windows_service
+from .windows_service import (
     DaemonService,
     install_service,
     uninstall_service,

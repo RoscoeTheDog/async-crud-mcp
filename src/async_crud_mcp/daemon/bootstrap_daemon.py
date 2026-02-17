@@ -65,7 +65,8 @@ def configure_logging(log_subdir: Optional[str] = None) -> Path:
     logger.add(
         log_file,
         rotation="10 MB",
-        retention=3,
+        retention="7 days",
+        compression="gz",
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {name}:{function}:{line} | {message}",
         level="DEBUG",
         enqueue=True,  # Thread-safe async writes; drain via logger.complete()
@@ -82,6 +83,7 @@ def configure_logging(log_subdir: Optional[str] = None) -> Path:
                 "<level>{message}</level>"
             ),
             level="DEBUG",
+            enqueue=True,  # Thread-safe async writes; drain via logger.complete()
         )
 
     return log_file

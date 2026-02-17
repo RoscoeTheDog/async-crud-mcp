@@ -41,7 +41,7 @@ from pathlib import Path
 # Platform check - must happen before pywin32 imports
 if sys.platform != 'win32':
     raise ImportError(
-        "bootstrap_service module is only available on Windows. "
+        "windows_service module is only available on Windows. "
         f"Current platform: {sys.platform}"
     )
 
@@ -416,5 +416,5 @@ def stop_service():
 
 if __name__ == '__main__':
     # Support command-line service management
-    # Usage: python -m async_crud_mcp.daemon.windows.bootstrap_service install|start|stop|remove
+    # Usage: python -m async_crud_mcp.daemon.windows.windows_service install|start|stop|remove
     win32serviceutil.HandleCommandLine(DaemonService)

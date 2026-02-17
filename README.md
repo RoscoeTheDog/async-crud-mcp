@@ -236,6 +236,23 @@ The `async-crud-mcp` project uses a two-layer architecture for robust daemon man
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Per-User Daemon Model
+
+On **Windows**, `async-crud-mcp` uses a single system-wide Bootstrap service combined with a
+`MultiUserDispatcher` (ADR-008). The dispatcher maintains a username-keyed map of MCP worker
+processes and spawns each worker via `CreateProcessAsUser` for full process-level isolation:
+
+- Each user gets a dedicated worker process with its own port (derived from a username hash, base 8400)
+- Per-user config (`~/.async-crud-mcp/config.toml`) and log files are isolated per user account
+- Workers start on session logon and stop only when the user's **last** active session ends
+- The system-wide service itself runs as `LocalSystem` and never accesses user files directly
+
+On **macOS**, the Bootstrap daemon runs as a **launchd user agent** (`~/Library/LaunchAgents/`),
+launched automatically for each logged-in user by launchd — no system-wide service or dispatcher needed.
+
+On **Linux**, the daemon runs as a **systemd user service** (`~/.config/systemd/user/`), activated
+per-user by `systemd --user` — each user manages their own daemon instance independently.
+
 ### Supporting Subsystems
 
 - **Configuration Management**: Pydantic Settings with TOML support

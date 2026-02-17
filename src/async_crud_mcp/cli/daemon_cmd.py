@@ -1,7 +1,10 @@
 """Daemon subcommand group for lifecycle management."""
 
 import json
+import os
+import sys
 import time
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -11,7 +14,7 @@ from rich.syntax import Syntax
 from async_crud_mcp.daemon.config_init import generate_default_config
 from async_crud_mcp.daemon.config_watcher import atomic_write_config
 from async_crud_mcp.daemon.health import check_health
-from async_crud_mcp.daemon.paths import get_config_file_path, get_logs_dir, get_user_config_file_path, get_user_logs_dir
+from async_crud_mcp.daemon.paths import APP_NAME, get_config_file_path, get_logs_dir, get_user_config_file_path, get_user_logs_dir
 
 app = typer.Typer(help="Daemon lifecycle management")
 console = Console()
@@ -220,8 +223,20 @@ def logs(
         log_file = log_dir / "daemon.log"
 
         if not log_file.exists():
-            console.print(f"[yellow]Log file not found:[/yellow] {log_file}")
-            return
+            if sys.platform == "win32":
+                programdata = os.environ.get("PROGRAMDATA", "C:\\ProgramData")
+                if target_username:
+                    fallback_log = Path(programdata) / APP_NAME / "logs" / target_username / "daemon.log"
+                else:
+                    fallback_log = Path(programdata) / APP_NAME / "logs" / "daemon.log"
+                if fallback_log.exists():
+                    log_file = fallback_log
+                else:
+                    console.print(f"[yellow]Log file not found:[/yellow] {log_file}")
+                    return
+            else:
+                console.print(f"[yellow]Log file not found:[/yellow] {log_file}")
+                return
 
         if follow:
             console.print(f"[cyan]Following logs from:[/cyan] {log_file}")

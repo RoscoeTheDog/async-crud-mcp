@@ -32,7 +32,7 @@ Placeholders:
     async_crud_mcp  - Python package name
 
 Usage:
-    Called from bootstrap_service.py SvcDoRun() in Windows service context.
+    Called from windows_service.py SvcDoRun() in Windows service context.
 
     from .dispatcher import MultiUserDispatcher
     dispatcher = MultiUserDispatcher()

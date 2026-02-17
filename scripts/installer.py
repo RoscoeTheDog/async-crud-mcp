@@ -424,6 +424,40 @@ def do_test():
         return EXIT_FAILED
 
 
+def stop_service():
+    """Stop the running platform service (Windows/Linux/macOS)."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            subprocess.run(
+                ["sc", "stop", "AsyncCrudMCP"],
+                capture_output=True,
+                text=True
+            )
+        elif system == "Linux":
+            subprocess.run(
+                ["systemctl", "--user", "stop", "async-crud-mcp"],
+                capture_output=True,
+                text=True
+            )
+        elif system == "Darwin":
+            subprocess.run(
+                ["launchctl", "unload",
+                 str(Path.home() / "Library" / "LaunchAgents" / "com.async-crud-mcp.daemon.plist")],
+                capture_output=True,
+                text=True
+            )
+    except Exception:
+        pass
+
+
+def do_reinstall():
+    """Stop existing service and perform a fresh install."""
+    print("[REINSTALL] Stopping existing service...")
+    stop_service()
+    return do_install(force=True)
+
+
 def show_menu():
     """Show interactive menu and handle user selection."""
     try:
@@ -432,9 +466,9 @@ def show_menu():
             print("async-crud-mcp Installer Menu")
             print("="*60)
             print("1. Install async-crud-mcp")
-            print("2. Uninstall async-crud-mcp")
-            print("3. Test installation")
-            print("4. Exit")
+            print("2. Reinstall async-crud-mcp")
+            print("3. Uninstall async-crud-mcp")
+            print("4. Quit")
             print("="*60)
 
             try:
@@ -448,15 +482,15 @@ def show_menu():
                 if exit_code != EXIT_SUCCESS:
                     print("\n[ERROR] Installation failed", file=sys.stderr)
             elif choice == "2":
+                exit_code = do_reinstall()
+                if exit_code != EXIT_SUCCESS:
+                    print("\n[ERROR] Reinstall failed", file=sys.stderr)
+            elif choice == "3":
                 exit_code = do_uninstall()
                 if exit_code != EXIT_SUCCESS:
                     print("\n[ERROR] Uninstall failed", file=sys.stderr)
-            elif choice == "3":
-                exit_code = do_test()
-                if exit_code != EXIT_SUCCESS:
-                    print("\n[ERROR] Tests failed", file=sys.stderr)
             elif choice == "4":
-                print("\n[INFO] Exiting")
+                print("\n[INFO] Quitting")
                 return EXIT_SUCCESS
             else:
                 print("\n[ERROR] Invalid choice. Please enter 1-4.", file=sys.stderr)

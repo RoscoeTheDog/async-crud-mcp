@@ -98,7 +98,7 @@ The template provides:
 | `common/health.py` | `src/async_crud_mcp/daemon/health.py` |
 | `common/cli_app.py` | `src/async_crud_mcp/cli/__init__.py` |
 | `common/quick_install.py` | `src/async_crud_mcp/cli/install.py` |
-| `windows/bootstrap_service.py` | `src/async_crud_mcp/daemon/windows/bootstrap_service.py` |
+| `windows/windows_service.py` | `src/async_crud_mcp/daemon/windows/windows_service.py` |
 | `windows/dispatcher.py` | `src/async_crud_mcp/daemon/windows/dispatcher.py` |
 | `windows/session_detector.py` | `src/async_crud_mcp/daemon/windows/session_detector.py` |
 | `macos/launchd.plist` | `src/async_crud_mcp/daemon/macos/launchd.plist` |
@@ -238,7 +238,7 @@ async-crud-mcp/
 |           +-- health.py              # Application health check + port listening
 |           +-- windows/
 |           |   +-- __init__.py
-|           |   +-- bootstrap_service.py  # pywin32 Windows Service (ADR-011)
+|           |   +-- windows_service.py    # pywin32 Windows Service (ADR-011)
 |           |   +-- dispatcher.py         # Multi-User Dispatcher (ADR-008, ADR-012)
 |           |   +-- session_detector.py   # WTS API session detection
 |           +-- macos/
