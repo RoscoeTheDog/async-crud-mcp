@@ -2,236 +2,94 @@
   "$schema": "queue-v5.1",
   "version": "5.1.0",
   "sprint_id": "",
-  "created_at": "2026-02-14T00:51:21.704411+00:00",
-  "updated_at": "2026-02-14T02:54:30.924263+00:00",
+  "created_at": "2026-02-17T06:17:29.207276+00:00",
+  "updated_at": "2026-02-17T07:03:32.809701+00:00",
   "stories": {
     "1": {
-      "id": "1",
-      "status": "done",
+      "id": 1,
+      "status": "queued",
       "story_type": "feature",
       "depends_on": [],
-      "blocks": [
-        "2",
-        "10",
-        "14"
-      ],
+      "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:22:50.567103+00:00",
-      "updated_at": "2026-02-14T02:52:47.240210+00:00"
+      "created_at": "2026-02-17T07:01:37.010251+00:00",
+      "updated_at": "2026-02-17T07:01:37.010251+00:00"
     },
     "2": {
-      "id": "2",
-      "status": "done",
+      "id": 2,
+      "status": "queued",
       "story_type": "feature",
-      "depends_on": [
-        "1"
-      ],
-      "blocks": [
-        "3",
-        "4",
-        "5",
-        "6",
-        "7"
-      ],
+      "depends_on": [],
+      "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:23:40.704968+00:00",
-      "updated_at": "2026-02-14T02:52:54.176127+00:00"
+      "created_at": "2026-02-17T07:01:57.125590+00:00",
+      "updated_at": "2026-02-17T07:01:57.125590+00:00"
     },
     "3": {
-      "id": "3",
-      "status": "done",
+      "id": 3,
+      "status": "queued",
       "story_type": "feature",
-      "depends_on": [
-        "2"
-      ],
-      "blocks": [
-        "11"
-      ],
+      "depends_on": [],
+      "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:23:51.413009+00:00",
-      "updated_at": "2026-02-14T02:53:01.657369+00:00"
+      "created_at": "2026-02-17T07:02:16.780766+00:00",
+      "updated_at": "2026-02-17T07:02:16.780766+00:00"
     },
     "4": {
-      "id": "4",
-      "status": "done",
+      "id": 4,
+      "status": "queued",
       "story_type": "feature",
-      "depends_on": [
-        "2"
-      ],
+      "depends_on": [],
       "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:23:59.226703+00:00",
-      "updated_at": "2026-02-14T02:53:08.511078+00:00"
+      "created_at": "2026-02-17T07:02:35.558538+00:00",
+      "updated_at": "2026-02-17T07:02:35.558538+00:00"
     },
     "5": {
-      "id": "5",
-      "status": "done",
+      "id": 5,
+      "status": "queued",
       "story_type": "feature",
-      "depends_on": [
-        "2"
-      ],
-      "blocks": [
-        "6"
-      ],
+      "depends_on": [],
+      "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:24:07.776420+00:00",
-      "updated_at": "2026-02-14T02:53:15.433447+00:00"
+      "created_at": "2026-02-17T07:02:54.040239+00:00",
+      "updated_at": "2026-02-17T07:02:54.040239+00:00"
     },
     "6": {
-      "id": "6",
-      "status": "done",
+      "id": 6,
+      "status": "queued",
       "story_type": "feature",
-      "depends_on": [
-        "2",
-        "5"
-      ],
+      "depends_on": [],
       "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:24:17.058553+00:00",
-      "updated_at": "2026-02-14T02:53:22.976982+00:00"
+      "created_at": "2026-02-17T07:03:12.492003+00:00",
+      "updated_at": "2026-02-17T07:03:12.492003+00:00"
     },
     "7": {
-      "id": "7",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "2"
-      ],
-      "blocks": [
-        "11"
-      ],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:24:26.309686+00:00",
-      "updated_at": "2026-02-14T02:53:31.386864+00:00"
-    },
-    "8": {
-      "id": "8",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [],
-      "blocks": [
-        "9",
-        "12",
-        "13"
-      ],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:24:33.587075+00:00",
-      "updated_at": "2026-02-14T02:53:39.145257+00:00"
-    },
-    "9": {
-      "id": "9",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "8"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:24:40.938945+00:00",
-      "updated_at": "2026-02-14T02:53:46.303890+00:00"
-    },
-    "10": {
-      "id": "10",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "1"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:24:49.201596+00:00",
-      "updated_at": "2026-02-14T02:53:53.742025+00:00"
-    },
-    "11": {
-      "id": "11",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "3",
-        "7"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:24:57.646580+00:00",
-      "updated_at": "2026-02-14T02:54:02.248101+00:00"
-    },
-    "12": {
-      "id": "12",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "8"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:25:03.954840+00:00",
-      "updated_at": "2026-02-14T02:54:09.488022+00:00"
-    },
-    "13": {
-      "id": "13",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "8"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:25:11.981361+00:00",
-      "updated_at": "2026-02-14T02:54:17.112025+00:00"
-    },
-    "14": {
-      "id": "14",
-      "status": "done",
-      "story_type": "feature",
-      "depends_on": [
-        "1"
-      ],
-      "blocks": [],
-      "deferred_reason": null,
-      "file_path": null,
-      "created_at": "2026-02-14T01:25:20.370859+00:00",
-      "updated_at": "2026-02-14T02:54:24.210981+00:00"
-    },
-    "15": {
-      "id": "15",
-      "status": "done",
+      "id": 7,
+      "status": "queued",
       "story_type": "feature",
       "depends_on": [],
       "blocks": [],
       "deferred_reason": null,
       "file_path": null,
-      "created_at": "2026-02-14T01:25:28.467249+00:00",
-      "updated_at": "2026-02-14T02:54:30.924218+00:00"
+      "created_at": "2026-02-17T07:03:32.809622+00:00",
+      "updated_at": "2026-02-17T07:03:32.809622+00:00"
     }
   },
   "execution_order": [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-    "15"
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
   ]
 }

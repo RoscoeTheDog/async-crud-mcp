@@ -23,7 +23,8 @@
       "testing": "haiku"
     },
     "gate3": {
-      "run_test_suite": "haiku"
+      "run_test_suite": "haiku",
+      "test_timeout_estimation": "sonnet"
     },
     "gate4": {
       "structural_checks": "haiku",
@@ -49,7 +50,10 @@
       "testing": 1200
     },
     "gate3": {
-      "integration_testing": 1200
+      "integration_testing": 1200,
+      "per_test_timeout": 60,
+      "test_timeout_estimation": 120,
+      "baseline_capture": 0
     },
     "gate4": {
       "structural_checks": 600,
