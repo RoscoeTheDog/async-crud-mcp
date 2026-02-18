@@ -577,11 +577,11 @@ def do_install(force=False, port=None):
         print("[WARN] Service start failed. You can start it manually with:")
         print("       sc start async-crud-mcp-daemon")
 
-    # Step 6: Configure Claude Desktop
-    print("\n[CONFIGURE] Configuring Claude Desktop integration...")
+    # Step 6: Configure Claude Code CLI + Desktop
+    print("\n[CONFIGURE] Configuring Claude Code integration...")
     configure_result = do_configure()
     if configure_result != EXIT_SUCCESS:
-        print("[WARN] Claude Desktop configuration failed, but package is installed")
+        print("[WARN] Claude Code configuration failed, but package is installed")
         print("       You can run 'python installer.py configure' later to retry")
 
     print("\n" + "="*60)
@@ -622,16 +622,22 @@ def do_uninstall(remove_all=False):
 
 
 def do_configure():
-    """Run Claude Code configuration."""
-    print("[CONFIGURE] Setting up Claude Desktop MCP configuration...")
+    """Run Claude Code CLI + Desktop configuration."""
     script_dir = Path(__file__).parent
     config_script = script_dir / "configure_claude_code.py"
 
+    # Primary: Claude Code CLI (~/.claude.json)
+    print("[CONFIGURE] Setting up Claude Code CLI configuration...")
     try:
         subprocess.run([sys.executable, str(config_script)], check=True)
-        return EXIT_SUCCESS
     except subprocess.CalledProcessError:
         return EXIT_FAILED
+
+    # Secondary: Claude Desktop (best-effort)
+    print("[CONFIGURE] Setting up Claude Desktop configuration...")
+    subprocess.run([sys.executable, str(config_script), "--desktop"], check=False)
+
+    return EXIT_SUCCESS
 
 
 def do_test():
