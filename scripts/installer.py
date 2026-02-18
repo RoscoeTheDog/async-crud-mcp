@@ -157,8 +157,11 @@ def install_package(venv_dir):
 
     try:
         # Use uv pip install (uv-created venvs don't include pip)
+        # CRITICAL (ADR-015 C1): Do NOT use -e (editable). Editable installs
+        # add the developer's source directory to sys.path. LocalSystem cannot
+        # access C:\Users\<developer>\... and the service fails to import.
         subprocess.run(
-            ["uv", "pip", "install", "-e", str(project_root),
+            ["uv", "pip", "install", str(project_root),
              "--python", str(python_path)],
             check=True,
             capture_output=True,
@@ -171,11 +174,33 @@ def install_package(venv_dir):
         return False
 
 
+def _get_base_python_dir(venv_dir):
+    """Find the base Python directory from the venv's pyvenv.cfg.
+
+    The 'home' key in pyvenv.cfg points to the directory containing
+    the base Python interpreter (e.g., uv-managed Python location).
+    """
+    pyvenv_cfg = venv_dir / "pyvenv.cfg"
+    if not pyvenv_cfg.exists():
+        return None
+    try:
+        for line in pyvenv_cfg.read_text(encoding="utf-8").splitlines():
+            if line.startswith("home"):
+                _, _, value = line.partition("=")
+                home_dir = Path(value.strip())
+                if home_dir.exists():
+                    return home_dir
+    except Exception:
+        pass
+    return None
+
+
 def configure_pywin32_dlls(venv_dir):
     """Configure pywin32 DLLs for Windows Service (Windows only).
 
-    Copies pywintypes*.dll, pythoncom*.dll, and pythonservice.exe to venv root
-    where pythonservice.exe expects to find them.
+    Copies pywintypes*.dll, pythoncom*.dll, pythonservice.exe, and core
+    Python DLLs (python3.dll, python3XX.dll) to venv root where
+    pythonservice.exe expects to find them.
     """
     system = platform.system()
     if system != "Windows":
@@ -208,10 +233,145 @@ def configure_pywin32_dlls(venv_dir):
                 shutil.copy2(pythonservice_exe, dest)
                 print(f"[OK] Copied pythonservice.exe to {dest}")
 
+        # Copy core Python DLLs (python3.dll, python312.dll, etc.) to venv root.
+        # pythonservice.exe needs these at load time but uv-managed Python
+        # stores them outside the venv (in %APPDATA%\uv\python\...).
+        base_python_dir = _get_base_python_dir(venv_dir)
+        if base_python_dir:
+            for dll_file in base_python_dir.glob("python3*.dll"):
+                dest = venv_dir / dll_file.name
+                if not dest.exists():
+                    shutil.copy2(dll_file, dest)
+                    print(f"[OK] Copied {dll_file.name} to {dest}")
+            # Copy vcruntime DLLs if present (needed by python3XX.dll itself)
+            for vcrt_name in ["vcruntime140.dll", "vcruntime140_1.dll"]:
+                vcrt_file = base_python_dir / vcrt_name
+                if vcrt_file.exists():
+                    dest = venv_dir / vcrt_name
+                    if not dest.exists():
+                        shutil.copy2(vcrt_file, dest)
+                        print(f"[OK] Copied {vcrt_name} to {dest}")
+        else:
+            print("[WARN] Could not find base Python directory, "
+                  "core Python DLLs not copied")
+
+        # Create pythonXY._pth so pythonservice.exe can find servicemanager.
+        # pythonservice.exe embeds python3XX.dll but never processes .pth files
+        # or pyvenv.cfg, so sys.path is missing win32/ and site-packages/.
+        # A _pth file next to the DLL is Python's standard mechanism for
+        # embedded interpreters to configure sys.path.
+        _create_pth_file(venv_dir)
+
         print("[OK] pywin32 DLLs configured")
         return True
     except Exception as e:
         print(f"[WARN] Failed to configure pywin32 DLLs: {e}")
+        return False
+
+
+def _create_pth_file(venv_dir):
+    """Create a pythonXY._pth file in the venv root for pythonservice.exe.
+
+    When Py_Initialize() finds pythonXY._pth next to python3XX.dll, it uses
+    its contents as the **complete** sys.path, replacing all default path
+    computation. This means the file must include:
+      - The base Python stdlib (Lib/, DLLs/, pythonXY.zip) so core modules
+        like 'encodings' and 'os' are available
+      - The venv's site-packages (for async_crud_mcp, loguru, etc.)
+      - The win32 directories (for servicemanager, win32service, etc.)
+
+    This file only affects executables that load python3XX.dll from the venv
+    root (i.e., pythonservice.exe). Scripts/python.exe loads the DLL from
+    the base Python location via pyvenv.cfg, so it is unaffected.
+
+    Args:
+        venv_dir: Path to the virtual environment root directory
+    """
+    # Find the versioned Python DLL (e.g., python312.dll), excluding python3.dll
+    versioned_dlls = [
+        p for p in venv_dir.glob("python3*.dll")
+        if p.stem != "python3"
+    ]
+    if not versioned_dlls:
+        print("[WARN] No versioned python3XX.dll found in venv root, "
+              "skipping _pth file creation")
+        return
+
+    # Derive the _pth filename from the DLL name (python312.dll -> python312._pth)
+    dll_name = versioned_dlls[0].stem  # e.g. "python312"
+    pth_file = venv_dir / f"{dll_name}._pth"
+
+    # The base Python directory contains the stdlib (Lib/, DLLs/, pythonXY.zip).
+    # Without these, pythonservice.exe cannot even initialize (no 'encodings').
+    base_python_dir = _get_base_python_dir(venv_dir)
+
+    lines = []
+
+    # Base Python stdlib paths (absolute - they live outside the venv)
+    if base_python_dir:
+        zip_file = base_python_dir / f"{dll_name}.zip"
+        if zip_file.exists():
+            lines.append(str(zip_file))
+        stdlib_dir = base_python_dir / "Lib"
+        if stdlib_dir.exists():
+            lines.append(str(stdlib_dir))
+        dlls_dir = base_python_dir / "DLLs"
+        if dlls_dir.exists():
+            lines.append(str(dlls_dir))
+    else:
+        print("[WARN] Could not find base Python directory; "
+              "_pth file may be incomplete (missing stdlib)")
+
+    # Venv-local paths (relative to the venv root where the _pth file lives)
+    lines.append(".")
+    lines.append("Lib\\site-packages")
+    lines.append("Lib\\site-packages\\win32")
+    lines.append("Lib\\site-packages\\win32\\lib")
+    lines.append("Lib\\site-packages\\Pythonwin")
+    lines.append("import site")
+
+    pth_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[OK] Created {pth_file.name} for pythonservice.exe sys.path")
+
+
+def verify_package_import(venv_dir):
+    """Verify the package can be imported using the venv's Python (ADR-015 C5).
+
+    This catches issues where the installer's Python can import the package
+    but the venv's Python cannot (e.g., missing dependencies, wrong sys.path).
+
+    Args:
+        venv_dir: Path to the virtual environment directory
+
+    Returns:
+        True if import succeeds, False otherwise
+    """
+    print("[VERIFY] Running post-install import verification (ADR-015 C5)...")
+
+    system = platform.system()
+    if system == "Windows":
+        python_path = venv_dir / "Scripts" / "python.exe"
+    else:
+        python_path = venv_dir / "bin" / "python"
+
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c", "import async_crud_mcp"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            print("[OK] Package import verified")
+            return True
+        else:
+            print(f"[ERROR] Import verification failed: {result.stderr}", file=sys.stderr)
+            return False
+    except subprocess.TimeoutExpired:
+        print("[ERROR] Import verification timed out", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"[ERROR] Import verification error: {e}", file=sys.stderr)
         return False
 
 
@@ -221,21 +381,23 @@ def init_config(config_dir, config_file, port=None):
     Args:
         config_dir: Configuration directory path
         config_file: Configuration file path
-        port: Optional port override (default: 8765)
+        port: Optional port override (default: 8720)
     """
     print(f"[CONFIG] Initializing configuration at {config_file}...")
 
     # Create config directory
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    # Default configuration
+    # Default configuration (nested schema matching daemon's config_init)
     default_config = {
-        "host": "127.0.0.1",
-        "port": port if port is not None else 8765,
-        "log_level": "INFO",
-        "storage": {
-            "data_dir": str(config_dir / "data")
-        }
+        "daemon": {
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": port if port is not None else 8720,
+            "transport": "sse",
+            "log_level": "INFO",
+        },
+        "server": {}
     }
 
     # Write config file if it doesn't exist
@@ -249,36 +411,88 @@ def init_config(config_dir, config_file, port=None):
     return True
 
 
-def install_service():
-    """Install platform service (systemd/launchd/Windows Service)."""
+def install_service(venv_dir):
+    """Install platform service using the daemon installer API.
+
+    Args:
+        venv_dir: Path to the virtual environment directory
+    """
     print("[SERVICE] Installing platform service...")
 
     system = platform.system()
-    script_dir = Path(__file__).parent.parent / "src" / "async_crud_mcp" / "daemon"
-
-    if system == "Linux":
-        installer_script = script_dir / "linux" / "systemd_installer.sh"
-    elif system == "Darwin":
-        installer_script = script_dir / "macos" / "launchd_installer.sh"
-    elif system == "Windows":
-        installer_script = script_dir / "windows" / "service_installer.bat"
+    if system == "Windows":
+        python_path = venv_dir / "Scripts" / "python.exe"
     else:
-        print(f"[WARN] Platform service not supported on {system}", file=sys.stderr)
-        return False
-
-    if not installer_script.exists():
-        print(f"[WARN] Service installer not found: {installer_script}", file=sys.stderr)
-        return False
+        python_path = venv_dir / "bin" / "python"
 
     try:
-        if system == "Windows":
-            subprocess.run([str(installer_script), "install"], check=True)
-        else:
-            subprocess.run(["bash", str(installer_script), "install"], check=True)
+        subprocess.run(
+            [str(python_path), "-c",
+             "from async_crud_mcp.daemon.installer import get_installer; get_installer().install()"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
         print("[OK] Service installed")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"[ERROR] Failed to install service: {e}", file=sys.stderr)
+        print(f"[WARN] Service installation failed: {e.stderr}", file=sys.stderr)
+        return False
+
+
+def start_service():
+    """Start the platform service after installation.
+
+    Returns:
+        True if service started successfully, False otherwise
+    """
+    print("[SERVICE] Starting platform service...")
+
+    system = platform.system()
+    try:
+        if system == "Windows":
+            result = subprocess.run(
+                ["sc", "start", "async-crud-mcp-daemon"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print("[OK] Service started")
+                return True
+            else:
+                print(f"[WARN] Service start returned: {result.stderr.strip()}")
+                return False
+        elif system == "Linux":
+            result = subprocess.run(
+                ["systemctl", "--user", "start", "async-crud-mcp"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print("[OK] Service started")
+                return True
+            else:
+                print(f"[WARN] Service start failed: {result.stderr.strip()}")
+                return False
+        elif system == "Darwin":
+            plist_path = (Path.home() / "Library" / "LaunchAgents"
+                          / "com.async-crud-mcp.daemon.plist")
+            result = subprocess.run(
+                ["launchctl", "load", str(plist_path)],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                print("[OK] Service started")
+                return True
+            else:
+                print(f"[WARN] Service start failed: {result.stderr.strip()}")
+                return False
+        else:
+            print(f"[WARN] Unsupported platform: {system}")
+            return False
+    except Exception as e:
+        print(f"[WARN] Failed to start service: {e}")
         return False
 
 
@@ -345,13 +559,23 @@ def do_install(force=False, port=None):
     if not configure_pywin32_dlls(paths["venv_dir"]):
         print("[WARN] pywin32 DLL configuration failed, service may not work")
 
+    # Step 3.6: Post-install import verification (ADR-015 C5)
+    if not verify_package_import(paths["venv_dir"]):
+        print("[ERROR] Package installed but cannot be imported in the venv", file=sys.stderr)
+        return EXIT_FAILED
+
     # Step 4: Initialize config
     if not init_config(paths["config_dir"], paths["config_file"], port=port):
         return EXIT_FAILED
 
     # Step 5: Install service
-    if not install_service():
+    if not install_service(paths["venv_dir"]):
         print("[WARN] Service installation failed, but package is installed")
+
+    # Step 5.5: Start service
+    if not start_service():
+        print("[WARN] Service start failed. You can start it manually with:")
+        print("       sc start async-crud-mcp-daemon")
 
     # Step 6: Configure Claude Desktop
     print("\n[CONFIGURE] Configuring Claude Desktop integration...")
@@ -370,8 +594,7 @@ def do_install(force=False, port=None):
         print(f"Port: {port}")
     print("\nNext steps:")
     print("  1. Review configuration in config.json")
-    print("  2. Start the daemon service")
-    print("  3. Restart Claude Desktop for MCP integration")
+    print("  2. Restart Claude Desktop for MCP integration")
     print("="*60 + "\n")
 
     return EXIT_SUCCESS
@@ -424,13 +647,180 @@ def do_test():
         return EXIT_FAILED
 
 
+def _is_service_marked_for_deletion(service_name):
+    """Check if a Windows service is stuck in marked-for-deletion state (ADR-017).
+
+    The SCM sets DeleteFlag=1 in the registry when DeleteService() is called
+    but open handles prevent finalization.
+
+    Args:
+        service_name: Windows service name to check
+
+    Returns:
+        True if service is marked for deletion, False otherwise
+    """
+    if platform.system() != "Windows":
+        return False
+    try:
+        import winreg
+        key = winreg.OpenKeyEx(
+            winreg.HKEY_LOCAL_MACHINE,
+            f"SYSTEM\\CurrentControlSet\\Services\\{service_name}",
+            0, winreg.KEY_READ
+        )
+        try:
+            value, _ = winreg.QueryValueEx(key, "DeleteFlag")
+            return value == 1
+        except FileNotFoundError:
+            return False
+        finally:
+            winreg.CloseKey(key)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def _find_running_processes(names):
+    """Find which of the given process names are currently running (Windows).
+
+    Args:
+        names: Iterable of process executable names (e.g., "taskmgr.exe")
+
+    Returns:
+        List of (name, pid) tuples for running processes
+    """
+    found = []
+    for name in names:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().splitlines():
+                    if name.lower() in line.lower():
+                        # CSV format: "name","pid","session","session#","mem"
+                        parts = line.split(",")
+                        if len(parts) >= 2:
+                            try:
+                                pid = int(parts[1].strip('"'))
+                                found.append((name, pid))
+                            except ValueError:
+                                found.append((name, 0))
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    return found
+
+
+def _kill_process(name, pid=None):
+    """Kill a process by name or PID (Windows).
+
+    Args:
+        name: Process executable name (for logging)
+        pid: Optional specific PID to kill. If None, kills by image name.
+
+    Returns:
+        True if taskkill succeeded, False otherwise
+    """
+    try:
+        if pid and pid > 0:
+            cmd = ["taskkill", "/F", "/PID", str(pid)]
+        else:
+            cmd = ["taskkill", "/F", "/IM", name]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+# ADR-017: Tiered process cleanup for service reinstallation
+# Tier 1: Auto-kill (low risk, no user data)
+_TIER1_PROCESSES = {
+    "pythonservice.exe": "service binary (ours)",
+    "mmc.exe": "Services console / Computer Management",
+}
+
+# Tier 2: Prompt user (may have active user state)
+_TIER2_PROCESSES = {
+    "taskmgr.exe": "Task Manager (Services tab holds service handles)",
+    "procexp.exe": "Process Explorer (enumerates all services)",
+    "procexp64.exe": "Process Explorer 64-bit (enumerates all services)",
+    "perfmon.exe": "Performance Monitor (service performance counters)",
+}
+
+
+def kill_blocking_processes():
+    """Kill or prompt to kill processes that prevent Windows service deletion.
+
+    ADR-017: Tiered process cleanup strategy for error 1072.
+    - Tier 1 (pythonservice.exe, mmc.exe): Auto-kill silently
+    - Tier 2 (taskmgr, procexp, perfmon): Prompt user before killing
+    - Tier 3 (AV, monitoring agents): Handled by retry loop in install_service()
+
+    On non-Windows platforms this is a no-op.
+    """
+    if platform.system() != "Windows":
+        return
+
+    import time as _time
+
+    # --- Tier 1: Auto-kill (safe, no user data at risk) ---
+    for proc_name, description in _TIER1_PROCESSES.items():
+        if _kill_process(proc_name):
+            print(f"[INFO] Killed {proc_name} ({description})")
+
+    _time.sleep(1)
+
+    # Check if we're stuck in marked-for-deletion state
+    service_name = "async-crud-mcp-daemon"
+    if not _is_service_marked_for_deletion(service_name):
+        return  # No stuck deletion, Tier 1 was sufficient
+
+    # --- Tier 2: Prompt user for higher-risk processes ---
+    running_tier2 = _find_running_processes(_TIER2_PROCESSES.keys())
+    if not running_tier2:
+        # No Tier 2 processes found -- must be Tier 3 (AV, monitoring, etc.)
+        print("[WARN] Service is marked for deletion but no known handle holders found.")
+        print("       An antivirus, monitoring agent, or other background process may")
+        print("       be holding a handle. The installer will retry automatically.")
+        return
+
+    print("")
+    print("[WARN] Service is marked for deletion but open handles are preventing removal.")
+    print("[WARN] The following processes may be holding service handles:")
+    print("")
+
+    for proc_name, pid in running_tier2:
+        description = _TIER2_PROCESSES.get(proc_name, "unknown")
+        print(f"       {proc_name} (PID {pid}) - {description}")
+
+    print("")
+
+    for proc_name, pid in running_tier2:
+        description = _TIER2_PROCESSES.get(proc_name, "unknown")
+        try:
+            answer = input(f"  Kill {proc_name} (PID {pid}) to continue? [Y/n]: ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print("\n[INFO] Skipping -- will rely on retry loop")
+            break
+
+        if answer in ("", "y", "yes"):
+            if _kill_process(proc_name, pid):
+                print(f"  [OK] Killed {proc_name} (PID {pid})")
+            else:
+                print(f"  [WARN] Failed to kill {proc_name} (PID {pid})")
+        else:
+            print(f"  [INFO] Skipping {proc_name}")
+
+    _time.sleep(2)
+
+
 def stop_service():
     """Stop the running platform service (Windows/Linux/macOS)."""
     system = platform.system()
     try:
         if system == "Windows":
             subprocess.run(
-                ["sc", "stop", "AsyncCrudMCP"],
+                ["sc", "stop", "async-crud-mcp-daemon"],
                 capture_output=True,
                 text=True
             )
@@ -455,6 +845,11 @@ def do_reinstall():
     """Stop existing service and perform a fresh install."""
     print("[REINSTALL] Stopping existing service...")
     stop_service()
+    import time
+    time.sleep(2)  # Give Windows SCM time to process the stop
+    print("[REINSTALL] Cleaning up blocking processes (ADR-017)...")
+    kill_blocking_processes()
+    time.sleep(1)  # Give SCM time to finalize after handle cleanup
     return do_install(force=True)
 
 
@@ -534,7 +929,7 @@ Examples:
     parser.add_argument(
         "--port", "-p",
         type=int,
-        help="Override default port (8765) - install only"
+        help="Override default port (8720) - install only"
     )
 
     parser.add_argument(
