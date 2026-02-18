@@ -869,11 +869,12 @@ def show_menu():
             print("1. Install async-crud-mcp")
             print("2. Reinstall async-crud-mcp")
             print("3. Uninstall async-crud-mcp")
-            print("4. Quit")
+            print("4. Test installation")
+            print("5. Quit")
             print("="*60)
 
             try:
-                choice = input("\nSelect an option (1-4): ").strip()
+                choice = input("\nSelect an option (1-5): ").strip()
             except (KeyboardInterrupt, EOFError):
                 print("\n[INFO] Cancelled by user")
                 return EXIT_CANCELLED
@@ -891,10 +892,14 @@ def show_menu():
                 if exit_code != EXIT_SUCCESS:
                     print("\n[ERROR] Uninstall failed", file=sys.stderr)
             elif choice == "4":
+                exit_code = do_test()
+                if exit_code != EXIT_SUCCESS:
+                    print("\n[ERROR] Test failed", file=sys.stderr)
+            elif choice == "5":
                 print("\n[INFO] Quitting")
                 return EXIT_SUCCESS
             else:
-                print("\n[ERROR] Invalid choice. Please enter 1-4.", file=sys.stderr)
+                print("\n[ERROR] Invalid choice. Please enter 1-5.", file=sys.stderr)
     except KeyboardInterrupt:
         print("\n[INFO] Cancelled by user")
         return EXIT_CANCELLED
