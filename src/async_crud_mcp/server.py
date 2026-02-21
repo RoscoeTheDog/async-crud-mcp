@@ -30,6 +30,8 @@ from mcp.types import TextContent
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from pydantic import ValidationError
+
 from async_crud_mcp import __version__
 from async_crud_mcp.config import (
     APP_NAME,
@@ -233,6 +235,33 @@ class ProjectActivationMiddleware(Middleware):
         return await call_next(context)
 
 
+class ValidationErrorMiddleware(Middleware):
+    """Catch Pydantic ValidationError and return a structured JSON error.
+
+    Registered as the innermost middleware so that validation errors from
+    request model construction are caught before reaching the tool handler.
+    """
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext,
+        call_next: CallNext,
+    ) -> ToolResult:
+        try:
+            return await call_next(context)
+        except ValidationError as e:
+            return ToolResult(
+                content=[TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "status": "error",
+                        "error_code": "VALIDATION_ERROR",
+                        "message": str(e),
+                    }),
+                )],
+            )
+
+
 # Module-level shared dependencies (initialized once before tool registration)
 # Load from global config file if it exists; fall back to defaults + env vars
 # if the file is somehow unreadable.
@@ -289,7 +318,8 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
 # Initialize FastMCP server instance
 mcp = FastMCP(APP_NAME, lifespan=_server_lifespan)
 mcp.add_middleware(AuditMiddleware())              # Outermost: captures all tool calls
-mcp.add_middleware(ProjectActivationMiddleware())  # Inner: activation gate
+mcp.add_middleware(ProjectActivationMiddleware())  # Middle: activation gate
+mcp.add_middleware(ValidationErrorMiddleware())    # Innermost: catch Pydantic errors
 
 # Per-project activation state
 _active_project_root: Path | None = None
@@ -357,7 +387,7 @@ async def async_write_tool(
     create_dirs: bool = True,
     timeout: float = 30.0,
 ):
-    """Write content to a file atomically.
+    """Write content to a new file atomically. Fails with FILE_EXISTS if file already exists -- use async_update_tool to modify existing files.
 
     Args:
         path: File path to write
@@ -670,11 +700,17 @@ async def async_exec_tool(
     File I/O commands (cat, sed, rm, etc.) are denied -- use CRUD tools instead.
     Legitimate commands (git, pytest, npm, pip, etc.) are allowed.
 
+    The cwd parameter must be within the active project root; paths outside are
+    rejected with PATH_OUTSIDE_BASE. Sensitive environment variables (API keys,
+    LD_PRELOAD, etc.) listed in shell.env_strip are always removed from the
+    execution environment, even if explicitly passed via env.
+
     Args:
-        command: Shell command to execute (passed to bash -c)
-        timeout: Command timeout in seconds (default: 30, max: 300)
-        cwd: Working directory (default: project root)
-        env: Additional environment variables to set
+        command: Shell command to execute (passed to bash -c). Must not be empty
+            or contain null bytes.
+        timeout: Command timeout in seconds (default: 30, max: 300). Must be > 0.
+        cwd: Working directory (default: project root). Must be within project root.
+        env: Additional environment variables to set. Keys in env_strip are removed.
         background: If true, run in background and return task_id immediately
 
     Returns:
@@ -720,9 +756,11 @@ async def async_wait_tool(
 
     If task_id is provided, waits for that background task to finish
     (up to 'seconds' timeout, default 30s). Otherwise, simply sleeps.
+    When seconds=0 and no task_id, returns immediately (no-op).
 
     Args:
-        seconds: Seconds to sleep, or timeout when waiting for a task (default: 0)
+        seconds: Seconds to sleep, or timeout when waiting for a task (default: 0).
+            Must be >= 0.
         task_id: Background task ID to wait for (from async_exec_tool with background=True)
 
     Returns:
@@ -748,14 +786,15 @@ async def async_search_tool(
 
     Searches files matching the glob pattern for lines matching the regex.
     Respects access control rules and content scanning policies.
+    The search path must be within the active project root.
 
     Args:
         pattern: Regex pattern to search for
-        path: Search directory (default: project root)
+        path: Search directory (default: project root). Must be within project root.
         glob: Glob pattern to filter files (default: *)
         recursive: Search subdirectories (default: True)
         case_insensitive: Case-insensitive matching (default: False)
-        max_results: Maximum matches to return (default: 100)
+        max_results: Maximum matches to return (default: 100). Must be >= 1.
         context_lines: Lines of context before/after each match (default: 0)
         output_mode: 'content' (default), 'files_with_matches', or 'count'
 
@@ -1058,6 +1097,7 @@ async def update_config_tool(section: str, updates: dict) -> dict:
 
     Args:
         section: Must be 'crud' (only project-scoped settings are writable).
+            Valid values: 'crud'. Daemon/shell/search/audit sections are global-only.
         updates: Partial dict to merge into the crud config.
             Example: {"content_scan_enabled": false}
             Example: {"access_rules": [...], "default_read_policy": "deny"}

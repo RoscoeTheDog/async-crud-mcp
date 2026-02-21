@@ -178,7 +178,7 @@ class ExecRequest(BaseModel):
     """Request model for async_exec tool."""
 
     command: str = Field(..., description="Shell command to execute")
-    timeout: float = Field(default=30.0, description="Command timeout in seconds")
+    timeout: float = Field(default=30.0, gt=0, description="Command timeout in seconds")
     cwd: str | None = Field(default=None, description="Working directory (default: project root)")
     env: dict[str, str] | None = Field(default=None, description="Additional environment variables")
     background: bool = Field(default=False, description="Run command in background")
