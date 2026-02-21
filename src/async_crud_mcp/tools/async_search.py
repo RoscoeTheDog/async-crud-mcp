@@ -69,6 +69,13 @@ async def async_search(
             message="No search path specified and no project activated.",
         )
 
+    # Validate search path is within project root
+    if project_root and not str(search_path.resolve()).startswith(str(project_root.resolve())):
+        return ErrorResponse(
+            error_code=ErrorCode.PATH_OUTSIDE_BASE,
+            message=f"Search path is outside project root: {search_path}",
+        )
+
     if not search_path.is_dir():
         return ErrorResponse(
             error_code=ErrorCode.DIR_NOT_FOUND,

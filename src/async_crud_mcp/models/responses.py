@@ -220,6 +220,7 @@ class ContentionResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["contention"] = "contention"
+    error_code: str = Field(default="HASH_MISMATCH", description="Error code for contention")
     path: str = Field(..., description="File path with contention")
     expected_hash: str = Field(..., description="Hash that was expected")
     current_hash: str = Field(..., description="Current file hash")

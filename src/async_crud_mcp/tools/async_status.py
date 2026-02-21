@@ -6,7 +6,7 @@ from typing import Union
 
 from async_crud_mcp import __version__
 from async_crud_mcp.config import Settings
-from async_crud_mcp.core import HashRegistry, LockManager, PathValidationError, PathValidator
+from async_crud_mcp.core import AccessDeniedError, HashRegistry, LockManager, PathValidationError, PathValidator
 from async_crud_mcp.models import (
     ActiveLocks,
     AsyncStatusRequest,
@@ -82,14 +82,20 @@ async def async_status(
                 tracked_files=tracked_files,
                 active_locks=active_locks,
                 queue_depth=total_queue_depth,
-                base_directories=settings.crud.base_directories,
+                base_directories=[str(d) for d in path_validator._base_directories],
             )
 
         # Per-file status (path is provided)
         else:
-            # Validate path
+            # Validate path and access policy
             try:
-                validated_path = path_validator.validate(request.path)
+                validated_path = path_validator.validate_operation(request.path, "read")
+            except AccessDeniedError as e:
+                return ErrorResponse(
+                    error_code=ErrorCode.ACCESS_DENIED,
+                    message=str(e),
+                    path=request.path,
+                )
             except PathValidationError as e:
                 return ErrorResponse(
                     error_code=ErrorCode.PATH_OUTSIDE_BASE,
