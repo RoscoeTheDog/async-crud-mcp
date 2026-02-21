@@ -251,15 +251,14 @@ class ValidationErrorMiddleware(Middleware):
         try:
             return await call_next(context)
         except ValidationError as e:
+            error_dict = {
+                "status": "error",
+                "error_code": "VALIDATION_ERROR",
+                "message": str(e),
+            }
             return ToolResult(
-                content=[TextContent(
-                    type="text",
-                    text=json.dumps({
-                        "status": "error",
-                        "error_code": "VALIDATION_ERROR",
-                        "message": str(e),
-                    }),
-                )],
+                content=[TextContent(type="text", text=json.dumps(error_dict))],
+                structured_content=error_dict,
             )
 
 
