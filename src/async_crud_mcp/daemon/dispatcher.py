@@ -40,6 +40,7 @@ Usage:
 """
 
 import asyncio
+import json
 import os
 import socket
 import subprocess
@@ -71,13 +72,13 @@ except ImportError as e:
 
 from loguru import logger
 
-from ..paths import (
+from .paths import (
     APP_NAME,
     _get_user_profile_path,
     get_user_config_file_path,
     get_user_logs_dir,
 )
-from ..config_init import DEFAULT_PORT
+from .config_init import DEFAULT_PORT
 
 # Service/system accounts to skip (uppercase for case-insensitive comparison)
 SYSTEM_ACCOUNTS = frozenset({
@@ -89,7 +90,14 @@ SYSTEM_ACCOUNTS = frozenset({
 DEFAULT_POLL_INTERVAL = 5
 
 # Grace period after worker start before checking port connectivity (seconds)
-STARTUP_GRACE_SECONDS = 15
+STARTUP_GRACE_SECONDS = 60
+
+# ADR-013: Restart-storm guardrails
+BACKOFF_BASE_SECONDS = 5
+BACKOFF_MAX_SECONDS = 300
+LOG_ESCALATION_THRESHOLD = 10
+PORT_RELEASE_WAIT_SECONDS = 5
+PORT_RELEASE_POLL_INTERVAL = 0.5
 
 
 @dataclass
@@ -118,6 +126,8 @@ class UserWorker:
     process_id: Optional[int] = None
     stderr_file: Optional[IO[str]] = None
     started_at: Optional[float] = None
+    consecutive_failures: int = 0
+    next_restart_at: float = 0
 
 
 class MultiUserDispatcher:
@@ -382,7 +392,7 @@ class MultiUserDispatcher:
 
         # Find Python executable (BUG-03: resolve pythonservice.exe -> python.exe)
         python_exe = self._get_python_executable()
-        cmd = f'"{python_exe}" -m async_crud_mcp.server'
+        cmd = f'"{python_exe}" -c "from async_crud_mcp.server import main; main()"'
 
         # Set up per-user log directory
         user_log_dir = get_user_logs_dir(worker.username)
@@ -492,17 +502,23 @@ class MultiUserDispatcher:
 
         This is called periodically from the main loop. It checks each
         worker's process status, port connectivity, and config file for
-        changes. Includes stale process cleanup on restart (BUG-13) and
-        port-level health monitoring (ADR-012).
+        changes. Includes stale process cleanup on restart (BUG-13),
+        port-level health monitoring (ADR-012), and restart-storm
+        guardrails with exponential backoff (ADR-013).
         """
+        now = time.time()
+
         for username, worker in list(self.workers.items()):
+            needs_restart = False
+            restart_reason = ""
+
             # Check if process is still alive
             if worker.process_handle:
                 exit_code = win32process.GetExitCodeProcess(worker.process_handle)
                 if exit_code != 259:  # STILL_ACTIVE = 259
-                    logger.warning(
-                        f"Worker for {username} exited (code {exit_code}), restarting"
-                    )
+                    needs_restart = True
+                    restart_reason = f"exited (code {exit_code})"
+
                     # Close the old handle (BUG-13: stale process cleanup)
                     try:
                         win32api.CloseHandle(worker.process_handle)
@@ -518,49 +534,91 @@ class MultiUserDispatcher:
                             pass
                         worker.stderr_file = None
 
-                    # Re-acquire user token if needed
-                    if not worker.user_token and worker.session_ids:
-                        try:
-                            sid = next(iter(worker.session_ids))
-                            worker.user_token = win32ts.WTSQueryUserToken(sid)
-                        except Exception as e:
-                            logger.error(
-                                f"Cannot re-acquire token for {username}: {e}"
-                            )
-                            continue
-
-                    self._start_worker(worker)
-
                 else:
                     # Process is alive - verify port is actually listening
                     # Skip check during startup grace period (ADR-012)
                     if (
                         worker.started_at is not None
-                        and (time.time() - worker.started_at) > STARTUP_GRACE_SECONDS
+                        and (now - worker.started_at) > STARTUP_GRACE_SECONDS
                     ):
                         settings = _load_user_settings(worker.config_path)
                         host = settings.get('daemon', {}).get('host', '127.0.0.1')
                         port = settings.get('daemon', {}).get('port', DEFAULT_PORT)
 
                         if not self._is_port_listening(host, port):
-                            logger.warning(
-                                f"Worker for {username} (PID {worker.process_id}) "
-                                f"is alive but port {port} not listening, restarting"
+                            needs_restart = True
+                            restart_reason = (
+                                f"alive (PID {worker.process_id}) but "
+                                f"port {port} not listening"
                             )
                             self._stop_worker(worker)
+                        else:
+                            # Worker is healthy - reset circuit breaker
+                            if worker.consecutive_failures > 0:
+                                logger.info(
+                                    f"Worker for {username} recovered after "
+                                    f"{worker.consecutive_failures} failures"
+                                )
+                                worker.consecutive_failures = 0
+                                worker.next_restart_at = 0
+                                self._clear_circuit_breaker_state(worker)
 
-                            # Re-acquire user token if needed
-                            if not worker.user_token and worker.session_ids:
-                                try:
-                                    sid = next(iter(worker.session_ids))
-                                    worker.user_token = win32ts.WTSQueryUserToken(sid)
-                                except Exception as e:
-                                    logger.error(
-                                        f"Cannot re-acquire token for {username}: {e}"
-                                    )
-                                    continue
+            # ADR-013: Apply circuit breaker before restarting
+            if needs_restart:
+                worker.consecutive_failures += 1
 
-                            self._start_worker(worker)
+                # Exponential backoff: base * 2^(failures-1), capped
+                backoff = min(
+                    BACKOFF_BASE_SECONDS * (2 ** (worker.consecutive_failures - 1)),
+                    BACKOFF_MAX_SECONDS,
+                )
+                worker.next_restart_at = now + backoff
+
+                # Log escalation
+                if worker.consecutive_failures >= LOG_ESCALATION_THRESHOLD:
+                    logger.error(
+                        f"[ADR-013] Worker for {username} has failed "
+                        f"{worker.consecutive_failures} consecutive times "
+                        f"({restart_reason}). Next restart in {backoff:.0f}s."
+                    )
+                else:
+                    logger.warning(
+                        f"Worker for {username} {restart_reason}, "
+                        f"failure #{worker.consecutive_failures}, "
+                        f"backoff {backoff:.0f}s"
+                    )
+
+                self._write_circuit_breaker_state(worker)
+
+                # Check if we've waited long enough
+                if now < worker.next_restart_at:
+                    logger.debug(
+                        f"Deferring restart for {username} "
+                        f"({worker.next_restart_at - now:.0f}s remaining)"
+                    )
+                    # Check config changes even if restart is deferred
+                    self._check_config_reload(worker)
+                    continue
+
+                # Re-acquire user token if needed
+                if not worker.user_token and worker.session_ids:
+                    try:
+                        sid = next(iter(worker.session_ids))
+                        worker.user_token = win32ts.WTSQueryUserToken(sid)
+                    except Exception as e:
+                        logger.error(
+                            f"Cannot re-acquire token for {username}: {e}"
+                        )
+                        self._check_config_reload(worker)
+                        continue
+
+                # Wait for port release before restarting
+                settings = _load_user_settings(worker.config_path)
+                host = settings.get('daemon', {}).get('host', '127.0.0.1')
+                port = settings.get('daemon', {}).get('port', DEFAULT_PORT)
+                self._wait_for_port_release(host, port)
+
+                self._start_worker(worker)
 
             # Check config changes
             self._check_config_reload(worker)
@@ -595,6 +653,70 @@ class MultiUserDispatcher:
                 self._stop_worker(worker)
                 worker.user_token = token
                 self._start_worker(worker)
+
+    # =========================================================================
+    # ADR-013: Circuit breaker helpers
+    # =========================================================================
+
+    def _wait_for_port_release(self, host: str, port: int) -> None:
+        """Wait for a port to become free before restarting a worker.
+
+        Polls the port at short intervals up to PORT_RELEASE_WAIT_SECONDS.
+        If the port is still occupied after the timeout, logs a warning
+        but does not block the restart attempt.
+
+        Args:
+            host: Host address to check
+            port: Port number to check
+        """
+        deadline = time.time() + PORT_RELEASE_WAIT_SECONDS
+        while time.time() < deadline:
+            if not self._is_port_listening(host, port):
+                return
+            time.sleep(PORT_RELEASE_POLL_INTERVAL)
+        logger.warning(
+            f"Port {port} still occupied after "
+            f"{PORT_RELEASE_WAIT_SECONDS}s wait"
+        )
+
+    def _write_circuit_breaker_state(self, worker: UserWorker) -> None:
+        """Persist circuit breaker state to disk for health check integration.
+
+        Writes a JSON file with failure count and next restart time so that
+        the health check endpoint can report circuit breaker status.
+
+        Args:
+            worker: UserWorker whose state to persist
+        """
+        try:
+            logs_dir = get_user_logs_dir(worker.username)
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            state_file = logs_dir / 'circuit_breaker_state.json'
+            state = {
+                'consecutive_failures': worker.consecutive_failures,
+                'next_restart_at': worker.next_restart_at,
+                'username': worker.username,
+                'updated_at': time.time(),
+            }
+            state_file.write_text(
+                json.dumps(state, indent=2), encoding='utf-8'
+            )
+        except Exception as e:
+            logger.debug(f"Failed to write circuit breaker state: {e}")
+
+    def _clear_circuit_breaker_state(self, worker: UserWorker) -> None:
+        """Remove circuit breaker state file when worker recovers.
+
+        Args:
+            worker: UserWorker whose state to clear
+        """
+        try:
+            logs_dir = get_user_logs_dir(worker.username)
+            state_file = logs_dir / 'circuit_breaker_state.json'
+            if state_file.exists():
+                state_file.unlink()
+        except Exception as e:
+            logger.debug(f"Failed to clear circuit breaker state: {e}")
 
     # =========================================================================
     # Port resilience helpers (ADR-012)

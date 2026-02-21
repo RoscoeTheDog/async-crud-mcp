@@ -1,55 +1,59 @@
 {
+  "story_id": "2",
   "validation_id": "-2",
   "phase": "a",
+  "status": "failed",
+  "completed_at": "2026-02-17T08:40:53.976444Z",
   "structural_checks": {
     "A": {
-      "passed": false,
-      "blocked": true,
-      "errors": [
-        "Story file not found for ID: -2"
-      ],
-      "missing_data": "story_file"
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
     "B": {
-      "passed": false,
-      "blocked": true,
-      "errors": [
-        "Cannot proceed - Check A blocked"
-      ],
-      "missing_data": "story_file"
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
     "C": {
-      "passed": false,
-      "blocked": true,
-      "errors": [
-        "Cannot proceed - Check A blocked"
-      ],
-      "missing_data": "story_file"
+      "passed": true,
+      "blocking": false,
+      "blocked": false
     },
     "D": {
-      "passed": false,
-      "blocked": true,
-      "errors": [
-        "Cannot proceed - Check A blocked"
-      ],
-      "missing_data": "story_file"
+      "passed": true,
+      "blocking": true,
+      "blocked": false
     },
     "J": {
       "passed": false,
-      "blocked": true,
-      "errors": [
-        "Cannot proceed - Check A blocked"
-      ],
-      "missing_data": "story_file"
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)",
+      "details": {
+        "threshold": 0.8,
+        "scope": "scoped",
+        "coverage": 0.0,
+        "touched_files": [
+          "src/async_crud_mcp/server.py"
+        ],
+        "meets_threshold": false
+      }
     }
   },
-  "convergence_analysis": {
-    "pattern": "blocked",
-    "action": "block",
-    "reason": "story_file_missing"
+  "blocking_check_failed": "J",
+  "error_signatures": [
+    "CoverageError:src/async_crud_mcp/server.py:coverage:0.0%:below 80% threshold"
+  ],
+  "convergence": {
+    "pattern": "passed",
+    "action": "done",
+    "history_length": 0
   },
-  "status": "blocked",
-  "blocked_reason": "story_file_not_found",
-  "phase_outcome": "blocked",
-  "executed_at": "2026-02-14T02:39:12.948843+00:00"
+  "notes": [
+    "Check J (Coverage) failed - blocking check prevents phase B progression",
+    "Touched file src/async_crud_mcp/server.py has 0% coverage",
+    "Overall test suite: 423 passed, 7 skipped, 0 failed",
+    "Phase A fails due to blocking check failure per validation gate requirements"
+  ]
 }

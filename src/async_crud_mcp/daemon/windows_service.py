@@ -262,39 +262,78 @@ def install_service(account=None):
                 existing = win32service.OpenService(
                     hs, svc_name, win32service.SERVICE_ALL_ACCESS
                 )
+                # Stop the service first if it's running
+                try:
+                    win32service.ControlService(
+                        existing, win32service.SERVICE_CONTROL_STOP
+                    )
+                    logger.info(f"Sent stop command to {svc_name}")
+                except Exception:
+                    pass  # Already stopped or can't stop
                 win32service.CloseServiceHandle(existing)
                 logger.info(f"Service {svc_name} already exists, removing...")
                 win32serviceutil.RemoveService(svc_name)
-                time.sleep(1)
             except Exception:
                 pass  # Service doesn't exist, that's fine
 
-            # Create the service
-            h = win32service.CreateService(
-                hs,
-                svc_name,
-                svc_display,
-                win32service.SERVICE_ALL_ACCESS,
-                win32service.SERVICE_WIN32_OWN_PROCESS,
-                win32service.SERVICE_AUTO_START,
-                win32service.SERVICE_ERROR_NORMAL,
-                binary_path,
-                None,   # load order group
-                False,  # bFetchTag
-                None,   # dependencies
-                account,  # service account (None = LocalSystem)
-                None,   # password
+            # Close and reopen SCM handle to release all references,
+            # allowing Windows to finalize the service deletion.
+            # Without this, CreateService fails with error 1072 because
+            # the SCM won't finalize deletion while the calling process
+            # holds any open handle (including the manager handle).
+            win32service.CloseServiceHandle(hs)
+            hs = None
+            time.sleep(2)
+            hs = win32service.OpenSCManager(
+                None, None, win32service.SC_MANAGER_ALL_ACCESS
             )
-            win32service.CloseServiceHandle(h)
+
+            # Retry CreateService with backoff for error 1072
+            # (service still marked for deletion by external handles)
+            max_attempts = 10
+            retry_interval = 3
+            last_error = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    h = win32service.CreateService(
+                        hs,
+                        svc_name,
+                        svc_display,
+                        win32service.SERVICE_ALL_ACCESS,
+                        win32service.SERVICE_WIN32_OWN_PROCESS,
+                        win32service.SERVICE_AUTO_START,
+                        win32service.SERVICE_ERROR_NORMAL,
+                        binary_path,
+                        None,   # load order group
+                        False,  # bFetchTag
+                        None,   # dependencies
+                        account,  # service account (None = LocalSystem)
+                        None,   # password
+                    )
+                    win32service.CloseServiceHandle(h)
+                    break  # Success
+                except win32service.error as e:
+                    if e.winerror == 1072 and attempt < max_attempts:
+                        logger.info(
+                            f"Service marked for deletion, retrying... "
+                            f"({attempt}/{max_attempts})"
+                        )
+                        time.sleep(retry_interval)
+                        last_error = e
+                    else:
+                        raise
+            else:
+                raise last_error or OSError(  # All retries exhausted
+                    f"Service '{svc_name}' is still marked for deletion "
+                    f"after {max_attempts} attempts. Close services.msc, "
+                    f"Task Manager, or any tool holding a handle to the "
+                    f"service and retry."
+                )
 
             # Set description via ChangeServiceConfig2
             try:
                 hs2 = win32service.OpenService(
-                    win32service.OpenSCManager(
-                        None, None, win32service.SC_MANAGER_ALL_ACCESS
-                    ),
-                    svc_name,
-                    win32service.SERVICE_CHANGE_CONFIG,
+                    hs, svc_name, win32service.SERVICE_CHANGE_CONFIG,
                 )
                 try:
                     win32service.ChangeServiceConfig2(
@@ -321,7 +360,8 @@ def install_service(account=None):
                 raise
 
         finally:
-            win32service.CloseServiceHandle(hs)
+            if hs is not None:
+                win32service.CloseServiceHandle(hs)
 
         logger.info(f"Service {svc_name} installed successfully")
 
@@ -416,5 +456,5 @@ def stop_service():
 
 if __name__ == '__main__':
     # Support command-line service management
-    # Usage: python -m async_crud_mcp.daemon.windows.windows_service install|start|stop|remove
+    # Usage: python -m async_crud_mcp.daemon.windows_service install|start|stop|remove
     win32serviceutil.HandleCommandLine(DaemonService)

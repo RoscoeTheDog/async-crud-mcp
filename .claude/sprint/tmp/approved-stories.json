@@ -1,264 +1,158 @@
 {
-  "partition_id": 1,
-  "gap_summary": {
-    "total_deliverables": 87,
-    "new": 0,
-    "modify": 17,
-    "done": 70,
-    "extra": 0
-  },
   "stories": [
     {
       "id": "1",
-      "title": "Align pyproject.toml with spec build layout",
+      "title": "Add ProgramData fallback path to daemon logs command",
       "type": "feature",
-      "description": "The pyproject.toml is missing the src layout configuration required by the spec. The build system should be configured for hatchling with src layout explicitly. The psutil dependency is in [project.optional-dependencies].dev instead of a separate dev section. Entry point exists and most deps are correct.",
+      "description": "The daemon logs command in daemon_cmd.py does not check the ProgramData fallback path on Windows when the primary log path is not found. Per spec d24 AC-d24.5, when running in Windows service context (LocalSystem), logs may be written to %PROGRAMDATA%/async-crud-mcp/logs instead of the user's LOCALAPPDATA path. The logs command should check this alternate location.",
       "acceptance_criteria": [
-        {"id": "AC-1.1", "text": "Build system configured for hatchling with explicit src layout (packages = ['src/async_crud_mcp'] already present, verify wheel targets)"}
+        {"id": "AC-1.1", "text": "daemon logs command checks ProgramData fallback path on Windows when primary log path not found"},
+        {"id": "AC-1.2", "text": "ProgramData path uses PROGRAMDATA environment variable with async-crud-mcp/logs suffix"},
+        {"id": "AC-1.3", "text": "Fallback only triggers on win32 platform"}
       ],
-      "files": ["pyproject.toml"],
+      "files": ["src/async_crud_mcp/cli/daemon_cmd.py"],
       "depends_on": [],
       "risk": "low",
       "points": 1,
-      "gap_sources": ["d1"]
+      "gap_sources": ["d24"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "CLI_COMMANDS.template.md (Daemon Commands)"
+      }
     },
     {
       "id": "2",
-      "title": "Complete CLI init with top-level commands and subgroups",
+      "title": "Add HTTP /health endpoint to server.py",
       "type": "feature",
-      "description": "The CLI __init__.py registers all subcommand groups but is missing: (1) setup as a direct command (not a subgroup), (2) quick-install and uninstall as top-level commands, (3) version command showing __version__. Currently setup_cmd is registered as a subgroup 'setup' and install_cmd as 'install' subgroup. Per spec, setup should be a direct command, quick-install and uninstall should be top-level, and version should display the package version.",
+      "description": "The spec requires a proper HTTP /health endpoint returning status, version, and uptime. Currently server.py only exposes a health_tool() as an MCP tool. A dedicated HTTP /health route should be added so external health monitors and installers can check server health without MCP client setup.",
       "acceptance_criteria": [
-        {"id": "AC-2.1", "text": "setup is a direct top-level command (not a subcommand group)"},
-        {"id": "AC-2.2", "text": "quick-install is a top-level command"},
-        {"id": "AC-2.3", "text": "uninstall is a top-level command"},
-        {"id": "AC-2.4", "text": "version command exists showing __version__ from __init__.py"}
+        {"id": "AC-2.1", "text": "HTTP GET /health endpoint returns JSON with status, version, uptime fields"},
+        {"id": "AC-2.2", "text": "Health endpoint is accessible via plain HTTP (not MCP protocol)"},
+        {"id": "AC-2.3", "text": "Returns 200 OK for healthy status, 503 for unhealthy"},
+        {"id": "AC-2.4", "text": "scripts/test_server.py can check the HTTP /health endpoint"}
       ],
-      "files": ["src/async_crud_mcp/cli/__init__.py"],
+      "files": ["src/async_crud_mcp/server.py", "scripts/test_server.py"],
       "depends_on": [],
-      "risk": "low",
-      "points": 2,
-      "gap_sources": ["d18"]
+      "risk": "medium",
+      "points": 3,
+      "gap_sources": ["d4", "d12"],
+      "drift_metadata": {
+        "max_severity": "major",
+        "classification": "drifted",
+        "spec_section": "SERVICE.template.md + INTEGRATION.template.md (Health Check Endpoints)"
+      }
     },
     {
       "id": "3",
-      "title": "Add missing options to bootstrap CLI commands",
+      "title": "Fix bootstrap_daemon configure_logging retention and add console enqueue",
       "type": "feature",
-      "description": "The bootstrap_cmd.py is missing several options specified in the spec: install needs --force and --use-task-scheduler options; uninstall needs --username and --force options; start needs --username option; stop needs --username option; status needs --username and --json options; list should show active per-user workers. Also missing admin privilege check and elevation for install/uninstall.",
+      "description": "configure_logging() in bootstrap_daemon.py uses retention=3 (int, 3 files) instead of '7 days' string retention per spec. The console handler is also missing enqueue=True for async safety (ADR-005). File handler is missing gz compression.",
       "acceptance_criteria": [
-        {"id": "AC-3.1", "text": "install command has --force and --use-task-scheduler options"},
-        {"id": "AC-3.2", "text": "uninstall command has --username and --force options"},
-        {"id": "AC-3.3", "text": "start command has --username option"},
-        {"id": "AC-3.4", "text": "stop command has --username option"},
-        {"id": "AC-3.5", "text": "status command has --username and --json options"},
-        {"id": "AC-3.6", "text": "Admin privilege check and elevation for install/uninstall"}
+        {"id": "AC-3.1", "text": "configure_logging() file handler uses retention='7 days' string format"},
+        {"id": "AC-3.2", "text": "configure_logging() console handler has enqueue=True for async safety"},
+        {"id": "AC-3.3", "text": "configure_logging() adds gz compression to file handler"}
       ],
-      "files": ["src/async_crud_mcp/cli/bootstrap_cmd.py", "tests/test_cli/test_bootstrap_cmd.py"],
+      "files": ["src/async_crud_mcp/daemon/bootstrap_daemon.py"],
       "depends_on": [],
-      "risk": "medium",
-      "points": 3,
-      "gap_sources": ["d19", "d79"]
+      "risk": "low",
+      "points": 1,
+      "gap_sources": ["d7"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "BOOTSTRAP.template.md + PYTHON_STACK.template.md (Logging Standard)"
+      }
     },
     {
       "id": "4",
-      "title": "Add missing options to daemon CLI commands",
+      "title": "Align installer.py interactive menu with spec options",
       "type": "feature",
-      "description": "The daemon_cmd.py is missing several spec options: start should set daemon.enabled=true in config (currently launches process directly); stop should set daemon.enabled=false (currently unimplemented placeholder); restart should cycle enabled flag with wait; status needs --username, --all, --json options; logs needs --lines, --username, --user options. All commands should use config file mutation (ADR-003) instead of direct process control.",
+      "description": "scripts/installer.py interactive menu shows Install/Uninstall/Test/Exit but spec expects Install/Reinstall/Uninstall/Quit as the four menu options. Align the menu items: rename 'Test' to 'Reinstall' (with stop+reinstall+restart logic), rename 'Exit' to 'Quit', and reorder to match spec ordering (1=Install, 2=Reinstall, 3=Uninstall, 4=Quit).",
       "acceptance_criteria": [
-        {"id": "AC-4.1", "text": "start command sets daemon.enabled=true in config (ADR-003)"},
-        {"id": "AC-4.2", "text": "stop command sets daemon.enabled=false in config"},
-        {"id": "AC-4.3", "text": "restart command cycles the enabled flag with wait"},
-        {"id": "AC-4.4", "text": "status command has --username, --all, --json options"},
-        {"id": "AC-4.5", "text": "logs command has --follow, --lines, --username, --user options"},
-        {"id": "AC-4.6", "text": "Logs checks ProgramData path for Windows service per-user logs"}
-      ],
-      "files": ["src/async_crud_mcp/cli/daemon_cmd.py", "tests/test_cli/test_daemon_cmd.py"],
-      "depends_on": [],
-      "risk": "medium",
-      "points": 3,
-      "gap_sources": ["d20", "d80"]
-    },
-    {
-      "id": "5",
-      "title": "Add missing options to config CLI commands",
-      "type": "feature",
-      "description": "The config_cmd.py is missing several options from the spec: init command needs --port, --no-interactive, and --username options; show command needs --username and --json options; validate should use pydantic model validation.",
-      "acceptance_criteria": [
-        {"id": "AC-5.1", "text": "init command has --port, --no-interactive, --username options"},
-        {"id": "AC-5.2", "text": "show command has --username and --json options"},
-        {"id": "AC-5.3", "text": "validate command uses pydantic model validation"}
-      ],
-      "files": ["src/async_crud_mcp/cli/config_cmd.py", "tests/test_cli/test_config_cmd.py"],
-      "depends_on": [],
-      "risk": "low",
-      "points": 2,
-      "gap_sources": ["d21", "d81"]
-    },
-    {
-      "id": "6",
-      "title": "Align setup wizard with spec steps",
-      "type": "feature",
-      "description": "The setup_cmd.py has a wizard but does not follow the spec's 6-step flow. Missing: --port, --no-interactive, --force options on the setup command itself; Step 1 prerequisites check; Step 2 auto-discover port if default in use; Step 5 configure Claude Code CLI; Step 6 verify server connectivity. Currently the wizard flow mixes config init and service install but misses the per-user directory creation, Claude Code configuration, and server verification steps. Also, 'no admin required' is not enforced.",
-      "acceptance_criteria": [
-        {"id": "AC-6.1", "text": "setup command has --port, --no-interactive, --force options"},
-        {"id": "AC-6.2", "text": "Step 1: Check prerequisites"},
-        {"id": "AC-6.3", "text": "Step 2: Find available port (auto-discover if default in use)"},
-        {"id": "AC-6.4", "text": "Step 3: Create per-user directories (config, logs)"},
-        {"id": "AC-6.5", "text": "Step 5: Configure Claude Code CLI"},
-        {"id": "AC-6.6", "text": "Step 6: Verify server connectivity"},
-        {"id": "AC-6.7", "text": "No admin required"}
-      ],
-      "files": ["src/async_crud_mcp/cli/setup_cmd.py", "tests/test_cli/test_setup_cmd.py"],
-      "depends_on": [],
-      "risk": "medium",
-      "points": 3,
-      "gap_sources": ["d22", "d82"]
-    },
-    {
-      "id": "7",
-      "title": "Align install commands with spec options",
-      "type": "feature",
-      "description": "The install_cmd.py is missing several spec-required options: quick_install needs --force, --port, --no-start options (currently only has --yes); uninstall needs --keep-config/--remove-config, --keep-logs/--remove-logs, --force options; admin check and elevation for quick-install on Windows is missing. The quick-install flow should install service, generate config, start service, enable daemon. Uses Rich console with fallback.",
-      "acceptance_criteria": [
-        {"id": "AC-7.1", "text": "quick_install has --force, --port, --no-start options"},
-        {"id": "AC-7.2", "text": "uninstall has --keep-config/--remove-config, --keep-logs/--remove-logs, --force options"},
-        {"id": "AC-7.3", "text": "Admin check and elevation for quick-install on Windows"},
-        {"id": "AC-7.4", "text": "Uses Rich console for output with fallback"}
-      ],
-      "files": ["src/async_crud_mcp/cli/install_cmd.py", "tests/test_cli/test_install_cmd.py"],
-      "depends_on": [],
-      "risk": "medium",
-      "points": 2,
-      "gap_sources": ["d23", "d83"]
-    },
-    {
-      "id": "8",
-      "title": "Add port validation and from_file class method to config",
-      "type": "feature",
-      "description": "The config.py is missing several spec requirements: (1) Port validation: ge=1024, le=65535 or null - currently no port range validation; (2) Host validation: non-empty string; (3) Settings.from_file() class method for per-user config loading - currently only get_settings() function; (4) _strip_comment_fields() function; (5) _force_reload option on get_settings(); (6) session_poll_seconds is not in DaemonConfig defaults from spec (it exists but should be verified).",
-      "acceptance_criteria": [
-        {"id": "AC-8.1", "text": "Port validation: ge=1024, le=65535 or null"},
-        {"id": "AC-8.2", "text": "Host validation: non-empty string"},
-        {"id": "AC-8.3", "text": "Settings.from_file(config_path) class method"},
-        {"id": "AC-8.4", "text": "get_settings() singleton accessor with _force_reload option"},
-        {"id": "AC-8.5", "text": "_strip_comment_fields() for _/$-prefixed comment removal"}
-      ],
-      "files": ["src/async_crud_mcp/config.py", "tests/test_config.py"],
-      "depends_on": [],
-      "risk": "low",
-      "points": 2,
-      "gap_sources": ["d24", "d59"]
-    },
-    {
-      "id": "9",
-      "title": "Add port pre-flight exit code and security logging to server",
-      "type": "feature",
-      "description": "The server.py is mostly complete but has gaps: (1) Exit code 48 on EADDRINUSE (port conflict) - currently raises RuntimeError without specific exit code; (2) Localhost binding security: logs security warning for non-localhost binding - missing; (3) Health endpoint should return status, version, uptime as specified.",
-      "acceptance_criteria": [
-        {"id": "AC-9.1", "text": "Exit code 48 on EADDRINUSE (port conflict)"},
-        {"id": "AC-9.2", "text": "Logs security warning for non-localhost binding"},
-        {"id": "AC-9.3", "text": "Health endpoint returns status, version, uptime"}
-      ],
-      "files": ["src/async_crud_mcp/server.py", "tests/test_server.py"],
-      "depends_on": ["8"],
-      "risk": "low",
-      "points": 2,
-      "gap_sources": ["d25", "d60"]
-    },
-    {
-      "id": "10",
-      "title": "Align paths.py APP_NAME import with ADR-009",
-      "type": "feature",
-      "description": "The paths.py imports APP_NAME from ..config which is correct for most purposes but the spec says 'APP_NAME set to async-crud-mcp (ADR-009 single name convention)' as a local constant. The current approach works but could break if config import fails. Also missing XDG_CACHE_HOME support mentioned in spec acceptance criteria. The _is_windows_service_context and _get_user_profile_path are present and correct. Overall well-aligned but needs XDG_CACHE_HOME.",
-      "acceptance_criteria": [
-        {"id": "AC-10.1", "text": "XDG compliance includes XDG_CACHE_HOME support on Linux"},
-        {"id": "AC-10.2", "text": "APP_NAME defined locally as fallback or verified import from config"}
-      ],
-      "files": ["src/async_crud_mcp/daemon/paths.py"],
-      "depends_on": [],
-      "risk": "low",
-      "points": 1,
-      "gap_sources": ["d5"]
-    },
-    {
-      "id": "11",
-      "title": "Fix installer service install and add post-install steps",
-      "type": "feature",
-      "description": "The installer.py install_service() looks for a non-existent service_installer.bat. Per template spec, it should use venv python to call CLI 'bootstrap install' (same pattern as template's step_install_service). Also missing post-install steps: running setup wizard and server tests. NOTE: Several spec ACs are ALREADY DONE from earlier fixes: privileges check, preflight checks, uv venv --managed-python, pywin32 DLL config, exit codes, menu (4 options), error handling, uv pip install.",
-      "acceptance_criteria": [
-        {"id": "AC-11.1", "text": "install_service() uses venv python -m async_crud_mcp bootstrap install instead of non-existent service_installer.bat"},
-        {"id": "AC-11.2", "text": "Runs setup wizard post-install via venv python -m async_crud_mcp setup --no-interactive"},
-        {"id": "AC-11.3", "text": "Runs server tests post-install via test_server.py"},
-        {"id": "AC-11.4", "text": "Logging to installer.log file for debugging"},
-        {"id": "AC-11.5", "text": "InstallerContext or step tracking for clear progress reporting"}
+        {"id": "AC-4.1", "text": "Interactive menu option 1 is 'Install'"},
+        {"id": "AC-4.2", "text": "Interactive menu option 2 is 'Reinstall' which stops existing service, reinstalls, and restarts"},
+        {"id": "AC-4.3", "text": "Interactive menu option 3 is 'Uninstall'"},
+        {"id": "AC-4.4", "text": "Interactive menu option 4 is 'Quit' (replaces 'Exit')"}
       ],
       "files": ["scripts/installer.py"],
       "depends_on": [],
-      "risk": "high",
-      "points": 4,
-      "gap_sources": ["d28"]
-    },
-    {
-      "id": "12",
-      "title": "Add config_init DEFAULT_PORT alignment and session_poll_seconds",
-      "type": "feature",
-      "description": "The config_init.py has DEFAULT_PORT = 8720 but the spec says the placeholder should be the default port. The spec also mentions session_poll_seconds config parameter in generate_default_config. The current generate_default_config lacks session_poll_seconds. Also init_config is missing the host parameter passthrough.",
-      "acceptance_criteria": [
-        {"id": "AC-12.1", "text": "generate_default_config() includes session_poll_seconds"},
-        {"id": "AC-12.2", "text": "DEFAULT_PORT matches spec default (8422 per target_project or 8720 as current)"}
-      ],
-      "files": ["src/async_crud_mcp/daemon/config_init.py"],
-      "depends_on": [],
-      "risk": "low",
-      "points": 1,
-      "gap_sources": ["d11"]
-    },
-    {
-      "id": "13",
-      "title": "Add --port, --skip-logs, --log-age to test_server.py",
-      "type": "feature",
-      "description": "The scripts/test_server.py is missing CLI options specified in spec: --port for custom port, --skip-logs to skip log file age check, --log-age for max log age. Currently it hardcodes port 8765 and has no log age checking. Also needs clear pass/fail output improvement.",
-      "acceptance_criteria": [
-        {"id": "AC-13.1", "text": "--port option for custom port"},
-        {"id": "AC-13.2", "text": "--skip-logs option to skip log file age check"},
-        {"id": "AC-13.3", "text": "--log-age option for max log age"},
-        {"id": "AC-13.4", "text": "Clear pass/fail output"}
-      ],
-      "files": ["scripts/test_server.py"],
-      "depends_on": [],
       "risk": "low",
       "points": 2,
-      "gap_sources": ["d33"]
+      "gap_sources": ["d28"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "partial",
+        "spec_section": "INSTALLER.template.md"
+      }
     },
     {
-      "id": "14",
-      "title": "Enhance README with full spec documentation",
+      "id": "5",
+      "title": "Enhance README with CLI usage examples and two-layer architecture overview",
       "type": "feature",
-      "description": "The README.md has basic content but is missing significant spec requirements: (1) Installation instructions referencing setup.bat/setup.sh; (2) Usage examples for CLI commands (bootstrap, daemon, config, setup, install); (3) Architecture overview with two-layer design (bootstrap layer + MCP server layer). Currently just has a brief overview and basic getting started.",
+      "description": "README.md is missing explicit CLI command usage examples and the two-layer architecture overview (daemon service + MCP server). The spec requires these sections for user onboarding.",
       "acceptance_criteria": [
-        {"id": "AC-14.1", "text": "Installation instructions (quick install, setup.bat/setup.sh)"},
-        {"id": "AC-14.2", "text": "Usage examples for CLI commands"},
-        {"id": "AC-14.3", "text": "Architecture overview with two-layer design"}
+        {"id": "AC-5.1", "text": "README contains Quick Install section showing setup.bat / setup.sh usage"},
+        {"id": "AC-5.2", "text": "README contains CLI usage examples for bootstrap, daemon, config subcommands"},
+        {"id": "AC-5.3", "text": "README contains Architecture section describing two-layer design (OS service + MCP server)"},
+        {"id": "AC-5.4", "text": "README describes per-user daemon model and multi-user support"}
       ],
       "files": ["README.md"],
       "depends_on": [],
       "risk": "low",
       "points": 2,
-      "gap_sources": ["d87"]
+      "gap_sources": ["d87"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "README.template.md"
+      }
     },
     {
-      "id": "15",
-      "title": "Add .ruff_cache to .gitignore",
+      "id": "6",
+      "title": "Align pyproject.toml requires-python and add missing mcp dependency",
       "type": "feature",
-      "description": "The .gitignore is missing the .ruff_cache/ pattern specified in the acceptance criteria. All other required patterns are present.",
+      "description": "pyproject.toml has requires-python='>=3.12' but spec requires '>=3.10' for broader compatibility. Also missing 'mcp>=1.0.0' from core dependencies per spec AC-d1.3. The ruff target-version should also be updated from py312 to py310 to match.",
       "acceptance_criteria": [
-        {"id": "AC-15.1", "text": ".gitignore includes .ruff_cache/ pattern"}
+        {"id": "AC-6.1", "text": "requires-python = '>=3.10' in pyproject.toml"},
+        {"id": "AC-6.2", "text": "mcp>=1.0.0 added to [project.dependencies]"},
+        {"id": "AC-6.3", "text": "tool.ruff target-version updated from 'py312' to 'py310'"},
+        {"id": "AC-6.4", "text": "All existing tests still pass with the updated config"}
       ],
-      "files": [".gitignore"],
+      "files": ["pyproject.toml"],
       "depends_on": [],
       "risk": "low",
       "points": 1,
-      "gap_sources": ["d85"]
+      "gap_sources": ["d1"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "PYPROJECT.template.md"
+      }
+    },
+    {
+      "id": "7",
+      "title": "Rename bootstrap_service.py to windows_service.py per ADR-014",
+      "type": "feature",
+      "description": "The spec and ADR-014 require the Windows pywin32 service file to be named windows_service.py, but the project uses bootstrap_service.py. Rename the file and update all imports, references, docstrings, and documentation that reference the old name. Files affected: daemon/installer.py (2 imports), daemon/windows/__init__.py (import + docstring), daemon/windows/dispatcher.py (comment), docs/PRD.md (2 references).",
+      "acceptance_criteria": [
+        {"id": "AC-7.1", "text": "File renamed from src/async_crud_mcp/daemon/windows/bootstrap_service.py to windows_service.py"},
+        {"id": "AC-7.2", "text": "Import in daemon/installer.py updated: from .windows.windows_service import install_service"},
+        {"id": "AC-7.3", "text": "Import in daemon/installer.py updated: from .windows.windows_service import uninstall_service"},
+        {"id": "AC-7.4", "text": "Import in daemon/windows/__init__.py updated: from .windows_service import (...)"},
+        {"id": "AC-7.5", "text": "Docstring/comment references in __init__.py, dispatcher.py, and docs/PRD.md updated"},
+        {"id": "AC-7.6", "text": "No remaining references to bootstrap_service in source code (excluding archives/sprint tmp)"}
+      ],
+      "files": ["src/async_crud_mcp/daemon/windows/bootstrap_service.py", "src/async_crud_mcp/daemon/installer.py", "src/async_crud_mcp/daemon/windows/__init__.py", "src/async_crud_mcp/daemon/windows/dispatcher.py", "docs/PRD.md"],
+      "depends_on": [],
+      "risk": "medium",
+      "points": 2,
+      "gap_sources": ["d15"],
+      "drift_metadata": {
+        "max_severity": "major",
+        "classification": "drifted",
+        "spec_section": "SERVICE.template.md + ADR-014"
+      }
     }
-  ],
-  "uncovered_extras": []
+  ]
 }

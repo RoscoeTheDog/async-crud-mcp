@@ -9,7 +9,12 @@ This package provides cross-platform daemon/service support including:
 - Health checking
 - Platform-specific installers
 - Bootstrap daemon orchestration
+
+ADR-016: Flat layout with eager conditional imports.
+All platform-specific modules live directly in daemon/, not in subpackages.
 """
+
+import sys
 
 from .bootstrap_daemon import BootstrapDaemon
 from .config_init import init_config, load_settings_from_file
@@ -40,6 +45,20 @@ from .paths import (
     get_venv_dir,
 )
 from .session_detector import get_active_sessions, is_user_session_active
+
+# Windows-specific (only available with pywin32)
+if sys.platform == 'win32':
+    try:
+        from .dispatcher import MultiUserDispatcher
+        from .windows_service import (
+            DaemonService,
+            install_service,
+            uninstall_service,
+            start_service,
+            stop_service,
+        )
+    except ImportError:
+        pass  # pywin32 not installed
 
 __all__ = [
     # Bootstrap

@@ -5,6 +5,7 @@ and unauthorized file access. All paths are resolved to their real filesystem
 locations (following symlinks) before validation.
 """
 
+import fnmatch
 import os
 from pathlib import Path
 from typing import List, Optional
@@ -40,11 +41,15 @@ class PathValidator:
         validator.validate('/etc/passwd')  # Raises PathValidationError
     """
 
+    # Characters that indicate a glob pattern (not a literal path prefix)
+    _GLOB_CHARS = frozenset("*?[")
+
     def __init__(
         self,
         base_directories: Optional[List[str]] = None,
         access_rules: Optional[List] = None,
         default_destructive_policy: str = "allow",
+        default_read_policy: str = "allow",
     ):
         """Initialize validator with allowed base directories and access rules.
 
@@ -53,11 +58,16 @@ class PathValidator:
                 Each is resolved to absolute and symlinks are followed.
             access_rules: List of PathRule objects for per-operation access control.
                 Rules are evaluated in priority order (highest first, first-match-wins).
-            default_destructive_policy: Fallback policy when no access rule matches.
+            default_destructive_policy: Fallback policy when no access rule matches
+                for write/update/delete/rename operations.
+                Either "allow" or "deny". Defaults to "allow" for backward compatibility.
+            default_read_policy: Fallback policy when no access rule matches
+                for read/list operations.
                 Either "allow" or "deny". Defaults to "allow" for backward compatibility.
         """
         self._base_directories = base_directories or []
         self._default_destructive_policy = default_destructive_policy
+        self._default_read_policy = default_read_policy
 
         # Pre-sort access rules by priority descending for first-match-wins evaluation
         self._access_rules = sorted(
@@ -76,14 +86,25 @@ class PathValidator:
             self._resolved_bases.append(normalized)
 
         # Pre-resolve access rule paths for efficient matching
+        # Each entry is (resolved_path_or_pattern, rule, is_glob)
         self._resolved_rules: List[tuple] = []
         for rule in self._access_rules:
             rule_path = rule.path
-            if not os.path.isabs(rule_path):
-                rule_path = os.path.join(os.getcwd(), rule_path)
-            resolved = os.path.realpath(os.path.expanduser(rule_path))
-            normalized = os.path.normcase(os.path.normpath(resolved))
-            self._resolved_rules.append((normalized, rule))
+            is_glob = bool(self._GLOB_CHARS & set(rule_path))
+
+            if is_glob:
+                # Glob patterns: normalize separators to forward slashes for
+                # consistent fnmatch matching, apply case-folding on Windows
+                pattern = rule_path.replace("\\", "/")
+                pattern = os.path.normcase(pattern)
+                self._resolved_rules.append((pattern, rule, True))
+            else:
+                # Literal prefix paths: resolve to absolute as before
+                if not os.path.isabs(rule_path):
+                    rule_path = os.path.join(os.getcwd(), rule_path)
+                resolved = os.path.realpath(os.path.expanduser(rule_path))
+                normalized = os.path.normcase(os.path.normpath(resolved))
+                self._resolved_rules.append((normalized, rule, False))
 
     def validate(self, path: str) -> Path:
         """Validate a path against the base directory whitelist.
@@ -164,16 +185,18 @@ class PathValidator:
         """Get the resolved and normalized base directories used for validation."""
         return self._resolved_bases.copy()
 
+    # Operation types considered "read" for default policy selection
+    _READ_OPS = frozenset(("read", "list"))
+
     def validate_operation(self, path: str, op_type: str) -> Path:
         """Validate a path for a specific operation type against access rules.
 
         First checks base directory containment via validate(), then evaluates
-        access rules in priority order (first-match-wins). Read operations are
-        not subject to access rules.
+        access rules in priority order (first-match-wins).
 
         Args:
             path: Path to validate (can be relative or absolute)
-            op_type: Operation type ("write", "update", "delete", "rename")
+            op_type: Operation type ("read", "list", "write", "update", "delete", "rename")
 
         Returns:
             Validated Path object (absolute, resolved)
@@ -185,9 +208,16 @@ class PathValidator:
         # Step 1: Base directory validation (unchanged behavior)
         validated = self.validate(path)
 
-        # Step 2: If no access rules configured, skip rule evaluation
+        # Select the correct default policy based on operation type
+        default_policy = (
+            self._default_read_policy
+            if op_type in self._READ_OPS
+            else self._default_destructive_policy
+        )
+
+        # Step 2: If no access rules configured, apply default policy
         if not self._resolved_rules:
-            if self._default_destructive_policy == "deny":
+            if default_policy == "deny":
                 raise AccessDeniedError(
                     f"Operation '{op_type}' denied on {path}: "
                     f"no access rules configured and default policy is 'deny'"
@@ -197,26 +227,40 @@ class PathValidator:
         # Step 3: Normalize the validated path for rule matching
         normalized = os.path.normcase(os.path.normpath(str(validated)))
 
+        # Also prepare a forward-slash version for glob matching
+        normalized_fwd = normalized.replace("\\", "/")
+
         # Step 4: Evaluate rules in priority order (first match wins)
-        for rule_path, rule in self._resolved_rules:
+        for rule_path, rule, is_glob in self._resolved_rules:
             # Check if operation type matches this rule
             if "*" not in rule.operations and op_type not in rule.operations:
                 continue
 
-            # Check if path matches this rule (prefix match)
-            rule_with_sep = rule_path if rule_path.endswith(os.sep) else rule_path + os.sep
-            normalized_with_sep = normalized if normalized.endswith(os.sep) else normalized + os.sep
+            # Check if path matches this rule
+            if is_glob:
+                # Glob pattern matching using fnmatch
+                if fnmatch.fnmatch(normalized_fwd, rule_path):
+                    if rule.action == "deny":
+                        raise AccessDeniedError(
+                            f"Operation '{op_type}' denied on {path}: "
+                            f"blocked by access rule for '{rule.path}'"
+                        )
+                    return validated
+            else:
+                # Literal prefix matching (original behavior)
+                rule_with_sep = rule_path if rule_path.endswith(os.sep) else rule_path + os.sep
+                normalized_with_sep = normalized if normalized.endswith(os.sep) else normalized + os.sep
 
-            if normalized == rule_path or normalized_with_sep.startswith(rule_with_sep):
-                if rule.action == "deny":
-                    raise AccessDeniedError(
-                        f"Operation '{op_type}' denied on {path}: "
-                        f"blocked by access rule for '{rule.path}'"
-                    )
-                return validated
+                if normalized == rule_path or normalized_with_sep.startswith(rule_with_sep):
+                    if rule.action == "deny":
+                        raise AccessDeniedError(
+                            f"Operation '{op_type}' denied on {path}: "
+                            f"blocked by access rule for '{rule.path}'"
+                        )
+                    return validated
 
         # Step 5: No rule matched, apply default policy
-        if self._default_destructive_policy == "deny":
+        if default_policy == "deny":
             raise AccessDeniedError(
                 f"Operation '{op_type}' denied on {path}: "
                 f"no matching access rule and default policy is 'deny'"

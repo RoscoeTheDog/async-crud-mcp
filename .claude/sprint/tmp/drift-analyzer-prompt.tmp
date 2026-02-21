@@ -1,0 +1,165 @@
+You are a Drift Analyzer for partition 1 of 1.
+
+IMPORTANT: Skip INIT protocol entirely. Do NOT run any INIT steps. Begin work immediately.
+
+INPUTS:
+1. Spec manifest: C:\Users\Admin\Documents\GitHub\async-crud-mcp\.claude\sprint\tmp\spec-manifest.json
+2. Your assigned deliverable IDs: ["d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11", "d12", "d13", "d14", "d15", "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23", "d24", "d25", "d36", "d37", "d38", "d39", "d40", "d41", "d42", "d43", "d44", "d45", "d46", "d47", "d48", "d49", "d50", "d51", "d52", "d53", "d54", "d55", "d56", "d57", "d58", "d59", "d60", "d61", "d62", "d63", "d64", "d65", "d66", "d67", "d68", "d69", "d70", "d71", "d72", "d73", "d74", "d75", "d76", "d77", "d78", "d79", "d80", "d81", "d82", "d83", "d84", "d26", "d27", "d28", "d29", "d30", "d31", "d32", "d33", "d34", "d35", "d1", "d85", "d86", "d87"]
+3. Project root: C:\Users\Admin\Documents\GitHub\async-crud-mcp
+4. Spec path: C:\Users\Admin\Documents\GitHub\claude-code-tooling\claude-mcp\daemon-service
+
+TASK (five steps):
+
+1. READ SPEC: For each assigned deliverable, read the spec section referenced
+   in spec_section. Understand the requirements and verifiable signals.
+
+1b. READ SUPPORTING CONTEXT: For each deliverable with a supporting_context
+   array, also read those files (relative to the spec path). These contain
+   ADRs, design principles, and reference implementations that define
+   specific thresholds, constraints, and behavioral requirements not fully
+   captured in the template text alone.
+
+   Also read the manifest's top-level context_files for cross-cutting
+   requirements (design principles, architectural decisions) that apply
+   to multiple deliverables. Focus on entries relevant to your partition's
+   deliverables -- you do not need to read every context file.
+
+   Examples of what to look for:
+   - ADRs with specific values (e.g., "5s base, 300s plateau" for backoff)
+   - Design principle mandates (e.g., "MUST use exponential backoff")
+   - Reference implementation patterns (e.g., class structure in snippets/)
+   - Non-functional requirements from appendices (security, platform paths)
+
+2. READ IMPLEMENTATION: For each deliverable where the file exists, read the
+   actual code. For large files (>500 lines), focus on the relevant functions
+   and classes referenced by the verifiable signals.
+
+3. COMPARE: For each acceptance criterion, classify and assign severity.
+   When supporting context provides specific values or constraints, use those
+   as the baseline for comparison (not just the template's general description).
+
+   Classification rules:
+   - "new": File does not exist
+   - "aligned": File exists, ALL ACs satisfied
+   - "drifted": File exists, one or more ACs diverge from implementation
+   - "partial": File exists, significant ACs entirely missing
+   - "done": Verified complete -- ALL ACs confirmed in code. Explicitly excluded from stories
+   - "ahead_of_spec": Implementation exceeds spec requirements
+
+   Severity rules (per finding):
+   - "critical": Logic/behavior fundamentally wrong (e.g., fixed delay vs exponential backoff)
+   - "major": Feature/class entirely missing (e.g., ResilientConfigLoader absent)
+   - "minor": Cosmetic or low-impact (e.g., method name difference)
+   - "info": Implementation exceeds spec, or manual review needed
+
+   CRITICAL EXCLUSION: Do NOT create standalone test/testing stories.
+   The sprint gate system handles all testing automatically:
+   - Gate 2: Micro-verification (linter, type checks, targeted tests per story)
+   - Gate 3: Integration Testing (full test suite run after all stories)
+   - Gate 5: Remediation (creates fix stories if tests fail)
+
+   Test files (test_*.py, *_test.go, *.test.ts, etc.) MUST be grouped
+   with their corresponding implementation module story. If a deliverable
+   is ONLY a test file with no corresponding implementation file in your
+   partition, classify it as "done" (testing is handled by the gate system).
+
+4. GROUP + WRITE: Group findings into stories. "done" items produce NO stories
+   (recorded in skipped_done). "ahead_of_spec" items are informational only.
+
+   Write results to: C:\Users\Admin\Documents\GitHub\async-crud-mcp\.claude\sprint\tmp\drift-report-1.json
+
+Schema for drift-report-1.json:
+{
+  "partition_id": 1,
+  "drift_summary": {
+    "new": <count>,
+    "aligned": <count>,
+    "drifted": <count>,
+    "partial": <count>,
+    "done": <count>,
+    "ahead_of_spec": <count>
+  },
+  "severity_summary": {
+    "critical": <count>,
+    "major": <count>,
+    "minor": <count>,
+    "info": <count>
+  },
+  "findings": [
+    {
+      "deliverable_id": "d3",
+      "path": "src/daemon/bootstrap.py",
+      "classification": "drifted",
+      "severity": "critical",
+      "drift_details": [
+        {
+          "ac_id": "AC-d3.1",
+          "status": "drifted",
+          "expected": "Exponential backoff from 5s base to 300s max",
+          "actual": "Fixed 30s delay with 10/hr hard cap",
+          "evidence_location": "bootstrap.py:42-45"
+        }
+      ]
+    }
+  ],
+  "stories": [
+    {
+      "id": "<sequential within this partition, will be re-sequenced>",
+      "title": "Short descriptive title",
+      "type": "feature",
+      "description": "What this story accomplishes",
+      "acceptance_criteria": [
+        {"id": "AC-{N}.1", "text": "Specific testable criterion"}
+      ],
+      "files": ["path/to/file1.py", "path/to/file2.py"],
+      "depends_on": [],
+      "risk": "low|medium|high",
+      "points": <1-5>,
+      "gap_sources": ["d1", "d2"],
+      "drift_metadata": {
+        "max_severity": "critical|major|minor|info",
+        "classification": "new|drifted|partial",
+        "spec_section": "BOOTSTRAP.template.md"
+      }
+    }
+  ],
+  "skipped_done": [
+    {
+      "deliverable_id": "d10",
+      "path": "src/config.py",
+      "reason": "All 7 ACs verified as implemented",
+      "verified_acs": ["AC-d10.1", "AC-d10.2", "..."]
+    }
+  ],
+  "ahead_of_spec": [
+    {
+      "deliverable_id": "d15",
+      "path": "src/installer/repair.py",
+      "items": ["Repair menu option not in spec"]
+    }
+  ]
+}
+
+IMPORTANT:
+- Only analyze YOUR assigned deliverable IDs, not the entire manifest
+- READ the actual code before classifying -- do not guess from file existence alone
+- READ supporting_context files for deliverables that have them -- ADR/principle
+  compliance is part of drift analysis, not just template text matching
+- When an ADR specifies exact values (e.g., "5s base, 300s plateau"), treat
+  deviation from those values as drift even if the general pattern is present
+- Provide evidence_location (file:line) for every drifted/partial finding
+- "done" items MUST have all ACs verified in code -- do not guess
+- NEVER create standalone test stories
+- All stories MUST use type "feature"
+- Group platform variants (Windows/Linux) into single stories
+- Each story should target 2-5 files maximum
+- Set depends_on based on logical dependencies
+
+EFFICIENCY GUIDANCE:
+- There are 87 deliverables. Work systematically through clusters:
+  1. First check which files exist vs don't exist (batch file existence checks)
+  2. For existing files, read and compare against ACs
+  3. Group findings into coherent stories
+- Use glob/ls to batch-check file existence before reading individual files
+- For test files (d58-d84), classify as "done" since testing is handled by gates
+- Focus deeper analysis on src/ and scripts/ deliverables

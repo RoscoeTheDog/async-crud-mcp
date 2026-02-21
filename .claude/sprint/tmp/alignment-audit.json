@@ -1,0 +1,380 @@
+{
+  "audit_status": "auto_corrected",
+  "auto_applied": {
+    "confidence": "high",
+    "actions": [
+      {
+        "action": "remove_duplicate",
+        "details": "Removed original Story 2 ('Add --json flag to daemon status command and verify logs --follow') because all 6 ACs are already implemented in daemon_cmd.py: status has --json/-j (line 155), --all/-a (line 154), --username/-u (line 153); logs has --follow/-f (line 206), --lines/-n (line 207), --username/-u (line 208), --user (line 209). Replaced with new story targeting actual d24 gap: ProgramData fallback in logs command (AC-d24.5).",
+        "story_ids_affected": ["2"]
+      },
+      {
+        "action": "add_story",
+        "details": "Added d18 (systemd.service), d19 (systemd_installer.sh), d20 (launchd.plist), d21 (launchd_installer.sh) to skipped_done. All four files exist and meet their spec ACs: systemd.service has Type=simple/Restart=always/RestartSec=30/WantedBy=default.target; systemd_installer.sh has daemon-reload/enable/start + linger check; launchd.plist has correct Label/RunAtLoad/KeepAlive; launchd_installer.sh has launchctl load to ~/Library/LaunchAgents/.",
+        "story_ids_affected": []
+      }
+    ]
+  },
+  "flagged_for_review": [
+    {
+      "story_id": null,
+      "concern": "d1 (pyproject.toml) is not covered by any story or skipped_done. File exists but has drift: requires-python='>=3.12' vs spec '>=3.10', and missing 'mcp>=1.0.0' from core dependencies (spec AC-d1.3). Consider adding a story or verifying the >=3.12 is an intentional project override.",
+      "confidence": "medium"
+    },
+    {
+      "story_id": null,
+      "concern": "d15 (windows_service.py): Spec requires file to be named 'windows_service.py' per ADR-014, but implementation is at 'bootstrap_service.py'. The skipped_done entry matched the wrong path. The file functionally implements the spec ACs but the naming violates ADR-014. Consider adding a rename story or accepting the deviation.",
+      "confidence": "medium"
+    },
+    {
+      "story_id": "6",
+      "concern": "Story 6 ACs are mostly already implemented: AC-6.1 (uv venv --managed-python at line 132), AC-6.2 (pywin32 DLL config at line 174+), AC-6.4 (EXIT_CANCELLED=130). The interactive menu has Install/Uninstall/Test/Exit but spec says Install/Reinstall/Uninstall/Quit. Story may need scope reduction to only address the menu naming mismatch and service install flow verification.",
+      "confidence": "medium"
+    },
+    {
+      "story_id": "3",
+      "concern": "Story 3 adds --keep-config/--keep-logs flags. The current uninstall already defaults to keeping (not removing) config/logs via --remove-config/--remove-logs opt-in flags. Adding explicit --keep-* flags is technically spec-compliant but adds redundant flags. Verify this matches the project's CLI design intent.",
+      "confidence": "low"
+    }
+  ],
+  "final_stories": [
+    {
+      "id": "1",
+      "title": "Align DEFAULT_PORT to 8422 across config_init.py and config.py",
+      "type": "feature",
+      "description": "The spec defines default_port=8422 for the async-crud-mcp target project, but both config_init.py and config.py use DEFAULT_PORT=8720. Update the default port constant and all references (docstrings, comments) to match the spec target.",
+      "acceptance_criteria": [
+        {"id": "AC-1.1", "text": "DEFAULT_PORT = 8422 in src/async_crud_mcp/daemon/config_init.py"},
+        {"id": "AC-1.2", "text": "DaemonConfig.port default = 8422 in src/async_crud_mcp/config.py"},
+        {"id": "AC-1.3", "text": "health.py port default updated from 8720 to 8422"},
+        {"id": "AC-1.4", "text": "Docstrings and inline comments referencing port 8720 updated to 8422"},
+        {"id": "AC-1.5", "text": "All existing tests pass after the port change"}
+      ],
+      "files": ["src/async_crud_mcp/daemon/config_init.py", "src/async_crud_mcp/config.py", "src/async_crud_mcp/daemon/health.py"],
+      "depends_on": [],
+      "risk": "low",
+      "points": 1,
+      "gap_sources": ["d10", "d5"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "CONFIG.template.md + SSOT/port-assignment.md"
+      }
+    },
+    {
+      "id": "2",
+      "title": "Add ProgramData fallback path to daemon logs command",
+      "type": "feature",
+      "description": "The daemon logs command in daemon_cmd.py does not check the ProgramData fallback path on Windows when the primary log path is not found. Per spec d24 AC-d24.5, when running in Windows service context (LocalSystem), logs may be written to %PROGRAMDATA%/async-crud-mcp/logs instead of the user's LOCALAPPDATA path. The logs command should check this alternate location.",
+      "acceptance_criteria": [
+        {"id": "AC-2.1", "text": "daemon logs command checks ProgramData fallback path on Windows when primary log path not found"},
+        {"id": "AC-2.2", "text": "ProgramData path uses PROGRAMDATA environment variable with async-crud-mcp/logs suffix"},
+        {"id": "AC-2.3", "text": "Fallback only triggers on win32 platform"}
+      ],
+      "files": ["src/async_crud_mcp/cli/daemon_cmd.py"],
+      "depends_on": [],
+      "risk": "low",
+      "points": 1,
+      "gap_sources": ["d24"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "CLI_COMMANDS.template.md (Daemon Commands)"
+      }
+    },
+    {
+      "id": "3",
+      "title": "Add --keep-config and --keep-logs flags to uninstall command",
+      "type": "feature",
+      "description": "The uninstall command in install_cmd.py uses --remove-config and --remove-logs flags but spec d27 requires both positive (--keep-config/--keep-logs) and negative (--remove-config/--remove-logs) flag variants.",
+      "acceptance_criteria": [
+        {"id": "AC-3.1", "text": "uninstall command has --keep-config flag (default behavior: keep config)"},
+        {"id": "AC-3.2", "text": "uninstall command has --remove-config flag (opt-in removal)"},
+        {"id": "AC-3.3", "text": "uninstall command has --keep-logs flag (default behavior: keep logs)"},
+        {"id": "AC-3.4", "text": "uninstall command has --remove-logs flag (opt-in removal)"},
+        {"id": "AC-3.5", "text": "Flags are mutually exclusive pairs per group"}
+      ],
+      "files": ["src/async_crud_mcp/cli/install_cmd.py"],
+      "depends_on": [],
+      "risk": "low",
+      "points": 2,
+      "gap_sources": ["d27"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "CLI_COMMANDS.template.md (Quick Install and Uninstall)"
+      }
+    },
+    {
+      "id": "4",
+      "title": "Add HTTP /health endpoint to server.py",
+      "type": "feature",
+      "description": "The spec requires a proper HTTP /health endpoint returning status, version, and uptime. Currently server.py only exposes a health_tool() as an MCP tool. A dedicated HTTP /health route should be added so external health monitors and installers can check server health without MCP client setup.",
+      "acceptance_criteria": [
+        {"id": "AC-4.1", "text": "HTTP GET /health endpoint returns JSON with status, version, uptime fields"},
+        {"id": "AC-4.2", "text": "Health endpoint is accessible via plain HTTP (not MCP protocol)"},
+        {"id": "AC-4.3", "text": "Returns 200 OK for healthy status, 503 for unhealthy"},
+        {"id": "AC-4.4", "text": "scripts/test_server.py can check the HTTP /health endpoint"}
+      ],
+      "files": ["src/async_crud_mcp/server.py", "scripts/test_server.py"],
+      "depends_on": ["1"],
+      "risk": "medium",
+      "points": 3,
+      "gap_sources": ["d4", "d12"],
+      "drift_metadata": {
+        "max_severity": "major",
+        "classification": "drifted",
+        "spec_section": "SERVICE.template.md + INTEGRATION.template.md (Health Check Endpoints)"
+      }
+    },
+    {
+      "id": "5",
+      "title": "Fix bootstrap_daemon configure_logging retention and add console enqueue",
+      "type": "feature",
+      "description": "configure_logging() in bootstrap_daemon.py uses retention=3 (int, 3 files) instead of '7 days' string retention per spec. The console handler is also missing enqueue=True for async safety (ADR-005). File handler is missing gz compression.",
+      "acceptance_criteria": [
+        {"id": "AC-5.1", "text": "configure_logging() file handler uses retention='7 days' string format"},
+        {"id": "AC-5.2", "text": "configure_logging() console handler has enqueue=True for async safety"},
+        {"id": "AC-5.3", "text": "configure_logging() adds gz compression to file handler"}
+      ],
+      "files": ["src/async_crud_mcp/daemon/bootstrap_daemon.py"],
+      "depends_on": [],
+      "risk": "low",
+      "points": 1,
+      "gap_sources": ["d7"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "BOOTSTRAP.template.md + PYTHON_STACK.template.md (Logging Standard)"
+      }
+    },
+    {
+      "id": "6",
+      "title": "Verify and align installer.py menu options and service install flow",
+      "type": "feature",
+      "description": "scripts/installer.py interactive menu shows Install/Uninstall/Test/Exit but spec expects Install/Reinstall/Uninstall/Quit. Also verify the service installation flow correctly delegates to CLI bootstrap install (which uses CreateService API) rather than directly calling service_installer.bat.",
+      "acceptance_criteria": [
+        {"id": "AC-6.1", "text": "Interactive menu matches spec: Install/Reinstall/Uninstall/Quit options"},
+        {"id": "AC-6.2", "text": "installer.py installs service by calling CLI bootstrap install (which uses CreateService API)"},
+        {"id": "AC-6.3", "text": "Reinstall option stops existing service, reinstalls, and restarts"}
+      ],
+      "files": ["scripts/installer.py"],
+      "depends_on": [],
+      "risk": "medium",
+      "points": 2,
+      "gap_sources": ["d28"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "partial",
+        "spec_section": "INSTALLER.template.md"
+      }
+    },
+    {
+      "id": "7",
+      "title": "Enhance README with CLI usage examples and two-layer architecture overview",
+      "type": "feature",
+      "description": "README.md is missing explicit CLI command usage examples and the two-layer architecture overview (daemon service + MCP server). The spec requires these sections for user onboarding.",
+      "acceptance_criteria": [
+        {"id": "AC-7.1", "text": "README contains Quick Install section showing setup.bat / setup.sh usage"},
+        {"id": "AC-7.2", "text": "README contains CLI usage examples for bootstrap, daemon, config subcommands"},
+        {"id": "AC-7.3", "text": "README contains Architecture section describing two-layer design (OS service + MCP server)"},
+        {"id": "AC-7.4", "text": "README describes per-user daemon model and multi-user support"}
+      ],
+      "files": ["README.md"],
+      "depends_on": [],
+      "risk": "low",
+      "points": 2,
+      "gap_sources": ["d87"],
+      "drift_metadata": {
+        "max_severity": "minor",
+        "classification": "drifted",
+        "spec_section": "README.template.md"
+      }
+    }
+  ],
+  "skipped_done": [
+    {
+      "deliverable_id": "d2",
+      "path": "src/async_crud_mcp/__init__.py",
+      "reason": "__version__ = '0.1.0' defined at module level, matches pyproject.toml version",
+      "verified_acs": ["AC-d2.1", "AC-d2.2"]
+    },
+    {
+      "deliverable_id": "d3",
+      "path": "src/async_crud_mcp/__main__.py",
+      "reason": "Module entry point enabling python -m async_crud_mcp; calls CLI app",
+      "verified_acs": ["AC-d3.1"]
+    },
+    {
+      "deliverable_id": "d6",
+      "path": "src/async_crud_mcp/daemon/paths.py",
+      "reason": "All path functions present: get_config_dir, get_logs_dir, get_data_dir with platform-specific paths, XDG compliance, ProgramData fallback",
+      "verified_acs": ["AC-d6.1", "AC-d6.2", "AC-d6.3", "AC-d6.4", "AC-d6.5", "AC-d6.6"]
+    },
+    {
+      "deliverable_id": "d8",
+      "path": "src/async_crud_mcp/daemon/session_detector.py",
+      "reason": "is_user_session_active() present with cross-platform detection (Windows WTS, macOS /dev/console, Linux /run/user)",
+      "verified_acs": ["AC-d8.1", "AC-d8.2", "AC-d8.3", "AC-d8.4", "AC-d8.5"]
+    },
+    {
+      "deliverable_id": "d9",
+      "path": "src/async_crud_mcp/daemon/config_watcher.py",
+      "reason": "ConfigWatcher with debounce_seconds=1.0, check_for_changes() -> bool, mtime comparison, debounce window enforcement",
+      "verified_acs": ["AC-d9.1", "AC-d9.2", "AC-d9.3", "AC-d9.4"]
+    },
+    {
+      "deliverable_id": "d11",
+      "path": "src/async_crud_mcp/daemon/logging_setup.py",
+      "reason": "setup_logging() with enqueue=True on all handlers, 10MB rotation, 7 days retention, gz compression, logger.remove() first",
+      "verified_acs": ["AC-d11.1", "AC-d11.2", "AC-d11.3", "AC-d11.4", "AC-d11.5"]
+    },
+    {
+      "deliverable_id": "d13",
+      "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
+      "reason": "ShutdownHandler and graceful_stop with timeout=10.0 default, exception logging, process reference cleanup",
+      "verified_acs": ["AC-d13.1", "AC-d13.2", "AC-d13.3"]
+    },
+    {
+      "deliverable_id": "d16",
+      "path": "src/async_crud_mcp/daemon/windows/dispatcher.py",
+      "reason": "MultiUserDispatcher with username-keyed workers, UserWorker dataclass, session management, circuit breaker, port conflict defense",
+      "verified_acs": ["AC-d16.1", "AC-d16.2", "AC-d16.3", "AC-d16.4", "AC-d16.5", "AC-d16.6", "AC-d16.7", "AC-d16.8", "AC-d16.9", "AC-d16.10"]
+    },
+    {
+      "deliverable_id": "d17",
+      "path": "src/async_crud_mcp/daemon/windows/session_detector.py",
+      "reason": "WTSEnumerateSessions for session listing, WTSActive/WTSConnected treated as active",
+      "verified_acs": ["AC-d17.1", "AC-d17.2"]
+    },
+    {
+      "deliverable_id": "d18",
+      "path": "src/async_crud_mcp/daemon/linux/systemd.service",
+      "reason": "Type=simple, Restart=always, RestartSec=30, WantedBy=default.target, ExecStart references async-crud-mcp bootstrap",
+      "verified_acs": ["AC-d18.1", "AC-d18.2", "AC-d18.3"]
+    },
+    {
+      "deliverable_id": "d19",
+      "path": "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+      "reason": "systemctl --user daemon-reload, enable, start all present; loginctl enable-linger check with warning on absence",
+      "verified_acs": ["AC-d19.1", "AC-d19.2", "AC-d19.3"]
+    },
+    {
+      "deliverable_id": "d20",
+      "path": "src/async_crud_mcp/daemon/macos/launchd.plist",
+      "reason": "Label=com.async-crud-mcp.daemon, RunAtLoad=true, KeepAlive=true, log paths reference async-crud-mcp",
+      "verified_acs": ["AC-d20.1", "AC-d20.2", "AC-d20.3"]
+    },
+    {
+      "deliverable_id": "d21",
+      "path": "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+      "reason": "Installs to ~/Library/LaunchAgents/com.async-crud-mcp.daemon.plist, launchctl load called",
+      "verified_acs": ["AC-d21.1", "AC-d21.2"]
+    },
+    {
+      "deliverable_id": "d22",
+      "path": "src/async_crud_mcp/cli/__init__.py",
+      "reason": "app is Typer instance with bootstrap, daemon, config subcommand groups; version, quick-install, uninstall, setup top-level commands",
+      "verified_acs": ["AC-d22.1", "AC-d22.2", "AC-d22.3"]
+    },
+    {
+      "deliverable_id": "d23",
+      "path": "src/async_crud_mcp/cli/bootstrap_cmd.py",
+      "reason": "All six commands present with install elevation, status --json, --username options",
+      "verified_acs": ["AC-d23.1", "AC-d23.2", "AC-d23.3", "AC-d23.4"]
+    },
+    {
+      "deliverable_id": "d25",
+      "path": "src/async_crud_mcp/cli/config_cmd.py",
+      "reason": "init/show/edit/validate commands with --force/--port/--no-interactive/--username options, DEFAULT_PORT usage, directory creation, exit code 1 on invalid",
+      "verified_acs": ["AC-d25.1", "AC-d25.2", "AC-d25.3", "AC-d25.4", "AC-d25.5"]
+    },
+    {
+      "deliverable_id": "d26",
+      "path": "src/async_crud_mcp/cli/setup_cmd.py",
+      "reason": "Setup wizard with --port/--no-interactive/--force, find_available_port, directory creation, configure_claude_code call, health check, no admin required",
+      "verified_acs": ["AC-d26.1", "AC-d26.2", "AC-d26.3", "AC-d26.4", "AC-d26.5", "AC-d26.6"]
+    },
+    {
+      "deliverable_id": "d29",
+      "path": "scripts/uninstaller.py",
+      "reason": "Stdlib-only uninstaller with service stop, unregistration, optional config/logs removal",
+      "verified_acs": ["AC-d29.1", "AC-d29.2", "AC-d29.3"]
+    },
+    {
+      "deliverable_id": "d30",
+      "path": "scripts/setup.bat",
+      "reason": "Windows thin wrapper delegating to installer.py with admin check",
+      "verified_acs": ["AC-d30.1", "AC-d30.2", "AC-d30.3"]
+    },
+    {
+      "deliverable_id": "d31",
+      "path": "scripts/setup.sh",
+      "reason": "Unix wrapper delegating to installer.py with shebang line",
+      "verified_acs": ["AC-d31.1", "AC-d31.2"]
+    },
+    {
+      "deliverable_id": "d32",
+      "path": "scripts/bootstrap_uv.py",
+      "reason": "install_uv() with platform detection, pip_install_with_uv() with pip fallback, create_venv_with_uv() present",
+      "verified_acs": ["AC-d32.1", "AC-d32.2", "AC-d32.3"]
+    },
+    {
+      "deliverable_id": "d33",
+      "path": "scripts/build_installer.py",
+      "reason": "Bundle builder producing dist/ zip with embedded Python, uv, vendored deps; --no-uv flag supported",
+      "verified_acs": ["AC-d33.1", "AC-d33.2", "AC-d33.3"]
+    },
+    {
+      "deliverable_id": "d34",
+      "path": "scripts/configure_claude_code.py",
+      "reason": "Configures Claude Code CLI with MCP SSE endpoint, registers in mcp-daemons.json, handles missing ~/.claude.json",
+      "verified_acs": ["AC-d34.1", "AC-d34.2", "AC-d34.3"]
+    },
+    {
+      "deliverable_id": "d36",
+      "path": "scripts/test_server.bat",
+      "reason": "Windows wrapper for test_server.py passing arguments",
+      "verified_acs": ["AC-d36.1"]
+    },
+    {
+      "deliverable_id": "d37",
+      "path": "scripts/test_server.sh",
+      "reason": "Unix wrapper for test_server.py with shebang and arguments pass-through",
+      "verified_acs": ["AC-d37.1"]
+    },
+    {
+      "deliverable_id": "d38",
+      "path": "src/async_crud_mcp/daemon/windows/__init__.py",
+      "reason": "Package init exists for windows/ Python subpackage",
+      "verified_acs": ["AC-d38.1"]
+    }
+  ],
+  "ahead_of_spec": [
+    {
+      "deliverable_id": "d14",
+      "path": "src/async_crud_mcp/daemon/installer.py",
+      "items": [
+        "LaunchdInstaller has fully working implementation delegating to launchd_installer.sh (spec expected NotImplementedError skeleton)",
+        "SystemdInstaller has fully working implementation delegating to systemd_installer.sh (spec expected NotImplementedError skeleton)"
+      ]
+    },
+    {
+      "deliverable_id": "d5",
+      "path": "src/async_crud_mcp/config.py",
+      "items": [
+        "DaemonConfig has extra fields: config_debounce_seconds, health_check_interval beyond spec",
+        "Settings has CrudConfig, PersistenceConfig, WatcherConfig sections beyond spec DaemonConfig+Settings",
+        "PathRule model and access control rules not in spec"
+      ]
+    }
+  ],
+  "coverage_check": {
+    "total_spec_deliverables": 38,
+    "covered_by_stories": 10,
+    "verified_done": 26,
+    "uncovered": 2,
+    "uncovered_ids": ["d1", "d15"],
+    "notes": "The prompt referenced 87 total deliverables but the spec-manifest.json contains 38 deliverables (d1-d38). The drift analyzer's skipped_done includes 52 additional items (d39-d86) that are project-specific files (models, core, tools, tests) beyond the daemon-service spec scope. Coverage check uses the 38 manifest deliverables. d1 (pyproject.toml) has drift (requires-python, missing mcp dep) but no story addresses it. d15 (windows_service.py) exists as bootstrap_service.py (ADR-014 naming mismatch)."
+  }
+}

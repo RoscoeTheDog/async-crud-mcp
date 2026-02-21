@@ -113,8 +113,6 @@ The template provides:
 | `scripts/build_installer.py` | `scripts/build_installer.py` |
 | `scripts/configure_claude_code.py` | `scripts/configure_claude_code.py` |
 | `scripts/test_server.py` | `scripts/test_server.py` |
-| `scripts/test_server.bat` | `scripts/test_server.bat` |
-| `scripts/test_server.sh` | `scripts/test_server.sh` |
 
 ### 2.2 High-Level Architecture
 
@@ -187,8 +185,6 @@ async-crud-mcp/
 |   +-- build_installer.py             # Python Embedded Bundle builder
 |   +-- configure_claude_code.py       # Claude Code CLI configuration
 |   +-- test_server.py                 # Post-install server verification
-|   +-- test_server.bat                # Windows test wrapper
-|   +-- test_server.sh                 # Unix test wrapper
 +-- src/
 |   +-- async_crud_mcp/
 |       +-- __init__.py                 # __version__, package metadata

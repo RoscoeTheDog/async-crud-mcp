@@ -1,23 +1,15 @@
 {
   "created": [
-    {"id": "1", "file_path": ".claude/sprint/stories/1-align-pyprojecttoml-with-spec-build-layout.md", "queued": true},
-    {"id": "2", "file_path": ".claude/sprint/stories/2-complete-cli-init-with-top-level-commands-and-subg.md", "queued": true},
-    {"id": "3", "file_path": ".claude/sprint/stories/3-add-missing-options-to-bootstrap-cli-commands.md", "queued": true},
-    {"id": "4", "file_path": ".claude/sprint/stories/4-add-missing-options-to-daemon-cli-commands.md", "queued": true},
-    {"id": "5", "file_path": ".claude/sprint/stories/5-add-missing-options-to-config-cli-commands.md", "queued": true},
-    {"id": "6", "file_path": ".claude/sprint/stories/6-align-setup-wizard-with-spec-steps.md", "queued": true},
-    {"id": "7", "file_path": ".claude/sprint/stories/7-align-install-commands-with-spec-options.md", "queued": true},
-    {"id": "8", "file_path": ".claude/sprint/stories/8-add-port-validation-and-fromfile-class-method-to-c.md", "queued": true},
-    {"id": "9", "file_path": ".claude/sprint/stories/9-add-port-pre-flight-exit-code-and-security-logging.md", "queued": true},
-    {"id": "10", "file_path": ".claude/sprint/stories/10-align-pathspy-appname-import-with-adr-009.md", "queued": true},
-    {"id": "11", "file_path": ".claude/sprint/stories/11-fix-installer-service-install-and-add-post-install.md", "queued": true},
-    {"id": "12", "file_path": ".claude/sprint/stories/12-add-configinit-defaultport-alignment-and-sessionpo.md", "queued": true},
-    {"id": "13", "file_path": ".claude/sprint/stories/13-add---port---skip-logs---log-age-to-testserverpy.md", "queued": true},
-    {"id": "14", "file_path": ".claude/sprint/stories/14-enhance-readme-with-full-spec-documentation.md", "queued": true},
-    {"id": "15", "file_path": ".claude/sprint/stories/15-add-ruffcache-to-gitignore.md", "queued": true}
+    {"id": "1", "file_path": ".claude/sprint/stories/1-add-programdata-fallback-path-to-daemon-logs-comma.md", "queued": true},
+    {"id": "2", "file_path": ".claude/sprint/stories/2-add-http-health-endpoint-to-serverpy.md", "queued": true},
+    {"id": "3", "file_path": ".claude/sprint/stories/3-fix-bootstrapdaemon-configurelogging-retention-and.md", "queued": true},
+    {"id": "4", "file_path": ".claude/sprint/stories/4-align-installerpy-interactive-menu-with-spec-optio.md", "queued": true},
+    {"id": "5", "file_path": ".claude/sprint/stories/5-enhance-readme-with-cli-usage-examples-and-two-lay.md", "queued": true},
+    {"id": "6", "file_path": ".claude/sprint/stories/6-align-pyprojecttoml-requires-python-and-add-missin.md", "queued": true},
+    {"id": "7", "file_path": ".claude/sprint/stories/7-rename-bootstrapservicepy-to-windowsservicepy-per.md", "queued": true}
   ],
   "failed": [],
   "dependencies_wired": true,
-  "total_created": 15,
+  "total_created": 7,
   "total_failed": 0
 }

@@ -1,0 +1,183 @@
+{
+  "A": {
+    "check_id": "A",
+    "story_id": "5",
+    "passed": true,
+    "blocking": false,
+    "blocked": false,
+    "errors": [],
+    "warnings": [],
+    "data": {
+      "file_path": "C:\\Users\\Admin\\Documents\\GitHub\\async-crud-mcp\\.claude\\sprint\\stories\\5-enhance-readme-with-cli-usage-examples-and-two-lay.md",
+      "fields_found": [
+        "$schema",
+        "id",
+        "title",
+        "type",
+        "status",
+        "parent",
+        "created_at",
+        "updated_at",
+        "depends_on",
+        "blocks",
+        "cross_story_impact",
+        "affected_by",
+        "deferred_reason",
+        "deferred_at",
+        "validation"
+      ],
+      "status": "queued",
+      "type": "feature"
+    },
+    "missing_data": null,
+    "repairs": [],
+    "executed_at": "2026-02-17T08:40:55.505757+00:00"
+  },
+  "B": {
+    "check_id": "B",
+    "story_id": "5",
+    "passed": true,
+    "blocking": false,
+    "blocked": false,
+    "errors": [],
+    "warnings": [],
+    "data": {
+      "acs_found": 4,
+      "acs_with_priority": 4,
+      "acs_with_checkbox": 4,
+      "priority_distribution": {
+        "P0": 4,
+        "P1": 0,
+        "P2": 0
+      },
+      "auto_repaired": []
+    },
+    "missing_data": null,
+    "repairs": [],
+    "executed_at": "2026-02-17T08:40:56.113253+00:00"
+  },
+  "C": {
+    "check_id": "C",
+    "story_id": "5",
+    "passed": false,
+    "blocking": true,
+    "blocked": false,
+    "errors": [
+      "P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3, AC-5.4"
+    ],
+    "warnings": [],
+    "data": {
+      "acs_total": 4,
+      "acs_with_tests": 0,
+      "acs_missing_tests": [
+        "AC-5.1",
+        "AC-5.2",
+        "AC-5.3",
+        "AC-5.4"
+      ],
+      "p0_missing_tests": [
+        "AC-5.1",
+        "AC-5.2",
+        "AC-5.3",
+        "AC-5.4"
+      ],
+      "p1_missing_tests": [],
+      "p2_missing_tests": [],
+      "test_files_found": [
+        "tests\\test_tools\\test_async_read.py",
+        "tests\\test_tools\\test_async_rename.py",
+        "tests\\test_cli\\test_setup_cmd.py",
+        "tests\\test_path_validator.py",
+        "tests\\test_cli\\test_install_cmd.py",
+        "tests\\test_tools\\test_async_update.py",
+        "tests\\test_cli\\test_daemon_cmd.py",
+        "tests\\test_tools\\test_async_write.py",
+        "tests\\test_file_io.py",
+        "tests\\test_lock_manager.py",
+        "tests\\test_tools\\test_async_list.py",
+        "tests\\test_tools\\test_async_batch_read.py",
+        "tests\\test_scripts\\test_test_server.py",
+        "tests\\test_tools\\test_async_delete.py",
+        "tests\\test_tools\\test_async_append.py",
+        "tests\\test_tools\\test_async_batch_update.py",
+        "tests\\test_cli\\test_config_cmd.py",
+        "tests\\test_daemon_paths.py",
+        "tests\\test_tools\\test_async_status.py",
+        "tests\\test_tools\\test_async_batch_write.py",
+        "tests\\test_cli\\test_bootstrap_cmd.py",
+        "tests\\test_server.py",
+        "tests\\test_diff_engine.py",
+        "tests\\test_file_watcher.py",
+        "tests\\test_persistence.py",
+        "tests\\test_config.py"
+      ],
+      "traceability_map": {
+        "AC-5.1": [],
+        "AC-5.2": [],
+        "AC-5.3": [],
+        "AC-5.4": []
+      }
+    },
+    "missing_data": null,
+    "repairs": [],
+    "executed_at": "2026-02-17T08:40:56.937543+00:00"
+  },
+  "D": {
+    "check_id": "D",
+    "story_id": "5",
+    "passed": true,
+    "blocking": true,
+    "blocked": false,
+    "errors": [],
+    "warnings": [
+      "Using Gate 3 collective test results (no per-story Phase C data). Priority-based pass rates derived from AC pattern matching on collective output.",
+      "Using checkpoint summary counts only. No raw output available for priority-based analysis.",
+      "Used structured test counts from Phase C output (raw output not parseable). Priority-based pass rates unavailable - all tests treated as P0."
+    ],
+    "data": {
+      "p0_total": 0,
+      "p0_passed": 0,
+      "p0_rate": 1.0,
+      "p1_total": 0,
+      "p1_passed": 0,
+      "p1_rate": 1.0,
+      "p2_total": 0,
+      "p2_passed": 0,
+      "p2_rate": 1.0,
+      "overall_total": 430,
+      "overall_passed": 423,
+      "overall_rate": 0.9837209302325581,
+      "framework": "structured_json",
+      "failed_tests": []
+    },
+    "missing_data": null,
+    "repairs": [],
+    "executed_at": "2026-02-17T08:40:57.551596+00:00"
+  },
+  "J": {
+    "check_id": "J",
+    "story_id": "5",
+    "passed": false,
+    "blocking": true,
+    "blocked": false,
+    "errors": [
+      "Coverage 0.0% below threshold 80% (scope: scoped)"
+    ],
+    "warnings": [],
+    "data": {
+      "threshold": 0.8,
+      "scope": "scoped",
+      "coverage": 0.0,
+      "touched_files": [
+        "README.md"
+      ],
+      "module": null,
+      "meets_threshold": false,
+      "coverage_format": "json",
+      "coverage_report_path": "coverage.json"
+    },
+    "missing_data": null,
+    "repairs": [],
+    "executed_at": "2026-02-17T08:40:58.131894+00:00"
+  }
+}

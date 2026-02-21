@@ -1,0 +1,48 @@
+{
+  "story_id": "7",
+  "validation_id": "-7",
+  "phase": "a",
+  "status": "failed",
+  "completed_at": "2026-02-17T08:39:30Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-7.1, AC-7.2, AC-7.3, AC-7.4, AC-7.5, AC-7.6"
+    },
+    "D": {
+      "passed": true,
+      "blocking": true,
+      "blocked": false
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+    }
+  },
+  "blocked_checks": [],
+  "failed_checks": ["C", "J"],
+  "failure_reason": "blocking_checks_failed",
+  "error_signatures": [
+    "TestCoverageGap:story_7:all_acs:no_tests:AC-7.1_AC-7.2_AC-7.3_AC-7.4_AC-7.5_AC-7.6",
+    "CoverageThreshold:story_7:windows_service_module:0.0_percent_below_80_percent_requirement"
+  ],
+  "convergence": {
+    "pattern": "passed",
+    "action": "done",
+    "history_length": 0
+  }
+}

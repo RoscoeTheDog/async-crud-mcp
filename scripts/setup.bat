@@ -1,76 +1,41 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: async-crud-mcp Windows Installer Wrapper
-:: Detects Python 3.12+ and delegates to installer.py
+:: ============================================
+::   async-crud-mcp Setup
+:: ============================================
+:: Unified installer/uninstaller script
+:: Calls installer.py which presents an interactive menu
 
-echo [SETUP] async-crud-mcp Windows Installer
-echo.
-
-:: Try python from PATH
-where python >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    python --version 2>nul | findstr /R "Python 3\.1[2-9]\." >nul
-    if !ERRORLEVEL! EQU 0 (
-        set PYTHON=python
-        goto :found_python
-    )
+:: Check admin privileges
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Requesting administrator privileges...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
 )
 
-:: Try python3 from PATH
-where python3 >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    python3 --version 2>nul | findstr /R "Python 3\.1[2-9]\." >nul
-    if !ERRORLEVEL! EQU 0 (
-        set PYTHON=python3
-        goto :found_python
-    )
-)
+:: Find Python
+set "PYTHON_EXE="
+where python >nul 2>&1 && set "PYTHON_EXE=python"
+where python3 >nul 2>&1 && set "PYTHON_EXE=python3"
 
-:: Try py launcher with -3.12
-py -3.12 --version >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    set PYTHON=py -3.12
-    goto :found_python
-)
-
-:: Try common install locations
-set PYTHON_LOCATIONS=C:\Python312\python.exe C:\Python313\python.exe "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
-
-for %%P in (%PYTHON_LOCATIONS%) do (
-    if exist %%P (
-        %%P --version 2>nul | findstr /R "Python 3\.1[2-9]\." >nul
-        if !ERRORLEVEL! EQU 0 (
-            set PYTHON=%%P
-            goto :found_python
-        )
-    )
-)
-
-:: Python not found
-echo [ERROR] Python 3.12 or newer not found
-echo.
-echo Please install Python 3.12+ from:
-echo https://www.python.org/downloads/
-echo.
-echo Make sure to check "Add Python to PATH" during installation.
-pause
-exit /b 1
-
-:found_python
-echo [OK] Found Python: %PYTHON%
-%PYTHON% --version
-echo.
-
-:: Delegate to installer.py
-"%PYTHON%" "%~dp0installer.py" %*
-set EXIT_CODE=%ERRORLEVEL%
-
-if %EXIT_CODE% NEQ 0 (
+if not defined PYTHON_EXE (
+    echo [ERROR] Python not found in PATH
+    echo Please install Python 3.10+ from https://python.org
     echo.
-    echo [ERROR] Installer exited with code %EXIT_CODE%
-    pause
+    echo ========================================
+    echo Press any key to close...
+    echo ========================================
+    pause >nul
+    exit /b 1
 )
 
-endlocal
-exit /b %EXIT_CODE%
+:: Verify Python version
+for /f "tokens=2 delims= " %%v in ('"%PYTHON_EXE%" --version 2^>^&1') do set "PY_VERSION=%%v"
+echo Found Python %PY_VERSION%
+
+:: Run Python installer (no args = interactive mode)
+"%PYTHON_EXE%" "%~dp0installer.py" %*
+:: Python script handles its own "Press Enter to close..." prompt
+exit /b %errorlevel%

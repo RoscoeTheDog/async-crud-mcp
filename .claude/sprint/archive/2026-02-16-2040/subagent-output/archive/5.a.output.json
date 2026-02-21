@@ -1,0 +1,21 @@
+{
+  "story_id": "5",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:15:00Z",
+  "planning_output": {
+    "implementation_plan": "Add missing CLI options to config_cmd.py commands per spec d21. The init command needs --port, --no-interactive, and --username options (the underlying init_config() already supports all three params). The show command needs --username (to resolve per-user config path) and --json (for machine-readable raw JSON output instead of Rich panel). The validate command already uses pydantic model validation via get_settings() which constructs a Settings(BaseSettings) instance and catches ValidationError - AC-5.3 is satisfied, but we should also wire --username so validate can target a specific user's config. Tests need updating to cover all new options.",
+    "files_to_modify": [
+      "src/async_crud_mcp/cli/config_cmd.py",
+      "tests/test_cli/test_config_cmd.py"
+    ],
+    "estimated_complexity": "low",
+    "ac_breakdown": {
+      "AC-5.1": "Add --port (int, optional), --no-interactive (bool flag), and --username (str, optional) options to the init command. Wire them through to init_config(): port=port, interactive=not no_interactive, username=username. The init_config() function in config_init.py already accepts all three parameters (port, interactive, username). When --no-interactive is set, pass interactive=False so no prompts appear. When --username is provided, init_config will resolve the per-user config path via get_config_file_path(username). Also import init_config's get_config_file_path to use when username is provided for proper per-user path resolution.",
+      "AC-5.2": "Add --username (str, optional) and --json (bool flag) options to the show command. When --username is provided, use config_init.get_config_file_path(username) instead of paths.get_config_file_path() to resolve the per-user config path. When --json is set, output raw JSON via typer.echo(json.dumps(config_data, indent=2)) instead of the Rich Panel display. Both options can be combined (show a specific user's config as raw JSON).",
+      "AC-5.3": "Already satisfied - the validate command uses get_settings(config_path) which constructs a pydantic Settings(BaseSettings) instance. On invalid config, pydantic raises ValidationError which is caught and formatted with per-field error messages. Add --username option for consistency so validate can target a specific user's config file path."
+    },
+    "testing_strategy": "Update test_config_cmd.py: (1) Add test for init with --port flag verifying port is passed to init_config. (2) Add test for init with --no-interactive flag verifying interactive=False is passed. (3) Add test for init with --username flag. (4) Add test for show with --json flag verifying raw JSON output (no Rich panel markup). (5) Add test for show with --username flag verifying per-user path resolution. (6) Add test for validate with --username flag. All tests use existing mock patterns (patching init_config, get_config_file_path, get_settings).",
+    "dependencies": []
+  }
+}

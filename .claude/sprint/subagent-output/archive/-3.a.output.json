@@ -1,0 +1,177 @@
+{
+  "validation_id": "-3",
+  "story_id": "3",
+  "phase": "a",
+  "structural_checks": {
+    "A": {
+      "check_id": "A",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "data": {
+        "file_path": ".claude/sprint/stories/3-fix-bootstrapdaemon-configurelogging-retention-and.md",
+        "fields_found": [
+          "$schema",
+          "id",
+          "title",
+          "type",
+          "status",
+          "parent",
+          "created_at",
+          "updated_at",
+          "depends_on",
+          "blocks",
+          "cross_story_impact",
+          "affected_by",
+          "deferred_reason",
+          "deferred_at",
+          "validation"
+        ],
+        "status": "queued",
+        "type": "feature"
+      },
+      "missing_data": null,
+      "repairs": [],
+      "executed_at": "2026-02-17T08:39:25.838619+00:00"
+    },
+    "B": {
+      "check_id": "B",
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "data": {
+        "acs_found": 3,
+        "acs_with_priority": 3,
+        "acs_with_checkbox": 3,
+        "priority_distribution": {
+          "P0": 3,
+          "P1": 0,
+          "P2": 0
+        },
+        "auto_repaired": []
+      },
+      "missing_data": null,
+      "repairs": [],
+      "executed_at": "2026-02-17T08:39:32.328499+00:00"
+    },
+    "C": {
+      "check_id": "C",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-3.1, AC-3.2, AC-3.3"
+      ],
+      "warnings": [],
+      "data": {
+        "acs_total": 3,
+        "acs_with_tests": 0,
+        "acs_missing_tests": [
+          "AC-3.1",
+          "AC-3.2",
+          "AC-3.3"
+        ],
+        "p0_missing_tests": [
+          "AC-3.1",
+          "AC-3.2",
+          "AC-3.3"
+        ],
+        "p1_missing_tests": [],
+        "p2_missing_tests": [],
+        "test_files_found": 27,
+        "traceability_map": {
+          "AC-3.1": [],
+          "AC-3.2": [],
+          "AC-3.3": []
+        }
+      },
+      "missing_data": null,
+      "repairs": [],
+      "executed_at": "2026-02-17T08:39:38.443734+00:00"
+    },
+    "D": {
+      "check_id": "D",
+      "passed": true,
+      "blocking": true,
+      "blocked": false,
+      "errors": [],
+      "warnings": [
+        "Using Gate 3 collective test results (no per-story Phase C data). Priority-based pass rates derived from AC pattern matching on collective output.",
+        "Using checkpoint summary counts only. No raw output available for priority-based analysis.",
+        "Used structured test counts from Phase C output (raw output not parseable). Priority-based pass rates unavailable - all tests treated as P0."
+      ],
+      "data": {
+        "p0_total": 0,
+        "p0_passed": 0,
+        "p0_rate": 1.0,
+        "p1_total": 0,
+        "p1_passed": 0,
+        "p1_rate": 1.0,
+        "p2_total": 0,
+        "p2_passed": 0,
+        "p2_rate": 1.0,
+        "overall_total": 430,
+        "overall_passed": 423,
+        "overall_rate": 0.9837209302325581,
+        "framework": "structured_json",
+        "failed_tests": []
+      },
+      "missing_data": null,
+      "repairs": [],
+      "executed_at": "2026-02-17T08:39:46.032027+00:00"
+    },
+    "J": {
+      "check_id": "J",
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "Coverage 0.0% below threshold 80% (scope: scoped)"
+      ],
+      "warnings": [],
+      "data": {
+        "threshold": 0.8,
+        "scope": "scoped",
+        "coverage": 0.0,
+        "touched_files": [
+          "src/async_crud_mcp/daemon/bootstrap_daemon.py"
+        ],
+        "module": null,
+        "meets_threshold": false,
+        "coverage_format": "json",
+        "coverage_report_path": "coverage.json"
+      },
+      "missing_data": null,
+      "repairs": [],
+      "executed_at": "2026-02-17T08:39:52.170202+00:00"
+    }
+  },
+  "convergence": {
+    "status": "passed",
+    "action": "done",
+    "reason": null,
+    "run_count": 0,
+    "failure_trend": "none"
+  },
+  "phase_outcome": {
+    "passed": false,
+    "reason": "Blocking checks failed: C (P0 ACs without test coverage), J (coverage 0.0% < 80%)",
+    "blocking_failures": [
+      {
+        "check": "C",
+        "error": "P0 acceptance criteria without test coverage: AC-3.1, AC-3.2, AC-3.3"
+      },
+      {
+        "check": "J",
+        "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
+      }
+    ],
+    "dispatch_phase_b": false
+  },
+  "status": "failed",
+  "executed_at": "2026-02-17T08:40:27.532393+00:00"
+}

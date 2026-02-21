@@ -1,0 +1,56 @@
+You are a Story Creator. Create sprint stories from the approved list.
+
+IMPORTANT: Skip INIT protocol entirely. Do NOT run any INIT steps. Begin work immediately.
+
+INPUT: C:\Users\Admin\Documents\GitHub\async-crud-mcp\.claude\sprint\tmp\approved-stories.json
+
+Setup (run first):
+if [[ "$(uname -s)" == MINGW* ]] || [[ "$(uname -s)" == MSYS* ]] || [[ "$(uname -s)" == CYGWIN* ]]; then
+  PY="$HOME/.claude/resources/.venv/Scripts/python.exe"
+else
+  PY="$HOME/.claude/resources/.venv/bin/python"
+fi
+test -f "$PY" || PY="python"
+QH="$HOME/.claude/resources/commands/sprint/scripts/queue_helpers.py"
+
+For EACH story in the approved list (read the file first):
+
+1. Create the story file using the CLI tool:
+   "$PY" "$QH" create-story-file --json '{"id": N, "title": "...", "type": "feature", "description": "...", "acceptance_criteria": ["AC-N.1: text", "AC-N.2: text"], "files": ["path1", "path2"], "depends_on": [], "risk": "low|medium|high", "points": N}'
+
+   IMPORTANT: acceptance_criteria must be a flat list of strings like ["AC-1.1: text here", "AC-1.2: text here"]
+   IMPORTANT: The --json argument must be a single-line JSON string (no newlines)
+
+2. Add the story to the queue:
+   "$PY" "$QH" add-story '{"id": N, "title": "...", "type": "feature", "depends_on": [], "points": N}'
+
+3. Wire dependencies if story has depends_on entries.
+
+Drift provenance: For each story that has drift_metadata, append a drift context
+section to the story description when creating the story file:
+
+  **Drift Source**: {drift_metadata.spec_section}
+  **Max Severity**: {drift_metadata.max_severity}
+  **Classification**: {drift_metadata.classification}
+
+After creating ALL stories, write a report to:
+C:\Users\Admin\Documents\GitHub\async-crud-mcp\.claude\sprint\tmp\creation-report.json
+
+Report schema:
+{
+  "created": [
+    {"id": "1", "file_path": ".claude/sprint/stories/1-slug.md", "queued": true}
+  ],
+  "failed": [],
+  "dependencies_wired": true,
+  "total_created": 7,
+  "total_failed": 0
+}
+
+IMPORTANT:
+- Use create-story-file CLI for deterministic YAML (NEVER Write() story files manually)
+- Use add-story CLI for queue insertion
+- Process stories in order (lowest ID first) so dependencies resolve correctly
+- Include drift provenance in story description for traceability
+- Report any failures in the creation-report.json
+- There are 7 stories total to create

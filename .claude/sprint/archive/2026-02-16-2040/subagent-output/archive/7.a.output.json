@@ -1,0 +1,22 @@
+{
+  "story_id": "7",
+  "phase": "a",
+  "status": "passed",
+  "completed_at": "2026-02-13T09:00:00Z",
+  "planning_output": {
+    "implementation_plan": "Add missing spec-required CLI options to install_cmd.py: (1) quick_install gains --force, --port, --no-start options, (2) uninstall gains --keep-config/--remove-config, --keep-logs/--remove-logs, --force options, (3) Windows admin check with ctypes.windll.shell32.IsUserAnAdmin() before quick_install service operations, (4) Rich console already used throughout - add try/except ImportError fallback wrapper for AC-7.4 compliance. The uninstall command will use paths from daemon.paths (get_config_dir, get_logs_dir) and shutil.rmtree for cleanup, matching the pattern in scripts/uninstaller.py. The --force on quick_install passes through to init_config(force=True) to overwrite existing config. The --port passes through to init_config(port=N). The --no-start skips the installer.start() call. For uninstall, --keep-config (default) vs --remove-config and --keep-logs (default) vs --remove-logs are mutually exclusive flag pairs; --force skips the confirmation prompt (same as --yes but semantically for force-remove). The enable daemon step uses installer.install() which already registers with the system service manager.",
+    "files_to_modify": [
+      "src/async_crud_mcp/cli/install_cmd.py",
+      "tests/test_cli/test_install_cmd.py"
+    ],
+    "estimated_complexity": "medium",
+    "ac_breakdown": {
+      "AC-7.1": "Add --force (bool, passes force=True to init_config to overwrite existing config), --port (int, optional, passes to init_config(port=N) to override default 8720), --no-start (bool, when True skips installer.start() call) options to quick_install function. Current flow: config init -> install -> start. With --no-start, flow becomes: config init -> install. With --force, init_config(force=True) overwrites existing config instead of skipping. With --port, init_config(port=port) uses specified port.",
+      "AC-7.2": "Add --keep-config/--remove-config (mutually exclusive bool pair, default keep), --keep-logs/--remove-logs (mutually exclusive bool pair, default keep), --force (bool, skips confirmation same as --yes) options to uninstall function. When --remove-config is set, after service uninstall, delete config dir via shutil.rmtree(get_config_dir()). When --remove-logs is set, delete logs dir via shutil.rmtree(get_logs_dir()). Import get_config_dir and get_logs_dir from daemon.paths. The --force flag acts like --yes to skip confirmation prompt.",
+      "AC-7.3": "Add _is_admin() helper function that returns True on non-Windows platforms (no admin needed for launchd/systemd user services). On Windows: use ctypes.windll.shell32.IsUserAnAdmin() to check. In quick_install, before installer.install(), check _is_admin() on Windows - if not admin, print error message with Rich console suggesting to run as Administrator and exit with code 1. Only apply this check on sys.platform == 'win32'.",
+      "AC-7.4": "Rich console is already a hard dependency (rich>=13.0 in pyproject.toml) and is used directly throughout install_cmd.py. For fallback compliance: wrap the Rich import in try/except ImportError, define a _get_console() helper that returns either Rich Console or a fallback object with a .print() method that delegates to typer.echo (stripping Rich markup). This ensures the module works even if Rich is somehow unavailable. Current code already uses Rich Console and Progress - keep that pattern."
+    },
+    "testing_strategy": "Extend tests/test_cli/test_install_cmd.py with: (1) test_quick_install_with_force - verifies init_config called with force=True when --force passed, (2) test_quick_install_with_port - verifies init_config called with port=N, (3) test_quick_install_no_start - verifies installer.start() NOT called when --no-start passed, (4) test_quick_install_admin_check_windows - mock sys.platform='win32' and ctypes to test admin check failure path, (5) test_uninstall_remove_config - verifies shutil.rmtree called on config dir when --remove-config passed, (6) test_uninstall_remove_logs - verifies shutil.rmtree called on logs dir when --remove-logs passed, (7) test_uninstall_force_skips_confirm - verifies --force skips confirmation, (8) test_uninstall_keep_config_default - verifies config NOT removed by default. All tests use existing mock patterns from the file (patch get_installer, init_config, etc.).",
+    "dependencies": []
+  }
+}

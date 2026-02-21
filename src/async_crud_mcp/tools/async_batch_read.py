@@ -1,6 +1,6 @@
 """Async batch read tool for MCP file operations."""
 
-from async_crud_mcp.core import LockManager, PathValidator
+from async_crud_mcp.core import ContentScanner, LockManager, PathValidator
 from async_crud_mcp.models import (
     AsyncBatchReadRequest,
     AsyncReadRequest,
@@ -16,6 +16,7 @@ async def async_batch_read(
     request: AsyncBatchReadRequest,
     path_validator: PathValidator,
     lock_manager: LockManager,
+    content_scanner: ContentScanner | None = None,
 ) -> BatchReadResponse:
     """
     Read multiple files in a single batch operation.
@@ -27,6 +28,7 @@ async def async_batch_read(
         request: Batch read request with list of files to read
         path_validator: PathValidator instance for path validation
         lock_manager: LockManager instance for coordinating locks
+        content_scanner: Optional ContentScanner for sensitive data detection
 
     Returns:
         BatchReadResponse with per-file results and summary
@@ -47,7 +49,7 @@ async def async_batch_read(
             )
 
             # Call single-file async_read
-            result = await async_read(read_request, path_validator, lock_manager)
+            result = await async_read(read_request, path_validator, lock_manager, content_scanner)
 
             # Collect result and update counters
             results.append(result)

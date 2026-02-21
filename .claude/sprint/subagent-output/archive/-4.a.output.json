@@ -1,0 +1,55 @@
+{
+  "story_id": "4",
+  "validation_id": "-4",
+  "phase": "a",
+  "status": "failed",
+  "completed_at": "2026-02-17T08:40:10Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "failures": [
+        "P0 acceptance criteria without test coverage: AC-4.1, AC-4.2, AC-4.3, AC-4.4"
+      ]
+    },
+    "D": {
+      "passed": true,
+      "blocking": true,
+      "blocked": false
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "failures": [
+        "Coverage 0.0% below threshold 80% (scope: scoped)"
+      ]
+    }
+  },
+  "failed_checks": [
+    "C",
+    "J"
+  ],
+  "failure_reason": "blocking_checks_failed",
+  "error_signatures": [
+    "TestCoverageMissing:AC-4.1,AC-4.2,AC-4.3,AC-4.4:P0_acceptance_criteria_lack_test_coverage",
+    "CoverageThresholdNotMet:scripts/installer.py:0.0%_coverage_vs_80%_threshold"
+  ],
+  "convergence": {
+    "pattern": "healthy",
+    "action": "continue",
+    "history_length": 1
+  },
+  "notes": "Phase A failed due to blocking failures in checks C (P0 ACs missing test coverage) and J (insufficient code coverage). Story cannot proceed to Phase B until these issues are resolved."
+}

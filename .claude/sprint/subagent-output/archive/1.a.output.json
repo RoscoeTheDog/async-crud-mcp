@@ -1,41 +1,21 @@
 {
   "story_id": "1",
-  "validation_id": "-1",
   "phase": "a",
-  "status": "blocked",
-  "completed_at": "2026-02-13T10:09:47Z",
-  "structural_checks": {
-    "A": {
-      "passed": true,
-      "blocking": false,
-      "blocked": false
+  "status": "passed",
+  "completed_at": "2026-02-17T07:15:00Z",
+  "planning_output": {
+    "implementation_plan": "Add ProgramData fallback path to the daemon `logs` CLI command in daemon_cmd.py. Currently, when the primary log path (from `get_logs_dir()`) doesn't contain daemon.log, the command reports 'not found' and exits. On Windows, the daemon may be running as a Windows service (LocalSystem) writing logs to %PROGRAMDATA%/async-crud-mcp/logs instead. The fix adds a platform-guarded fallback check after the primary path fails.\n\nApproach:\n1. In the `logs()` function (daemon_cmd.py line ~222), after the `if not log_file.exists()` check, add a Windows-only fallback block.\n2. The fallback constructs the ProgramData path using `os.environ.get('PROGRAMDATA', 'C:\\\\ProgramData')` joined with `async-crud-mcp/logs/daemon.log`.\n3. Guard the fallback with `sys.platform == 'win32'` so it only triggers on Windows.\n4. If the ProgramData log file exists, use it instead. If neither exists, show the original 'not found' message.\n5. Import `sys` and `os` at the top of daemon_cmd.py (os may already be available via paths module but should be imported directly).\n6. The paths module already has `APP_NAME = 'async-crud-mcp'` - import and reuse it for the fallback path construction to stay DRY.\n\nAlternative considered: Adding a `get_programdata_logs_dir()` public function to paths.py. Rejected because the fallback is CLI-specific behavior (checking a second location), not a general path resolution change. The paths module's `get_logs_dir()` already correctly returns the ProgramData path when actually in service context.",
+    "files_to_modify": [
+      "src/async_crud_mcp/cli/daemon_cmd.py",
+      "tests/test_cli/test_daemon_cmd.py"
+    ],
+    "estimated_complexity": "low",
+    "ac_breakdown": {
+      "AC-1.1": "In daemon_cmd.py `logs()` function, after the `if not log_file.exists()` check at line 222, add a fallback block that: (a) checks if we're on Windows, (b) constructs the ProgramData log path as Path(os.environ.get('PROGRAMDATA', 'C:\\\\ProgramData')) / APP_NAME / 'logs' / 'daemon.log', (c) if that file exists, reassigns log_file to it and continues. If neither path has the file, show the original 'not found' message with the primary path. This also applies when --username is used with get_user_logs_dir - if that path doesn't exist on Windows, check ProgramData/{APP_NAME}/logs/{username}/daemon.log as well.",
+      "AC-1.2": "Use `os.environ.get('PROGRAMDATA', 'C:\\\\ProgramData')` for the ProgramData base, appending `async-crud-mcp/logs` (or `async-crud-mcp/logs/{username}` for per-user). This is consistent with the existing pattern in paths.py:157-158 and paths.py:384. Import APP_NAME from async_crud_mcp.daemon.paths to build the path.",
+      "AC-1.3": "Guard the entire fallback block with `sys.platform == 'win32'`. Add `import sys` and `import os` to daemon_cmd.py imports. The fallback code is unreachable on non-Windows platforms."
     },
-    "B": {
-      "passed": true,
-      "blocking": false,
-      "blocked": false
-    },
-    "C": {
-      "passed": false,
-      "blocking": false,
-      "blocked": false
-    },
-    "D": {
-      "passed": false,
-      "blocking": true,
-      "blocked": true,
-      "missing_data": "test_output"
-    },
-    "J": {
-      "passed": true,
-      "blocking": true,
-      "blocked": false
-    }
-  },
-  "blocked_checks": ["D"],
-  "blocked_reason": "missing_test_output",
-  "error_signatures": [
-    "ValidationError:test_coverage:story_1:AC-1.1:P0 acceptance criteria without test coverage"
-  ],
-  "convergence": null
+    "testing_strategy": "Add tests to test_daemon_cmd.py:\n1. test_logs_programdata_fallback_on_windows: Mock sys.platform='win32', mock get_logs_dir to return a path where daemon.log doesn't exist, mock os.environ to include PROGRAMDATA, verify the command finds and reads from the ProgramData fallback path.\n2. test_logs_no_fallback_on_non_windows: Mock sys.platform='linux', verify no ProgramData fallback is attempted.\n3. test_logs_programdata_fallback_not_found: Mock both primary and ProgramData paths as non-existent, verify 'not found' message.",
+    "dependencies": []
+  }
 }

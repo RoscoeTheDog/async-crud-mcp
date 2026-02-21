@@ -1,0 +1,105 @@
+{
+  "story_id": 5,
+  "validation_id": -5,
+  "phase": "a",
+  "schema": "validation-phase-a-output-v1",
+  "executed_at": "2026-02-17T08:41:23.772484+00:00",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "repairs": []
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false,
+      "errors": [],
+      "warnings": [],
+      "data": {
+        "acs_found": 4,
+        "acs_with_priority": 4,
+        "priority_distribution": {
+          "P0": 4,
+          "P1": 0,
+          "P2": 0
+        }
+      }
+    },
+    "C": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3, AC-5.4"
+      ],
+      "warnings": [],
+      "data": {
+        "acs_total": 4,
+        "acs_with_tests": 0,
+        "acs_missing_tests": [
+          "AC-5.1",
+          "AC-5.2",
+          "AC-5.3",
+          "AC-5.4"
+        ],
+        "p0_missing_tests": [
+          "AC-5.1",
+          "AC-5.2",
+          "AC-5.3",
+          "AC-5.4"
+        ]
+      }
+    },
+    "D": {
+      "passed": true,
+      "blocking": true,
+      "blocked": false,
+      "errors": [],
+      "warnings": [
+        "Using Gate 3 collective test results (no per-story Phase C data). Priority-based pass rates derived from AC pattern matching on collective output."
+      ],
+      "data": {
+        "overall_rate": 0.9837209302325581,
+        "overall_passed": 423,
+        "overall_total": 430
+      }
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "Coverage 0.0% below threshold 80% (scope: scoped)"
+      ],
+      "warnings": [],
+      "data": {
+        "coverage": 0.0,
+        "threshold": 0.8,
+        "touched_files": [
+          "README.md"
+        ]
+      }
+    }
+  },
+  "convergence": {
+    "status": "failed",
+    "action": "defer",
+    "reason": "Blocking checks failed (C: no test coverage, J: insufficient coverage)",
+    "run_count": 0
+  },
+  "phase_outcome": {
+    "passed": false,
+    "blocked": false,
+    "proceed_to_phase_b": false
+  },
+  "summary": {
+    "blocking_issues": [
+      "P0 acceptance criteria without test coverage: AC-5.1, AC-5.2, AC-5.3, AC-5.4",
+      "Coverage 0.0% below threshold 80%"
+    ]
+  }
+}

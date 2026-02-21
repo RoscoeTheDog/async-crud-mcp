@@ -122,7 +122,7 @@ class WindowsServiceInstaller(InstallerBase):
     def install(self, **kwargs) -> None:
         """Install the Windows service.
 
-        Delegates to windows.windows_service.install_service() which uses
+        Delegates to windows_service.install_service() which uses
         direct win32service.CreateService() API.
 
         Args:
@@ -132,7 +132,7 @@ class WindowsServiceInstaller(InstallerBase):
             OSError: If installation fails (typically ACCESS_DENIED)
             ImportError: If pywin32 is not installed
         """
-        from .windows.windows_service import install_service
+        from .windows_service import install_service
         install_service(**kwargs)
 
     def uninstall(self) -> None:
@@ -142,7 +142,7 @@ class WindowsServiceInstaller(InstallerBase):
             OSError: If uninstallation fails
             ImportError: If pywin32 is not installed
         """
-        from .windows.windows_service import uninstall_service
+        from .windows_service import uninstall_service
         uninstall_service()
 
     def start(self) -> None:

@@ -1,0 +1,86 @@
+You are a Gap Analyzer for partition 1 of 1.
+
+IMPORTANT: Skip INIT protocol entirely. You are a subagent.
+
+INPUTS:
+1. Spec manifest: C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/sprint/tmp/spec-manifest.json
+2. Your assigned deliverable IDs: ALL (d1 through d87)
+3. Project root: C:/Users/Admin/Documents/GitHub/async-crud-mcp
+
+TASK (three steps):
+
+1. SCAN: For each assigned deliverable, check if the file exists at the specified path. If it exists, read it and compare against the spec's acceptance criteria. Classify each deliverable as:
+   - "new": File does not exist (must be created)
+   - "modify": File exists but missing acceptance criteria
+   - "done": File exists and meets all acceptance criteria
+   - "extra": File exists in project but not in spec (only flag if in same directories)
+
+   CRITICAL EXCLUSION: Do NOT create standalone test/testing stories.
+   The sprint gate system handles all testing automatically:
+   - Gate 2: Micro-verification (linter, type checks, targeted tests per story)
+   - Gate 3: Integration Testing (full test suite run after all stories)
+   - Gate 5: Remediation (creates fix stories if tests fail)
+
+   Test files (test_*.py, *_test.go, *.test.ts, etc.) MUST be grouped
+   with their corresponding implementation module story. If a deliverable
+   is ONLY a test file with no corresponding implementation file in your
+   partition, classify it as "done" (testing is handled by the gate system).
+
+2. GROUP: Group the "new" and "modify" deliverables into logical stories.
+   Grouping heuristics (in priority order):
+   - Test files ALWAYS belong with their implementation module
+     (e.g., service.py + test_service.py = one story). NEVER create
+     a story that contains ONLY test files.
+   - Platform pairs (e.g., setup.bat + setup.sh = one story)
+   - Related config files
+   - Each story should be completable in one sprint execution (2-5 files typical)
+
+3. WRITE: Write your results to:
+   C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/sprint/tmp/partial-stories-1.json
+
+Schema for partial-stories-1.json:
+{
+  "partition_id": 1,
+  "gap_summary": {
+    "total_deliverables": <count of assigned deliverables>,
+    "new": <count>,
+    "modify": <count>,
+    "done": <count>,
+    "extra": <count>
+  },
+  "stories": [
+    {
+      "id": "<sequential within this partition, will be re-sequenced>",
+      "title": "Short descriptive title",
+      "type": "feature",
+      "description": "What this story accomplishes",
+      "acceptance_criteria": [
+        {"id": "AC-{N}.1", "text": "Specific testable criterion"}
+      ],
+      "files": ["path/to/file1.py", "path/to/file2.py"],
+      "depends_on": [],
+      "risk": "low|medium|high",
+      "points": <1-5>,
+      "gap_sources": ["d1", "d2"]
+    }
+  ],
+  "uncovered_extras": [
+    {"path": "src/legacy.py", "description": "Not in spec"}
+  ]
+}
+
+IMPORTANT:
+- Only analyze deliverables from the spec manifest
+- NEVER create standalone test stories - test files belong with their implementation module
+- All stories MUST use type "feature" (remediation/validation are created by the gate system)
+- Group platform variants (Windows/Linux) into single stories
+- Each story should target 2-5 files maximum
+- Set depends_on based on logical dependencies (e.g., core module before CLI wrapper)
+- Focus ESPECIALLY on the daemon/ and scripts/ directories where the template drift was identified
+- The key known drifts are:
+  a) scripts/installer.py install_service() looks for non-existent service_installer.bat instead of using venv CLI `bootstrap install` pattern
+  b) Template's windows/service_installer.py (admin helpers) not present in implementation
+  c) scripts/installer.py is a simplified ~530 line version vs the template's ~1100 line version with full logging, error handling, step tracking, and InstallerContext
+  d) Many daemon modules may be simplified or missing acceptance criteria vs the template snippets
+
+You MUST write your output JSON to C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/sprint/tmp/partial-stories-1.json

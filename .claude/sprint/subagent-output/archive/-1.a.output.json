@@ -1,74 +1,47 @@
 {
+  "story_id": "1",
   "validation_id": "-1",
   "phase": "a",
-  "story_id": "-1",
+  "status": "failed",
+  "completed_at": "2026-02-17T08:39:44Z",
   "structural_checks": {
     "A": {
-      "check_id": "A",
-      "story_id": "-1",
-      "passed": false,
+      "passed": true,
       "blocking": false,
-      "blocked": true,
-      "errors": ["Story file not found for ID: -1"],
-      "warnings": [],
-      "missing_data": "story_file",
-      "executed_at": "2026-02-14T02:33:00+00:00"
+      "blocked": false
     },
     "B": {
-      "check_id": "B",
-      "story_id": "-1",
-      "passed": false,
+      "passed": true,
       "blocking": false,
-      "blocked": true,
-      "errors": ["Story file not found for ID: -1"],
-      "warnings": [],
-      "missing_data": "story_file",
-      "executed_at": "2026-02-14T02:33:03+00:00"
+      "blocked": false
     },
     "C": {
-      "check_id": "C",
-      "story_id": "-1",
       "passed": false,
-      "blocking": false,
-      "blocked": true,
-      "errors": ["Story file not found for ID: -1"],
-      "warnings": [],
-      "missing_data": "story_file",
-      "executed_at": "2026-02-14T02:33:25+00:00"
+      "blocking": true,
+      "blocked": false,
+      "error": "P0 acceptance criteria without test coverage: AC-1.1, AC-1.2, AC-1.3"
     },
     "D": {
-      "check_id": "D",
-      "story_id": "-1",
-      "passed": false,
+      "passed": true,
       "blocking": true,
-      "blocked": true,
-      "errors": ["Story file not found for ID: -1"],
-      "warnings": [],
-      "missing_data": "story_file",
-      "executed_at": "2026-02-14T02:33:35+00:00"
+      "blocked": false
     },
     "J": {
-      "check_id": "J",
-      "story_id": "-1",
       "passed": false,
       "blocking": true,
-      "blocked": true,
-      "errors": ["Story file not found for ID: -1"],
-      "warnings": [],
-      "missing_data": "story_file",
-      "executed_at": "2026-02-14T02:33:40+00:00"
+      "blocked": false,
+      "error": "Coverage 0.0% below threshold 80% (scope: scoped)"
     }
   },
-  "error_signatures": [],
-  "convergence_analysis": {
-    "pattern": "blocked",
-    "action": "no_phase_b",
-    "reason": "Meta-validation story has no corresponding story file"
+  "failed_checks": ["C", "J"],
+  "error_signatures": [
+    "TestCoverageError:stories/1:AC-1.1,AC-1.2,AC-1.3:no_test_coverage",
+    "CoverageError:src/async_crud_mcp/cli/daemon_cmd.py:coverage:0.0_percent_below_80_percent"
+  ],
+  "convergence": {
+    "pattern": "passed",
+    "action": "continue",
+    "history_length": 0
   },
-  "status": "blocked",
-  "blocked_reason": "story_file_missing",
-  "phase_outcome": "blocked",
-  "skip_phase_b": true,
-  "executed_at": "2026-02-14T02:33:45.123456+00:00",
-  "notes": "Story -1 is a meta-validation task without a corresponding story file. All structural checks blocked with exit code 3. Phase B dispatch skipped."
+  "notes": "Phase A FAILED due to blocking validators C (no test coverage for P0 ACs) and J (insufficient code coverage). No phase B will be dispatched."
 }

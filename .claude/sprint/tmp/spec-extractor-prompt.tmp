@@ -1,0 +1,139 @@
+You are a Spec Extractor. Read the specification at C:\Users\Admin\Documents\GitHub\claude-code-tooling\claude-mcp\daemon-service and produce a structured manifest of ALL deliverables.
+
+IMPORTANT: Skip INIT protocol entirely. Do NOT run any INIT steps. Begin work immediately.
+
+INPUT MODE: template_repo
+
+DIRECTORY STRUCTURE:
+daemon-service/
++-- CLAUDE.md               # Entrypoint (already summarized below)
++-- VERSION
++-- versions/
++-- templates/               # 10 template files
+|   +-- OVERVIEW.template.md
+|   +-- BOOTSTRAP.template.md
+|   +-- SERVICE.template.md
+|   +-- CONFIG.template.md
+|   +-- PYTHON_STACK.template.md
+|   +-- INTEGRATION.template.md
+|   +-- INSTALLER.template.md
+|   +-- CLI_COMMANDS.template.md
+|   +-- PYPROJECT.template.md
+|   +-- PORT_DISCOVERY.template.md
++-- resources/
+    +-- SSOT/                # 5 canonical files
+    |   +-- design-principles.md
+    |   +-- directory-structure.md
+    |   +-- port-assignment.md
+    |   +-- mcp-daemons-manifest.md
+    |   +-- architectural-decisions.md
+    +-- snippets/            # 32 actual source files
+    |   +-- windows/ (4 files)
+    |   +-- macos/ (2 files)
+    |   +-- linux/ (2 files)
+    |   +-- common/ (14 files)
+    |   +-- scripts/ (11 files)
+    +-- helpers/ (3 files)
+    +-- appendices/ (3 files)
+
+ENTRYPOINT SUMMARY (from CLAUDE.md):
+- Version: 1.19.0
+- Purpose: Reusable deployment pattern for MCP servers as persistent per-user daemon services
+- Placeholders: [APP_NAME]=claude-jsonl-mcp, [DEFAULT_PORT]=8422, [PACKAGE_NAME]=claude_jsonl_mcp
+- ADR-009: single [APP_NAME] convention (lowercase-hyphenated)
+- Templates describe architecture, snippets are actual source files to copy
+- 10 templates, 32 snippets, 14 ADRs
+
+DIRECTORY DISCOVERY (execute in order):
+1. Read the CLAUDE.md entrypoint (already summarized above - skip re-reading)
+2. Read ALL files in templates/ for deliverable descriptions
+3. Read ALL files in resources/SSOT/ for canonical requirements:
+   - Design principles (mandates, constraints)
+   - Architectural Decision Records (ADRs with specific values/thresholds)
+   - Directory structure expectations
+   - Port assignments, manifests, schemas
+4. List (but do not read in full) snippets/ to catalog available reference implementations
+5. Read resources/helpers/ for validation criteria and checklists
+6. Read resources/appendices/ for non-functional requirements (security, testing, platform paths)
+
+TARGET PROJECT: C:\Users\Admin\Documents\GitHub\async-crud-mcp
+(This is the project the spec will be compared against in drift analysis)
+
+For each deliverable, extract:
+- id: Unique identifier (e.g., "d1", "d2", ...)
+- path: Expected relative file path in the TARGET PROJECT
+- description: What this deliverable does
+- type: "file" | "module" | "config" | "script" | "test" | "doc"
+- spec_section: The spec file or section this deliverable comes from
+  (e.g., "CONFIG.template.md", "section 3.2")
+- acceptance_criteria: List of specific requirements with verifiable signals
+- supporting_context: List of non-template files that inform this deliverable's
+  requirements (ADRs, design principles, snippets, appendices). Include the file
+  path relative to SPEC_PATH and a brief note on relevance.
+
+Write the result to: C:\Users\Admin\Documents\GitHub\async-crud-mcp\.claude\sprint\tmp\spec-manifest.json
+
+Schema:
+{
+  "spec_path": "C:\Users\Admin\Documents\GitHub\claude-code-tooling\claude-mcp\daemon-service",
+  "input_mode": "template_repo",
+  "extracted_at": "ISO8601",
+  "context_files": [
+    {
+      "path": "resources/SSOT/architectural-decisions.md",
+      "type": "adr",
+      "summary": "summary here"
+    }
+  ],
+  "deliverables": [
+    {
+      "id": "d1",
+      "path": "src/module/file.py",
+      "description": "Description from spec",
+      "type": "file",
+      "spec_section": "CONFIG.template.md",
+      "acceptance_criteria": [
+        {
+          "id": "AC-d1.1",
+          "text": "Requirement text",
+          "verifiable_signal": "What a code reviewer would check"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-005",
+          "relevance": "Why this is relevant"
+        }
+      ]
+    }
+  ]
+}
+
+Set input_mode to "template_repo".
+
+context_files: Top-level array of ALL non-template files discovered during directory
+traversal (SSOT, snippets, helpers, appendices).
+
+supporting_context: Per-deliverable array of files that inform that specific
+deliverable's requirements.
+
+For verifiable_signal: describe what a code reviewer would look for to confirm
+the AC is met (class names, method signatures, config keys, behavior patterns).
+Incorporate specific values from ADRs/principles when available.
+
+IMPORTANT: Include EVERY deliverable mentioned in the spec. Do not skip files
+that seem minor (setup scripts, configs, test files). The drift analysis depends
+on completeness.
+
+IMPORTANT: When input_mode is "template_repo", requirements may be spread across
+templates, SSOT, snippets, and appendices. A deliverable's acceptance criteria
+should reflect ALL sources, not just the template text. Cross-reference SSOT
+files to enrich ACs with specific thresholds, values, and constraints.
+
+IMPORTANT: The target project is async-crud-mcp (a JSONL-based CRUD MCP server).
+Map deliverable paths to the actual project structure. Read the project's directory
+structure to understand where files are located. The project uses:
+- src/async_crud_mcp/ as the main package directory
+- scripts/ for installation scripts
+- tests/ for test files
+- pyproject.toml for build config

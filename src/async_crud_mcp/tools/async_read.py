@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
+    AccessDeniedError,
+    ContentScanner,
     LockManager,
     PathValidationError,
     PathValidator,
@@ -17,6 +19,7 @@ async def async_read(
     request: AsyncReadRequest,
     path_validator: PathValidator,
     lock_manager: LockManager,
+    content_scanner: ContentScanner | None = None,
 ) -> Union[ReadSuccessResponse, ErrorResponse]:
     """
     Read file content with offset/limit support and hash computation.
@@ -25,14 +28,21 @@ async def async_read(
         request: Read request with path, encoding, offset, and limit
         path_validator: PathValidator instance for path validation
         lock_manager: LockManager instance for coordinating locks
+        content_scanner: Optional ContentScanner for sensitive data detection
 
     Returns:
         ReadSuccessResponse with content and metadata, or ErrorResponse on failure
     """
     try:
-        # 1. Validate path using PathValidator
+        # 1. Validate path and access policy
         try:
-            validated_path = path_validator.validate(request.path)
+            validated_path = path_validator.validate_operation(request.path, "read")
+        except AccessDeniedError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ACCESS_DENIED,
+                message=str(e),
+                path=request.path,
+            )
         except PathValidationError as e:
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,
@@ -67,6 +77,20 @@ async def async_read(
                     message=f"Failed to decode file with encoding '{request.encoding}': {e}",
                     path=request.path,
                 )
+
+            # 4b.5: Content scanning (if enabled)
+            if content_scanner is not None:
+                scan_result = content_scanner.scan(content, str(validated_path))
+                if scan_result.blocked:
+                    return ErrorResponse(
+                        error_code=ErrorCode.ACCESS_DENIED,
+                        message=(
+                            f"File contains sensitive content matching rule "
+                            f"'{scan_result.matched_pattern}' "
+                            f"(line {scan_result.matched_line})"
+                        ),
+                        path=request.path,
+                    )
 
             # 4c. Split into lines, compute total_lines
             lines = content.splitlines(keepends=True)

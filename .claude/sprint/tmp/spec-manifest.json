@@ -1,1074 +1,1667 @@
 {
   "spec_path": "C:\\Users\\Admin\\Documents\\GitHub\\claude-code-tooling\\claude-mcp\\daemon-service",
-  "spec_version": "1.15.0",
-  "extracted_at": "2026-02-12T23:30:00Z",
-  "target_project": {
-    "app_name": "async-crud-mcp",
-    "package_name": "async_crud_mcp",
-    "default_port": 8422
-  },
+  "input_mode": "template_repo",
+  "extracted_at": "2026-02-16T00:00:00Z",
+  "context_files": [
+    {
+      "path": "resources/SSOT/architectural-decisions.md",
+      "type": "adr",
+      "summary": "14 ADRs: pywin32 service (ADR-001), embedded bundle (ADR-002), config-based daemon control (ADR-003), uv package manager (ADR-004), loguru enqueue+drain (ADR-005), ProgramData fallback (ADR-006), multi-candidate Python discovery (ADR-007), multi-user dispatcher (ADR-008), single APP_NAME convention (ADR-009), uv managed Python (ADR-010), WindowsSelectorEventLoopPolicy (ADR-011), port conflict detection (ADR-012), restart-storm guardrails (ADR-013), snippet naming conventions (ADR-014)"
+    },
+    {
+      "path": "resources/SSOT/directory-structure.md",
+      "type": "ssot",
+      "summary": "Platform directory mapping: Install=%LOCALAPPDATA%\\Programs\\[APP_NAME], Config=%LOCALAPPDATA%\\[APP_NAME]\\config, Logs=%LOCALAPPDATA%\\[APP_NAME]\\logs, Data=%LOCALAPPDATA%\\[APP_NAME]\\data. Also macOS (Library/) and Linux (XDG) equivalents."
+    },
+    {
+      "path": "resources/SSOT/port-assignment.md",
+      "type": "ssot",
+      "summary": "Port strategies: static (single user) or dynamic (username hash, base 8400, range 100). Port collision handled via 3-layer defense (ADR-012): server pre-flight socket.bind(), dispatcher pre-check, runtime TCP health poll."
+    },
+    {
+      "path": "resources/SSOT/mcp-daemons-manifest.md",
+      "type": "ssot",
+      "summary": "Schema for ~/.claude/mcp-daemons.json registry. Fields: name, configPath, defaultPort, host (default 127.0.0.1), urlPath (default /sse), type (default sse). Used by port_discovery.py via SessionStart hook."
+    },
+    {
+      "path": "resources/SSOT/design-principles.md",
+      "type": "ssot",
+      "summary": "Design principles from OVERVIEW.template.md: repo independence (no symlinks/editable installs), auto-start on boot, admin for Windows install only, separation of concerns (programs/config/state), per-user isolation, two-layer architecture, single version source of truth."
+    },
+    {
+      "path": "resources/snippets/common/paths.py",
+      "type": "snippet",
+      "summary": "Cross-platform path helpers: get_install_dir, get_config_dir, get_logs_dir, get_data_dir. Uses LOCALAPPDATA/XDG/Library per platform."
+    },
+    {
+      "path": "resources/snippets/common/config.py",
+      "type": "snippet",
+      "summary": "Pydantic-Settings config class (ADR-014 naming: config.py not settings.py). DaemonConfig model, Settings with from_file() classmethod, get_settings() singleton."
+    },
+    {
+      "path": "resources/snippets/common/config_init.py",
+      "type": "snippet",
+      "summary": "Config initialization: load_settings_from_file(), get_user_config_file_path(), _strip_comment_fields(), find_available_port()."
+    },
+    {
+      "path": "resources/snippets/common/config_watcher.py",
+      "type": "snippet",
+      "summary": "Debounced config file watcher with configurable debounce_seconds (default 1.0)."
+    },
+    {
+      "path": "resources/snippets/common/bootstrap_daemon.py",
+      "type": "snippet",
+      "summary": "BootstrapDaemon class with async run() loop: session detection, MCP server lifecycle, config polling, signal handler with try/except ValueError."
+    },
+    {
+      "path": "resources/snippets/common/session_detector.py",
+      "type": "snippet",
+      "summary": "Cross-platform session detection: WTSEnumerateSessions (Windows), /dev/console (macOS), /run/user/{uid} (Linux)."
+    },
+    {
+      "path": "resources/snippets/common/graceful_shutdown.py",
+      "type": "snippet",
+      "summary": "Graceful MCP server shutdown with 10s timeout."
+    },
+    {
+      "path": "resources/snippets/common/health.py",
+      "type": "snippet",
+      "summary": "Application-level health check: GET /health endpoint returning status, version, uptime_seconds, circuit_breaker state."
+    },
+    {
+      "path": "resources/snippets/common/installer.py",
+      "type": "snippet",
+      "summary": "Platform-agnostic installer ABC with factory pattern (get_installer()), install/uninstall/start/stop/get_state methods."
+    },
+    {
+      "path": "resources/snippets/common/logging_setup.py",
+      "type": "snippet",
+      "summary": "Loguru setup with console (CONSOLE_FORMAT) and file (10MB rotation, 7 days retention, enqueue=True) handlers."
+    },
+    {
+      "path": "resources/snippets/common/cli_app.py",
+      "type": "snippet",
+      "summary": "Typer CLI skeleton with bootstrap/daemon/config subcommand groups, setup and quick-install top-level commands."
+    },
+    {
+      "path": "resources/snippets/common/quick_install.py",
+      "type": "snippet",
+      "summary": "quick_install() and uninstall() implementations for top-level CLI commands."
+    },
+    {
+      "path": "resources/snippets/common/__main__.py",
+      "type": "snippet",
+      "summary": "Module entry point enabling python -m [PACKAGE_NAME]."
+    },
+    {
+      "path": "resources/snippets/windows/windows_service.py",
+      "type": "snippet",
+      "summary": "Windows service class (ADR-014 naming: windows_service.py): SvcDoRun with ReportServiceStatus(SERVICE_RUNNING) immediately, WindowsSelectorEventLoopPolicy (ADR-011), SERVICE_ACCEPT_SESSIONCHANGE."
+    },
+    {
+      "path": "resources/snippets/windows/dispatcher.py",
+      "type": "snippet",
+      "summary": "Multi-user dispatcher (ADR-008): per-user workers via CreateProcessAsUser, WTS session events, perpetual circuit breaker (ADR-013), three-layer port conflict defense (ADR-012)."
+    },
+    {
+      "path": "resources/snippets/windows/service_installer.py",
+      "type": "snippet",
+      "summary": "Windows service installation using direct CreateService API (GAP-4)."
+    },
+    {
+      "path": "resources/snippets/windows/session_detector.py",
+      "type": "snippet",
+      "summary": "Windows-specific session detection via WTSEnumerateSessions (WTSActive, WTSConnected)."
+    },
+    {
+      "path": "resources/snippets/macos/launchd.plist",
+      "type": "snippet",
+      "summary": "LaunchAgent plist template: Label=com.[APP_NAME].daemon, RunAtLoad=true, KeepAlive=true."
+    },
+    {
+      "path": "resources/snippets/macos/launchd_installer.sh",
+      "type": "snippet",
+      "summary": "macOS launchd installation script."
+    },
+    {
+      "path": "resources/snippets/linux/systemd.service",
+      "type": "snippet",
+      "summary": "systemd user service unit: Type=simple, Restart=always, RestartSec=30, WantedBy=default.target."
+    },
+    {
+      "path": "resources/snippets/linux/systemd_installer.sh",
+      "type": "snippet",
+      "summary": "Linux systemd installation script with loginctl enable-linger."
+    },
+    {
+      "path": "resources/snippets/scripts/installer.py",
+      "type": "snippet",
+      "summary": "Stdlib-only Python installer (~1100 lines): privilege check, preflight, venv with uv --managed-python, package install, pywin32 DLL config, OS service install, setup wizard."
+    },
+    {
+      "path": "resources/snippets/scripts/uninstaller.py",
+      "type": "snippet",
+      "summary": "Stdlib-only Python uninstaller."
+    },
+    {
+      "path": "resources/snippets/scripts/setup.bat",
+      "type": "snippet",
+      "summary": "Windows thin wrapper (~40 lines) delegating to installer.py."
+    },
+    {
+      "path": "resources/snippets/scripts/setup.sh",
+      "type": "snippet",
+      "summary": "Unix thin wrapper delegating to installer.py."
+    },
+    {
+      "path": "resources/snippets/scripts/bootstrap_uv.py",
+      "type": "snippet",
+      "summary": "Cross-platform uv bootstrap: install_uv(), create_venv_with_uv(), pip_install_with_uv() with pip fallback."
+    },
+    {
+      "path": "resources/snippets/scripts/build_installer.py",
+      "type": "snippet",
+      "summary": "Bundle builder: creates dist/[APP_NAME]-v{version}-win64.zip with embedded Python, uv, vendored deps."
+    },
+    {
+      "path": "resources/snippets/scripts/configure_claude_code.py",
+      "type": "snippet",
+      "summary": "Configures Claude Code CLI: updates ~/.claude.json mcpServers, registers in ~/.claude/mcp-daemons.json manifest."
+    },
+    {
+      "path": "resources/snippets/scripts/test_server.py",
+      "type": "snippet",
+      "summary": "Post-install server verification: --port, --skip-logs, --log-age options."
+    },
+    {
+      "path": "resources/snippets/scripts/test_server.bat",
+      "type": "snippet",
+      "summary": "Windows test_server wrapper."
+    },
+    {
+      "path": "resources/snippets/scripts/test_server.sh",
+      "type": "snippet",
+      "summary": "Unix test_server wrapper."
+    },
+    {
+      "path": "resources/snippets/scripts/port_discovery.py",
+      "type": "snippet",
+      "summary": "Port discovery script: reads mcp-daemons.json manifest, TCP checks each server, atomically updates ~/.claude.json."
+    },
+    {
+      "path": "resources/helpers/validate-implementation.md",
+      "type": "helper",
+      "summary": "Implementation validation checklist: directory structure, config validation, session detection, service registration, health endpoint, functional tests, security checks."
+    },
+    {
+      "path": "resources/helpers/select-templates.md",
+      "type": "helper",
+      "summary": "Template selection guide for which templates apply to which project types."
+    },
+    {
+      "path": "resources/helpers/generate-full-spec.md",
+      "type": "helper",
+      "summary": "Full spec generation helper instructions."
+    },
+    {
+      "path": "resources/appendices/a-platform-paths.md",
+      "type": "appendix",
+      "summary": "Platform-specific path reference for all OS targets."
+    },
+    {
+      "path": "resources/appendices/b-testing-checklist.md",
+      "type": "appendix",
+      "summary": "Testing checklist: fresh install, upgrade preservation, runtime behavior, multi-user, bootstrap failure modes."
+    },
+    {
+      "path": "resources/appendices/c-security.md",
+      "type": "appendix",
+      "summary": "Security requirements: 127.0.0.1 default, no secrets in config, config file permissions (Unix: chmod 600), no root at runtime, security warning for non-localhost binding."
+    }
+  ],
   "deliverables": [
     {
       "id": "d1",
       "path": "pyproject.toml",
-      "description": "Project configuration with all required dependencies (pydantic, pydantic-settings, typer, loguru, tenacity, httpx, python-dotenv, pywin32), build system, entry points, and dev dependencies",
+      "description": "Project build configuration with dependencies, entry points, and metadata",
       "type": "config",
+      "spec_section": "PYPROJECT.template.md",
       "acceptance_criteria": [
-        "Contains pydantic>=2.0 dependency",
-        "Contains pydantic-settings>=2.0 dependency",
-        "Contains typer>=0.9 dependency",
-        "Contains loguru>=0.7 dependency",
-        "Contains tenacity>=8.0 dependency",
-        "Contains httpx>=0.24 dependency",
-        "Contains python-dotenv>=1.0 dependency",
-        "Contains pywin32>=306 conditional on sys_platform=='win32'",
-        "Contains psutil>=5.9 in dev dependencies",
-        "Entry point async-crud-mcp = async_crud_mcp.cli:app",
-        "Build system configured for hatchling with src layout"
+        {
+          "id": "AC-d1.1",
+          "text": "Build backend is hatchling",
+          "verifiable_signal": "[build-system] requires=['hatchling'] and build-backend='hatchling.build' present"
+        },
+        {
+          "id": "AC-d1.2",
+          "text": "requires-python = '>=3.10'",
+          "verifiable_signal": "requires-python field equals '>=3.10'"
+        },
+        {
+          "id": "AC-d1.3",
+          "text": "Core dependencies: mcp>=1.0.0, fastmcp>=0.1.0, pydantic>=2.0, pydantic-settings>=2.0, typer>=0.9, loguru>=0.7, tenacity>=8.0, httpx>=0.24, python-dotenv>=1.0, rich>=13.0",
+          "verifiable_signal": "All listed packages in [project.dependencies]"
+        },
+        {
+          "id": "AC-d1.4",
+          "text": "pywin32>=306 with Windows-only platform marker",
+          "verifiable_signal": "'pywin32>=306; sys_platform == \"win32\"' in dependencies"
+        },
+        {
+          "id": "AC-d1.5",
+          "text": "CLI entry point: async-crud-mcp = 'async_crud_mcp.cli:app'",
+          "verifiable_signal": "[project.scripts] async-crud-mcp = 'async_crud_mcp.cli:app'"
+        },
+        {
+          "id": "AC-d1.6",
+          "text": "Dev extras include pytest>=8.0.0 and psutil>=5.9",
+          "verifiable_signal": "[project.optional-dependencies] dev contains pytest and psutil"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-004",
+          "relevance": "uv as primary package manager; hatchling build backend"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-009",
+          "relevance": "Entry point key must be the single lowercase-hyphenated APP_NAME"
+        }
       ]
     },
     {
       "id": "d2",
       "path": "src/async_crud_mcp/__init__.py",
-      "description": "Package init with __version__ as single source of truth (Design Principle 7)",
+      "description": "Package init - defines __version__ as single source of truth",
       "type": "module",
+      "spec_section": "OVERVIEW.template.md (Section: Single Source of Truth for Version)",
       "acceptance_criteria": [
-        "Defines __version__ string as the single source of truth",
-        "All other version references import from this location",
-        "Contains module docstring describing the package"
+        {
+          "id": "AC-d2.1",
+          "text": "__version__ string defined at module level",
+          "verifiable_signal": "__version__ = 'X.Y.Z' present"
+        },
+        {
+          "id": "AC-d2.2",
+          "text": "Version matches pyproject.toml [project] version",
+          "verifiable_signal": "Value matches pyproject.toml version field"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-009",
+          "relevance": "Single source of truth pattern"
+        }
       ]
     },
     {
       "id": "d3",
       "path": "src/async_crud_mcp/__main__.py",
-      "description": "Module entry point for python -m async_crud_mcp execution",
+      "description": "Module entry point enabling python -m async_crud_mcp",
       "type": "module",
+      "spec_section": "PYPROJECT.template.md (Package Layout)",
       "acceptance_criteria": [
-        "Allows running via python -m async_crud_mcp",
-        "Delegates to CLI app() entry point"
+        {
+          "id": "AC-d3.1",
+          "text": "Calls CLI app under __name__ == '__main__' guard",
+          "verifiable_signal": "if __name__ == '__main__': app() or equivalent"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/__main__.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d4",
-      "path": "src/async_crud_mcp/daemon/__init__.py",
-      "description": "Daemon package init exposing key symbols",
+      "path": "src/async_crud_mcp/server.py",
+      "description": "FastMCP server with callable main(), port pre-flight check, and file-based loguru logging",
       "type": "module",
+      "spec_section": "SERVICE.template.md (Worker Launch Safety) + BOOTSTRAP.template.md (ADR-012)",
       "acceptance_criteria": [
-        "Package initializer for daemon subpackage",
-        "Exports key daemon components"
+        {
+          "id": "AC-d4.1",
+          "text": "main() function callable directly without __name__ == '__main__' guard",
+          "verifiable_signal": "def main() at module level; function body not inside if __name__ guard"
+        },
+        {
+          "id": "AC-d4.2",
+          "text": "Port pre-flight socket.bind() before mcp.run() with sys.exit(48) on EADDRINUSE",
+          "verifiable_signal": "socket.socket().bind((host, port)); except OSError: sys.exit(48)"
+        },
+        {
+          "id": "AC-d4.3",
+          "text": "File-based loguru logging configured early in main() using get_logs_dir()",
+          "verifiable_signal": "logger.add(logs_dir / 'mcp_server.log', rotation='10 MB', retention=3, enqueue=True)"
+        },
+        {
+          "id": "AC-d4.4",
+          "text": "Uses loguru (not stdlib logging)",
+          "verifiable_signal": "from loguru import logger; no 'import logging'"
+        },
+        {
+          "id": "AC-d4.5",
+          "text": "Default host is 127.0.0.1",
+          "verifiable_signal": "host defaults to '127.0.0.1'"
+        },
+        {
+          "id": "AC-d4.6",
+          "text": "Security warning logged for non-localhost host binding",
+          "verifiable_signal": "logger.warning() when host not in ('127.0.0.1', 'localhost', '::1')"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-012",
+          "relevance": "Pre-flight socket.bind() required because uvicorn catches OSError internally"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-013",
+          "relevance": "File-based loguru mandatory; python -c launch requires main() not guarded by __name__"
+        },
+        {
+          "path": "resources/appendices/c-security.md",
+          "relevance": "Security warning for non-localhost binding"
+        }
       ]
     },
     {
       "id": "d5",
-      "path": "src/async_crud_mcp/daemon/paths.py",
-      "description": "Cross-platform path helpers for config, logs, data, shared, venv directories following OS conventions (Windows LOCALAPPDATA, macOS Library, Linux XDG)",
+      "path": "src/async_crud_mcp/config.py",
+      "description": "Pydantic-Settings configuration: DaemonConfig model, Settings class with from_file(), get_settings() singleton",
       "type": "module",
+      "spec_section": "CONFIG.template.md + PYTHON_STACK.template.md",
       "acceptance_criteria": [
-        "APP_NAME set to 'async-crud-mcp' (ADR-009 single name convention)",
-        "get_install_dir() returns platform-appropriate install path",
-        "get_config_dir() returns platform-appropriate config path",
-        "get_logs_dir() returns platform-appropriate logs path with ProgramData fallback for Windows service context (ADR-006)",
-        "get_data_dir() returns platform-appropriate data path",
-        "get_shared_dir() returns system-wide shared directory",
-        "get_shared_python_dir() and get_shared_uv_dir() for installer support",
-        "get_user_dir() returns per-user base directory",
-        "get_venv_dir() returns per-user venv directory",
-        "get_config_file_path() returns path to config.json",
-        "get_user_config_file_path(username) resolves per-user config via Windows registry",
-        "get_user_logs_dir(username) returns per-user log dir under ProgramData",
-        "_is_windows_service_context() detects LocalSystem account",
-        "_get_user_profile_path(username) resolves user profile via registry and pywin32",
-        "XDG compliance on Linux (XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME, XDG_CACHE_HOME)",
-        "No directories created automatically - callers must mkdir"
+        {
+          "id": "AC-d5.1",
+          "text": "DaemonConfig with required fields: enabled=True, host='127.0.0.1', port=8422 (range 1024-65535), transport='sse', log_level='DEBUG', config_poll_seconds=3",
+          "verifiable_signal": "DaemonConfig class with all fields and specified defaults"
+        },
+        {
+          "id": "AC-d5.2",
+          "text": "ADR-013 restart policy fields: startup_grace_seconds=60, backoff_base_seconds=5, backoff_max_seconds=300",
+          "verifiable_signal": "Three fields present in DaemonConfig with exact default values"
+        },
+        {
+          "id": "AC-d5.3",
+          "text": "Settings uses env_prefix with double-underscore nested delimiter",
+          "verifiable_signal": "SettingsConfigDict with env_prefix='ASYNC_CRUD_MCP_' and env_nested_delimiter='__'"
+        },
+        {
+          "id": "AC-d5.4",
+          "text": "Settings.from_file(config_path) classmethod falls back to defaults on missing/invalid file",
+          "verifiable_signal": "@classmethod from_file(cls, config_path: Path) -> 'Settings'; returns cls() on error"
+        },
+        {
+          "id": "AC-d5.5",
+          "text": "host field validator rejects empty string",
+          "verifiable_signal": "@field_validator('host') raises ValueError for empty string"
+        },
+        {
+          "id": "AC-d5.6",
+          "text": "get_settings() singleton with _force_reload parameter",
+          "verifiable_signal": "def get_settings(*, _force_reload: bool = False) -> Settings present"
+        },
+        {
+          "id": "AC-d5.7",
+          "text": "from_file() strips _-prefixed and $-prefixed comment keys before validation",
+          "verifiable_signal": "Keys starting with _ or $ excluded before model_validate()"
+        },
+        {
+          "id": "AC-d5.8",
+          "text": "File named config.py (not settings.py per ADR-014)",
+          "verifiable_signal": "Filename is config.py"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/config.py",
+          "relevance": "Reference implementation (ADR-014 naming: config.py)"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-003",
+          "relevance": "config_poll_seconds and daemon.enabled required fields"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-013",
+          "relevance": "startup_grace_seconds=60, backoff_base_seconds=5, backoff_max_seconds=300 defaults"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-014",
+          "relevance": "File must be named config.py not settings.py"
+        }
       ]
     },
     {
       "id": "d6",
-      "path": "src/async_crud_mcp/daemon/bootstrap_daemon.py",
-      "description": "Session-aware bootstrap daemon that manages MCP server lifecycle. Monitors user session state and config changes to start/stop MCP server subprocess",
+      "path": "src/async_crud_mcp/daemon/paths.py",
+      "description": "Cross-platform path resolution: config dir, logs dir, data dir, config file path",
       "type": "module",
+      "spec_section": "CONFIG.template.md (Directory Structure) + SSOT/directory-structure.md",
       "acceptance_criteria": [
-        "BootstrapDaemon class with running flag and mcp_process tracking",
-        "configure_logging() uses loguru with enqueue=True and rotation",
-        "Signal handlers wrapped in try/except ValueError for Windows service compat",
-        "async run() method with main loop polling session state and config",
-        "_load_settings() detects config file changes by mtime",
-        "_get_python_executable() with multi-candidate search for pythonservice.exe (ADR-007)",
-        "_start_mcp_server() launches subprocess with stderr redirected to file (not PIPE)",
-        "_stop_mcp_server() with graceful terminate and 5s timeout then kill",
-        "_cleanup_process() for proper handle cleanup",
-        "await logger.complete() in finally block for loguru drain (ADR-005)",
-        "Console handler only when running interactively (sys.stdout.isatty())",
-        "CLI entry point via __main__ block"
+        {
+          "id": "AC-d6.1",
+          "text": "get_config_dir() Windows: %LOCALAPPDATA%\\async-crud-mcp\\config",
+          "verifiable_signal": "Path(LOCALAPPDATA) / 'async-crud-mcp' / 'config' on win32"
+        },
+        {
+          "id": "AC-d6.2",
+          "text": "get_config_dir() Linux: XDG_CONFIG_HOME/async-crud-mcp (default ~/.config/async-crud-mcp)",
+          "verifiable_signal": "XDG_CONFIG_HOME env var used with ~/.config fallback"
+        },
+        {
+          "id": "AC-d6.3",
+          "text": "get_config_dir() macOS: ~/Library/Preferences/async-crud-mcp",
+          "verifiable_signal": "Path.home() / 'Library' / 'Preferences' / 'async-crud-mcp' on darwin"
+        },
+        {
+          "id": "AC-d6.4",
+          "text": "get_logs_dir() platform-appropriate: LOCALAPPDATA/async-crud-mcp/logs (Win), ~/Library/Logs/async-crud-mcp (mac), XDG_STATE_HOME/async-crud-mcp/logs (linux)",
+          "verifiable_signal": "All three branches return correct paths"
+        },
+        {
+          "id": "AC-d6.5",
+          "text": "get_config_file_path() returns full path to config.json",
+          "verifiable_signal": "Returns get_config_dir() / 'config.json'"
+        },
+        {
+          "id": "AC-d6.6",
+          "text": "Windows service context detection (ADR-006): if LOCALAPPDATA contains 'systemprofile', use ProgramData instead",
+          "verifiable_signal": "_is_windows_service_context() check; fallback to PROGRAMDATA path"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/directory-structure.md",
+          "relevance": "Canonical platform directory mapping"
+        },
+        {
+          "path": "resources/snippets/common/paths.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-006",
+          "relevance": "ProgramData fallback when running as LocalSystem"
+        }
       ]
     },
     {
       "id": "d7",
-      "path": "src/async_crud_mcp/daemon/session_detector.py",
-      "description": "Cross-platform user session detection via polling (Windows WTS API, macOS /dev/console, Linux /run/user)",
+      "path": "src/async_crud_mcp/daemon/bootstrap_daemon.py",
+      "description": "Session-aware bootstrap daemon: starts/stops MCP server based on session state and config",
       "type": "module",
+      "spec_section": "BOOTSTRAP.template.md",
       "acceptance_criteria": [
-        "get_active_sessions() returns list of lowercase usernames",
-        "is_user_session_active(username) checks specific user",
-        "Windows: Uses win32ts.WTSEnumerateSessions with WTSActive/WTSConnected states",
-        "macOS: Uses stat -f %Su /dev/console",
-        "Linux: Checks /run/user/{uid} directories for uid >= 1000",
-        "Handles ImportError for pywin32 gracefully",
-        "CLI test entry point via __main__"
+        {
+          "id": "AC-d7.1",
+          "text": "BootstrapDaemon class with async run() method",
+          "verifiable_signal": "class BootstrapDaemon with async def run(self)"
+        },
+        {
+          "id": "AC-d7.2",
+          "text": "Loop polls config and session every config_poll_seconds (default 3)",
+          "verifiable_signal": "await asyncio.sleep(config_poll_seconds) in while self.running"
+        },
+        {
+          "id": "AC-d7.3",
+          "text": "Signal handlers wrapped in try/except ValueError",
+          "verifiable_signal": "try: signal.signal(signal.SIGINT, ...) except ValueError: pass"
+        },
+        {
+          "id": "AC-d7.4",
+          "text": "await logger.complete() in finally block",
+          "verifiable_signal": "finally: await logger.complete()"
+        },
+        {
+          "id": "AC-d7.5",
+          "text": "Start logic: should_run = session_active AND daemon.enabled",
+          "verifiable_signal": "should_run = session_active and enabled; _start_mcp_server() when True and not running"
+        },
+        {
+          "id": "AC-d7.6",
+          "text": "Config debounce: 1.0s default via ConfigWatcher or inline mtime logic",
+          "verifiable_signal": "ConfigWatcher(debounce_seconds=1.0) or equivalent debounce logic"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/bootstrap_daemon.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-003",
+          "relevance": "Bootstrap polls config every N seconds; daemon.enabled controls server lifecycle"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-005",
+          "relevance": "logger.complete() drain in finally"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-011",
+          "relevance": "Signal handler try/except ValueError for Windows service thread context"
+        }
       ]
     },
     {
       "id": "d8",
-      "path": "src/async_crud_mcp/daemon/config_watcher.py",
-      "description": "Config file watcher with debounce protection and last-known-good caching for resilient config loading",
+      "path": "src/async_crud_mcp/daemon/session_detector.py",
+      "description": "Cross-platform user session detection",
       "type": "module",
+      "spec_section": "BOOTSTRAP.template.md (Cross-Platform Session Detection)",
       "acceptance_criteria": [
-        "ConfigWatcher class with debounce_seconds parameter",
-        "check_for_changes() returns True only after debounce window passes",
-        "ResilientConfigLoader generic class with pydantic model validation",
-        "Falls back to last-known-good config on ValidationError or JSONDecodeError",
-        "_strip_comment_fields() removes _-prefixed and $-prefixed keys recursively",
-        "atomic_write_config() writes via temp file and rename",
-        "has_fallback property"
+        {
+          "id": "AC-d8.1",
+          "text": "is_user_session_active() function present",
+          "verifiable_signal": "def is_user_session_active() returns bool"
+        },
+        {
+          "id": "AC-d8.2",
+          "text": "Windows: WTSEnumerateSessions via win32ts",
+          "verifiable_signal": "win32ts.WTSEnumerateSessions() in win32 branch"
+        },
+        {
+          "id": "AC-d8.3",
+          "text": "macOS: /dev/console owner check",
+          "verifiable_signal": "stat /dev/console or SCDynamicStore on darwin"
+        },
+        {
+          "id": "AC-d8.4",
+          "text": "Linux: /run/user/{uid} existence check",
+          "verifiable_signal": "Path(f'/run/user/{uid}').exists() on linux"
+        },
+        {
+          "id": "AC-d8.5",
+          "text": "Failures assume logged-out (return False), not exception",
+          "verifiable_signal": "try/except returning False on error"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/session_detector.py",
+          "relevance": "Reference cross-platform implementation"
+        },
+        {
+          "path": "resources/snippets/windows/session_detector.py",
+          "relevance": "Windows WTS API details"
+        }
       ]
     },
     {
       "id": "d9",
-      "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
-      "description": "Cross-platform signal handling and graceful shutdown with context manager and async support",
+      "path": "src/async_crud_mcp/daemon/config_watcher.py",
+      "description": "Debounced config file watcher protecting against mid-write reads",
       "type": "module",
+      "spec_section": "CONFIG.template.md (Config Resilience - Problem: Mid-Write Reads)",
       "acceptance_criteria": [
-        "ShutdownHandler class with SIGTERM/SIGINT handling",
-        "Signal registration wrapped in try/except ValueError for Windows service compat",
-        "Callback registration via add_callback()",
-        "Context manager support (__enter__/__exit__)",
-        "graceful_stop() function with timeout and force-stop fallback",
-        "shutdown_context() context manager",
-        "AsyncShutdownHandler for async code",
-        "SIGHUP handling on Unix"
+        {
+          "id": "AC-d9.1",
+          "text": "ConfigWatcher class with check_for_changes() -> bool",
+          "verifiable_signal": "class ConfigWatcher with def check_for_changes(self) -> bool"
+        },
+        {
+          "id": "AC-d9.2",
+          "text": "debounce_seconds defaults to 1.0",
+          "verifiable_signal": "debounce_seconds=1.0 in __init__ signature"
+        },
+        {
+          "id": "AC-d9.3",
+          "text": "mtime comparison for change detection",
+          "verifiable_signal": "config_path.stat().st_mtime != self._last_mtime comparison"
+        },
+        {
+          "id": "AC-d9.4",
+          "text": "Returns False within debounce window",
+          "verifiable_signal": "if now - self._last_change_detected < self.debounce_seconds: return False"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/config_watcher.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d10",
-      "path": "src/async_crud_mcp/daemon/logging_setup.py",
-      "description": "Loguru-based logging configuration with console and file handlers, rotation, and context binding",
+      "path": "src/async_crud_mcp/daemon/config_init.py",
+      "description": "Config initialization utilities: load_settings_from_file, find_available_port, DEFAULT_PORT",
       "type": "module",
+      "spec_section": "CONFIG.template.md (Settings Loading from File)",
       "acceptance_criteria": [
-        "setup_logging() configures both console and file handlers",
-        "enqueue=True on all handlers for async safety (ADR-005)",
-        "Console handler with colored format (CONSOLE_FORMAT)",
-        "File handler with 10 MB rotation, 7 day retention, gz compression",
-        "service_mode parameter skips console when stdout unavailable",
-        "serialize_file option for JSON output",
-        "diagnose=False for file handler in production (security)",
-        "get_logger(name) returns context-bound logger",
-        "add_request_context(request_id) for request tracing",
-        "No stdlib logging - loguru only"
+        {
+          "id": "AC-d10.1",
+          "text": "load_settings_from_file(path) with fallback to empty dict or defaults",
+          "verifiable_signal": "def load_settings_from_file(path); returns {} or defaults on missing/invalid file"
+        },
+        {
+          "id": "AC-d10.2",
+          "text": "_strip_comment_fields(data) removes _-prefixed and $-prefixed keys recursively",
+          "verifiable_signal": "def _strip_comment_fields handles nested dicts; skips keys starting with _ or $"
+        },
+        {
+          "id": "AC-d10.3",
+          "text": "find_available_port(start_port) uses socket.bind() to find open port",
+          "verifiable_signal": "def find_available_port() uses socket.socket().bind() test"
+        },
+        {
+          "id": "AC-d10.4",
+          "text": "DEFAULT_PORT = 8422",
+          "verifiable_signal": "DEFAULT_PORT = 8422 module-level constant"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/config_init.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/port-assignment.md",
+          "relevance": "Port 8422 assignment for async-crud-mcp"
+        }
       ]
     },
     {
       "id": "d11",
-      "path": "src/async_crud_mcp/daemon/config_init.py",
-      "description": "Configuration initialization with default generation, interactive prompts, service-context detection, and multi-user config resolution",
+      "path": "src/async_crud_mcp/daemon/logging_setup.py",
+      "description": "Loguru logging setup with enqueue=True handlers",
       "type": "module",
+      "spec_section": "PYTHON_STACK.template.md (Logging Standard: Loguru MANDATORY)",
       "acceptance_criteria": [
-        "DEFAULT_PORT and APP_NAME constants",
-        "_is_windows_service_context() detects LocalSystem",
-        "get_config_dir(username) with service context fallback to ProgramData",
-        "get_config_file_path(username) returns config.json path",
-        "get_logs_dir(username) with service context fallback",
-        "get_user_logs_dir(username) for per-user dispatcher logs",
-        "get_user_config_file_path(username) resolves via Windows registry",
-        "_strip_comment_fields(data) removes _/$-prefixed keys",
-        "load_settings_from_file(config_path) with merge against defaults",
-        "find_available_port(start, end) scans for first available port",
-        "generate_default_config() returns daemon+server config dict",
-        "init_config() with force, port, host, interactive, username params",
-        "Typer fallback to input() for interactive prompts"
+        {
+          "id": "AC-d11.1",
+          "text": "setup_logging() function present",
+          "verifiable_signal": "def setup_logging(log_level, console, file, log_dir) or similar"
+        },
+        {
+          "id": "AC-d11.2",
+          "text": "All handlers use enqueue=True",
+          "verifiable_signal": "enqueue=True in every logger.add() call"
+        },
+        {
+          "id": "AC-d11.3",
+          "text": "File handler: rotation='10 MB', retention='7 days', compression='gz'",
+          "verifiable_signal": "rotation='10 MB', retention='7 days', compression='gz' in file handler"
+        },
+        {
+          "id": "AC-d11.4",
+          "text": "logger.remove() clears default handler first",
+          "verifiable_signal": "logger.remove() before any logger.add()"
+        },
+        {
+          "id": "AC-d11.5",
+          "text": "No stdlib logging module used",
+          "verifiable_signal": "No 'import logging' in file"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/logging_setup.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-005",
+          "relevance": "enqueue=True mandatory; drain via logger.complete()"
+        }
       ]
     },
     {
       "id": "d12",
-      "path": "src/async_crud_mcp/daemon/installer.py",
-      "description": "Platform-agnostic installer with ABC factory pattern - InstallerBase, WindowsServiceInstaller, LaunchdInstaller (skeleton), SystemdInstaller (skeleton)",
+      "path": "src/async_crud_mcp/daemon/health.py",
+      "description": "Health check endpoint and daemon status with circuit breaker state reporting",
       "type": "module",
+      "spec_section": "INTEGRATION.template.md (Health Check Endpoints)",
       "acceptance_criteria": [
-        "InstallerBase abstract class with install/uninstall/start/stop/status/list methods",
-        "WindowsServiceInstaller using sc.exe for start/stop/status",
-        "WindowsServiceInstaller.install() delegates to windows_service.install_service()",
-        "LaunchdInstaller skeleton for macOS (NotImplementedError)",
-        "SystemdInstaller skeleton for Linux (NotImplementedError)",
-        "get_installer() factory function selecting by sys.platform",
-        "SERVICE_NAME = '{APP_NAME}-daemon' (single system-wide service)",
-        "APP_NAME constant using ADR-009 convention"
+        {
+          "id": "AC-d12.1",
+          "text": "GET /health returns {status, version, uptime_seconds}",
+          "verifiable_signal": "Route /health returns JSON with at minimum those three keys"
+        },
+        {
+          "id": "AC-d12.2",
+          "text": "health response includes circuit_breaker field (null when healthy)",
+          "verifiable_signal": "circuit_breaker key in response; reads circuit_breaker_state.json when present"
+        },
+        {
+          "id": "AC-d12.3",
+          "text": "get_daemon_status() returns structured status: port, enabled, pid, state",
+          "verifiable_signal": "Function returning dataclass or dict with port, enabled, pid, state"
+        },
+        {
+          "id": "AC-d12.4",
+          "text": "Port listening check via socket.connect_ex in status",
+          "verifiable_signal": "socket.connect_ex((host, port)) == 0 check"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/health.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-013",
+          "relevance": "circuit_breaker_state.json at {user_log_dir}/circuit_breaker_state.json"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-012",
+          "relevance": "Port listening check in health/status"
+        }
       ]
     },
     {
       "id": "d13",
-      "path": "src/async_crud_mcp/daemon/health.py",
-      "description": "Application-level health check verifying config readability, daemon enabled status, logs directory, and port connectivity (ADR-012)",
+      "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
+      "description": "Graceful MCP server shutdown with 10s timeout",
       "type": "module",
+      "spec_section": "BOOTSTRAP.template.md (Graceful Shutdown)",
       "acceptance_criteria": [
-        "_is_port_listening(host, port) TCP connectivity check",
-        "check_health() returns dict with status/config_readable/daemon_enabled/logs_dir_exists/port_listening/host/port/message",
-        "Status values: healthy, degraded, unhealthy",
-        "Port listening check only performed when daemon is enabled",
-        "Returns port_listening: None when check not applicable",
-        "Includes host and port fields in result (ADR-012)"
+        {
+          "id": "AC-d13.1",
+          "text": "Stop function with timeout=10 default",
+          "verifiable_signal": "stop(timeout=10) or equivalent with 10s timeout"
+        },
+        {
+          "id": "AC-d13.2",
+          "text": "Exception caught and logged",
+          "verifiable_signal": "try/except with logger.error() for failures"
+        },
+        {
+          "id": "AC-d13.3",
+          "text": "Process reference cleared after stop",
+          "verifiable_signal": "self.mcp_process = None in finally"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/graceful_shutdown.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d14",
-      "path": "src/async_crud_mcp/daemon/windows/__init__.py",
-      "description": "Windows-specific daemon package init",
+      "path": "src/async_crud_mcp/daemon/installer.py",
+      "description": "Platform-agnostic installer ABC with factory get_installer() and platform implementations",
       "type": "module",
+      "spec_section": "SERVICE.template.md + INSTALLER.template.md",
       "acceptance_criteria": [
-        "Package initializer for windows subpackage"
+        {
+          "id": "AC-d14.1",
+          "text": "get_installer() returns platform-appropriate installer",
+          "verifiable_signal": "def get_installer() dispatches on sys.platform"
+        },
+        {
+          "id": "AC-d14.2",
+          "text": "Installer ABC with install(), uninstall(), start(), stop(), get_state() methods",
+          "verifiable_signal": "Abstract base class or protocol with all five methods"
+        },
+        {
+          "id": "AC-d14.3",
+          "text": "Windows installer uses SERVICE_AUTO_START (value 2)",
+          "verifiable_signal": "win32service.SERVICE_AUTO_START in Windows install"
+        },
+        {
+          "id": "AC-d14.4",
+          "text": "is_admin() via ctypes.windll.shell32.IsUserAnAdmin()",
+          "verifiable_signal": "is_admin() method using that ctypes call"
+        },
+        {
+          "id": "AC-d14.5",
+          "text": "list_all_services() for bootstrap list command",
+          "verifiable_signal": "def list_all_services() returning list of status objects"
+        },
+        {
+          "id": "AC-d14.6",
+          "text": "Task Scheduler fallback via force_task_scheduler parameter",
+          "verifiable_signal": "force_task_scheduler or use_task_scheduler param in get_installer() or install()"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/installer.py",
+          "relevance": "Reference ABC and factory"
+        },
+        {
+          "path": "resources/snippets/windows/service_installer.py",
+          "relevance": "Windows CreateService API"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-001",
+          "relevance": "pywin32 SERVICE_AUTO_START; Task Scheduler fallback"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-008",
+          "relevance": "Single system-wide service with dispatcher"
+        }
       ]
     },
     {
       "id": "d15",
-      "path": "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
-      "description": "Windows Service wrapper using pywin32 ServiceFramework with Multi-User Dispatcher, direct CreateService API, and WindowsSelectorEventLoopPolicy",
+      "path": "src/async_crud_mcp/daemon/windows/windows_service.py",
+      "description": "Windows pywin32 service class: immediate SERVICE_RUNNING report, WindowsSelectorEventLoopPolicy, session change acceptance",
       "type": "module",
+      "spec_section": "SERVICE.template.md (Windows Service pywin32) + ADR-011",
       "acceptance_criteria": [
-        "DaemonService class extending win32serviceutil.ServiceFramework",
-        "_svc_name_ = 'async-crud-mcp-daemon'",
-        "GetAcceptedControls() includes SERVICE_ACCEPT_SESSIONCHANGE",
-        "SvcOtherEx() handles WTS_SESSION_LOGON/LOGOFF events",
-        "SvcDoRun() reports SERVICE_RUNNING immediately (BUG-01: prevents error 1053)",
-        "Uses WindowsSelectorEventLoopPolicy with manual loop (ADR-011, GAP-6)",
-        "SvcDoRun() wrapped in try/except with servicemanager.LogErrorMsg (BUG-07)",
-        "install_service() uses direct win32service.CreateService() API (GAP-4, BUG-11)",
-        "Writes PythonClass registry key for pythonservice.exe",
-        "uninstall_service() function",
-        "start_service() with timeout waiting for RUNNING state",
-        "stop_service() function",
-        "Platform check raises ImportError on non-Windows"
+        {
+          "id": "AC-d15.1",
+          "text": "SvcDoRun() calls ReportServiceStatus(SERVICE_RUNNING) as first line",
+          "verifiable_signal": "self.ReportServiceStatus(win32service.SERVICE_RUNNING) is first statement"
+        },
+        {
+          "id": "AC-d15.2",
+          "text": "WindowsSelectorEventLoopPolicy with manual event loop (ADR-011)",
+          "verifiable_signal": "asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy()); loop = asyncio.new_event_loop()"
+        },
+        {
+          "id": "AC-d15.3",
+          "text": "GetAcceptedControls returns result | SERVICE_ACCEPT_SESSIONCHANGE",
+          "verifiable_signal": "result |= win32service.SERVICE_ACCEPT_SESSIONCHANGE present"
+        },
+        {
+          "id": "AC-d15.4",
+          "text": "SvcOtherEx dispatches WTS_SESSION_LOGON and WTS_SESSION_LOGOFF",
+          "verifiable_signal": "SvcOtherEx checks event_type for both logon/logoff events"
+        },
+        {
+          "id": "AC-d15.5",
+          "text": "SvcDoRun has try/except with servicemanager.LogErrorMsg()",
+          "verifiable_signal": "servicemanager.LogErrorMsg() in except block of SvcDoRun"
+        },
+        {
+          "id": "AC-d15.6",
+          "text": "File named windows_service.py (ADR-014, not bootstrap_service.py)",
+          "verifiable_signal": "Filename windows_service.py exists; no bootstrap_service.py"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/windows/windows_service.py",
+          "relevance": "Reference implementation (ADR-014 naming)"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-011",
+          "relevance": "WindowsSelectorEventLoopPolicy for non-main thread"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-001",
+          "relevance": "Error 1053 fix: immediate ReportServiceStatus"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-014",
+          "relevance": "windows_service.py naming convention"
+        }
       ]
     },
     {
       "id": "d16",
       "path": "src/async_crud_mcp/daemon/windows/dispatcher.py",
-      "description": "Multi-User Dispatcher for Windows service context managing per-user MCP server workers via CreateProcessAsUser with port conflict detection (ADR-012)",
+      "description": "Multi-user dispatcher: per-user workers via CreateProcessAsUser, perpetual circuit breaker, port health monitoring",
       "type": "module",
+      "spec_section": "SERVICE.template.md (Multi-User Dispatcher Pattern) + ADR-008 + ADR-012 + ADR-013",
       "acceptance_criteria": [
-        "UserWorker dataclass with username, session_ids, user_token, config_path, config_mtime, profile_path, process_handle, process_id, stderr_file, started_at",
-        "MultiUserDispatcher class with workers dict keyed by username",
-        "_configure_logging() with GAP-8 fallback chain: ProgramData -> LocalAppData -> Temp",
-        "async run() with _enumerate_existing_sessions() on startup",
-        "on_session_logon(session_id) creates/updates workers",
-        "on_session_logoff(session_id) removes session, stops worker on last session",
-        "_create_worker() resolves paths and user token via WTSQueryUserToken",
-        "_start_worker() uses CreateProcessAsUser with per-user environment block",
-        "_start_worker() includes port pre-check and orphan kill (ADR-012)",
-        "_stop_worker() terminates process and closes handles",
-        "_stop_all_workers() on shutdown",
-        "_poll_workers() checks process alive, port listening, config changes",
-        "Port health check with STARTUP_GRACE_SECONDS = 15 (ADR-012)",
-        "_check_port_available(host, port) returns (available, owning_pid)",
-        "_is_port_listening(host, port) TCP check",
-        "_find_port_owner(port) via PowerShell Get-NetTCPConnection",
-        "_kill_port_owner(port, exclude_pid) via taskkill",
-        "_get_python_executable() multi-candidate search (ADR-007)",
-        "SYSTEM_ACCOUNTS frozenset for filtering",
-        "Skips system accounts on session events",
-        "await logger.complete() in finally block",
-        "Platform check raises ImportError on non-Windows"
+        {
+          "id": "AC-d16.1",
+          "text": "MultiUserDispatcher class with username-keyed workers dict",
+          "verifiable_signal": "workers: dict[str, UserWorker] keyed by username"
+        },
+        {
+          "id": "AC-d16.2",
+          "text": "UserWorker has: session_ids: set[int], started_at, consecutive_failures, next_restart_at",
+          "verifiable_signal": "dataclass or class with all four fields"
+        },
+        {
+          "id": "AC-d16.3",
+          "text": "Worker stopped only when user's last session ends",
+          "verifiable_signal": "worker.session_ids.discard(session_id); if not worker.session_ids: _stop_worker()"
+        },
+        {
+          "id": "AC-d16.4",
+          "text": "Worker launched via python -c 'from async_crud_mcp.server import main; main()' (not python -m)",
+          "verifiable_signal": "Command string contains python -c '...import main; main()'"
+        },
+        {
+          "id": "AC-d16.5",
+          "text": "Constants: BACKOFF_BASE_SECONDS=5, BACKOFF_MAX_SECONDS=300, STARTUP_GRACE_SECONDS=60",
+          "verifiable_signal": "All three constants present with those exact values"
+        },
+        {
+          "id": "AC-d16.6",
+          "text": "Port helpers: _check_port_available(), _kill_port_owner(), _is_port_listening() all present",
+          "verifiable_signal": "All three method definitions present"
+        },
+        {
+          "id": "AC-d16.7",
+          "text": "_wait_for_port_release() polls every 0.5s for up to 5s",
+          "verifiable_signal": "PORT_RELEASE_WAIT_SECONDS=5, PORT_RELEASE_POLL_INTERVAL=0.5; loop calls time.sleep(0.5)"
+        },
+        {
+          "id": "AC-d16.8",
+          "text": "Circuit breaker state file: _write_circuit_breaker_state() and _clear_circuit_breaker_state()",
+          "verifiable_signal": "Both methods present; write creates JSON file, clear deletes it"
+        },
+        {
+          "id": "AC-d16.9",
+          "text": "Startup enumeration via WTSEnumerateSessions catches pre-existing logins",
+          "verifiable_signal": "win32ts.WTSEnumerateSessions() called during initialization"
+        },
+        {
+          "id": "AC-d16.10",
+          "text": "System accounts filtered: SYSTEM, LOCAL SERVICE, NETWORK SERVICE skipped",
+          "verifiable_signal": "Check against set of system account names before creating worker"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/windows/dispatcher.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-008",
+          "relevance": "Architecture: single service, username-keyed workers, last-session-only shutdown"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-012",
+          "relevance": "Three-layer port conflict defense implementation details"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-013",
+          "relevance": "Perpetual circuit breaker: constants, state machine, state file schema"
+        }
       ]
     },
     {
       "id": "d17",
       "path": "src/async_crud_mcp/daemon/windows/session_detector.py",
-      "description": "Windows-specific session detection via WTS API with detailed session information",
+      "description": "Windows-specific session detection via WTS API",
       "type": "module",
+      "spec_section": "BOOTSTRAP.template.md (Windows Session Detection)",
       "acceptance_criteria": [
-        "get_active_sessions() using win32ts.WTSEnumerateSessions",
-        "is_user_session_active(username) case-insensitive check",
-        "get_session_details(username) returns dict with session_id, state, state_code, is_active",
-        "Handles WTSActive, WTSConnected, WTSDisconnected, etc. states",
-        "Platform check raises ImportError on non-Windows"
+        {
+          "id": "AC-d17.1",
+          "text": "WTSEnumerateSessions used for session listing",
+          "verifiable_signal": "win32ts.WTSEnumerateSessions() call present"
+        },
+        {
+          "id": "AC-d17.2",
+          "text": "WTSActive and WTSConnected treated as active; WTSDisconnected excluded",
+          "verifiable_signal": "State filter includes WTSActive=0, WTSConnected=1; excludes WTSDisconnected=4"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/windows/session_detector.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d18",
-      "path": "src/async_crud_mcp/cli/__init__.py",
-      "description": "CLI package init with main Typer app and subcommand group registration (bootstrap, daemon, config, setup, quick-install, uninstall, version)",
-      "type": "module",
+      "path": "src/async_crud_mcp/daemon/linux/systemd.service",
+      "description": "systemd user service unit file",
+      "type": "config",
+      "spec_section": "SERVICE.template.md (Linux systemd)",
       "acceptance_criteria": [
-        "Main typer.Typer() app with name='async-crud-mcp'",
-        "bootstrap_app subcommand group for OS service lifecycle",
-        "daemon_app subcommand group for MCP server control",
-        "config_app subcommand group for configuration management",
-        "setup command for per-user setup wizard",
-        "quick-install top-level command",
-        "uninstall top-level command",
-        "version top-level command showing __version__",
-        "no_args_is_help=True"
+        {
+          "id": "AC-d18.1",
+          "text": "Type=simple, Restart=always, RestartSec=30",
+          "verifiable_signal": "[Service] section has all three directives"
+        },
+        {
+          "id": "AC-d18.2",
+          "text": "WantedBy=default.target",
+          "verifiable_signal": "[Install] WantedBy=default.target"
+        },
+        {
+          "id": "AC-d18.3",
+          "text": "ExecStart references async-crud-mcp bootstrap executable",
+          "verifiable_signal": "ExecStart path contains async-crud-mcp"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/linux/systemd.service",
+          "relevance": "Reference service unit"
+        }
       ]
     },
     {
       "id": "d19",
-      "path": "src/async_crud_mcp/cli/bootstrap_cmd.py",
-      "description": "Bootstrap (OS service) CLI commands: install, uninstall, start, stop, status, list",
-      "type": "module",
+      "path": "src/async_crud_mcp/daemon/linux/systemd_installer.sh",
+      "description": "Linux systemd installation: daemon-reload, enable, start, loginctl enable-linger",
+      "type": "script",
+      "spec_section": "SERVICE.template.md (Linux systemd Commands)",
       "acceptance_criteria": [
-        "install command with --force and --use-task-scheduler options",
-        "uninstall command with --username and --force options",
-        "start command with --username option",
-        "stop command with --username option",
-        "status command with --username and --json options",
-        "list command showing all active per-user workers",
-        "Admin privilege check and elevation for install/uninstall",
-        "Uses get_installer() factory pattern"
+        {
+          "id": "AC-d19.1",
+          "text": "systemctl --user daemon-reload, enable, start steps present",
+          "verifiable_signal": "All three systemctl commands present"
+        },
+        {
+          "id": "AC-d19.2",
+          "text": "loginctl enable-linger $USER present",
+          "verifiable_signal": "loginctl enable-linger call present"
+        },
+        {
+          "id": "AC-d19.3",
+          "text": "Linger check warns if not enabled",
+          "verifiable_signal": "Check /var/lib/systemd/linger/$USER with warning on absence"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/linux/systemd_installer.sh",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d20",
-      "path": "src/async_crud_mcp/cli/daemon_cmd.py",
-      "description": "Daemon (MCP server) CLI commands: start, stop, restart, status, logs - controls via config file mutations",
-      "type": "module",
+      "path": "src/async_crud_mcp/daemon/macos/launchd.plist",
+      "description": "macOS LaunchAgent plist: RunAtLoad=true, KeepAlive=true",
+      "type": "config",
+      "spec_section": "SERVICE.template.md (macOS launchd)",
       "acceptance_criteria": [
-        "start command sets daemon.enabled=true in config",
-        "stop command sets daemon.enabled=false in config",
-        "restart command cycles the enabled flag with wait",
-        "status command with --username, --all, --json options",
-        "logs command with --follow, --lines, --username, --user options",
-        "Logs checks ProgramData path for Windows service per-user logs",
-        "All commands use config file mutation (ADR-003), not direct process control"
+        {
+          "id": "AC-d20.1",
+          "text": "Label is com.async-crud-mcp.daemon",
+          "verifiable_signal": "<key>Label</key><string>com.async-crud-mcp.daemon</string>"
+        },
+        {
+          "id": "AC-d20.2",
+          "text": "RunAtLoad=true and KeepAlive=true present",
+          "verifiable_signal": "Both <key>RunAtLoad</key><true/> and <key>KeepAlive</key><true/>"
+        },
+        {
+          "id": "AC-d20.3",
+          "text": "Log paths point to ~/Library/Logs/async-crud-mcp/",
+          "verifiable_signal": "StandardOutPath and StandardErrorPath contain async-crud-mcp"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/macos/launchd.plist",
+          "relevance": "Reference plist template"
+        }
       ]
     },
     {
       "id": "d21",
-      "path": "src/async_crud_mcp/cli/config_cmd.py",
-      "description": "Config CLI commands: init, show, edit, validate",
-      "type": "module",
+      "path": "src/async_crud_mcp/daemon/macos/launchd_installer.sh",
+      "description": "macOS launchd installation: copy plist to LaunchAgents, launchctl load",
+      "type": "script",
+      "spec_section": "SERVICE.template.md (macOS launchd Commands)",
       "acceptance_criteria": [
-        "init command with --force, --port, --no-interactive, --username options",
-        "show command with --username and --json options",
-        "edit command opens config in default editor",
-        "validate command checks config file validity",
-        "Uses pydantic model validation"
+        {
+          "id": "AC-d21.1",
+          "text": "Installs to ~/Library/LaunchAgents/com.async-crud-mcp.daemon.plist",
+          "verifiable_signal": "cp/install to ~/Library/LaunchAgents/ with correct filename"
+        },
+        {
+          "id": "AC-d21.2",
+          "text": "launchctl load called",
+          "verifiable_signal": "launchctl load ~/Library/LaunchAgents/com.async-crud-mcp.daemon.plist"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/macos/launchd_installer.sh",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d22",
-      "path": "src/async_crud_mcp/cli/setup_cmd.py",
-      "description": "Per-user setup wizard command - no admin required, creates directories, config, configures Claude Code CLI",
+      "path": "src/async_crud_mcp/cli/__init__.py",
+      "description": "CLI package init exposing app Typer instance",
       "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md + PYPROJECT.template.md",
       "acceptance_criteria": [
-        "setup command with --port, --no-interactive, --force options",
-        "Step 1: Check prerequisites",
-        "Step 2: Find available port (auto-discover if default in use)",
-        "Step 3: Create per-user directories (config, logs)",
-        "Step 4: Generate default config",
-        "Step 5: Configure Claude Code CLI",
-        "Step 6: Verify server connectivity",
-        "No admin required"
+        {
+          "id": "AC-d22.1",
+          "text": "app is importable as async_crud_mcp.cli:app (used by entry point in pyproject.toml)",
+          "verifiable_signal": "from async_crud_mcp.cli import app works; app is typer.Typer instance"
+        },
+        {
+          "id": "AC-d22.2",
+          "text": "All subcommand groups registered: bootstrap, daemon, config",
+          "verifiable_signal": "app.add_typer() calls for bootstrap_app, daemon_app, config_app"
+        },
+        {
+          "id": "AC-d22.3",
+          "text": "Top-level commands registered: version, quick-install, uninstall, setup",
+          "verifiable_signal": "@app.command() for version, quick_install, uninstall, setup"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/cli_app.py",
+          "relevance": "Reference CLI app structure"
+        }
       ]
     },
     {
       "id": "d23",
-      "path": "src/async_crud_mcp/cli/install_cmd.py",
-      "description": "Quick install and uninstall top-level commands for all-in-one installation",
+      "path": "src/async_crud_mcp/cli/bootstrap_cmd.py",
+      "description": "Bootstrap subcommand group: install, uninstall, start, stop, status, list",
       "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md (Bootstrap Commands)",
       "acceptance_criteria": [
-        "quick_install() with --force, --port, --no-start options",
-        "uninstall() with --keep-config/--remove-config, --keep-logs/--remove-logs, --force options",
-        "Admin check and elevation for quick-install on Windows",
-        "Installs service, generates config, starts service, enables daemon",
-        "Uses Rich console for output with fallback"
+        {
+          "id": "AC-d23.1",
+          "text": "All six commands present: install, uninstall, start, stop, status, list",
+          "verifiable_signal": "@app.command() decorators for all six"
+        },
+        {
+          "id": "AC-d23.2",
+          "text": "install elevates privileges on Windows if not admin",
+          "verifiable_signal": "installer.is_admin() check with elevation or error in install()"
+        },
+        {
+          "id": "AC-d23.3",
+          "text": "status supports --json/-j flag",
+          "verifiable_signal": "json_output: bool = typer.Option(False, '--json', '-j') in status()"
+        },
+        {
+          "id": "AC-d23.4",
+          "text": "Commands accept optional --username/-u",
+          "verifiable_signal": "username: Optional[str] = typer.Option(None, '--username', '-u') in commands"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-003",
+          "relevance": "bootstrap = OS service container; admin required for install/uninstall only"
+        }
       ]
     },
     {
       "id": "d24",
-      "path": "src/async_crud_mcp/config.py",
-      "description": "Pydantic-settings based configuration with DaemonConfig, Settings, env var overrides, and from_file() class method",
+      "path": "src/async_crud_mcp/cli/daemon_cmd.py",
+      "description": "Daemon subcommand group: start, stop, restart, status, logs",
       "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md (Daemon Commands)",
       "acceptance_criteria": [
-        "DaemonConfig pydantic BaseModel with enabled, host, port, transport, log_level, config_poll_seconds, session_poll_seconds, wait_for_session",
-        "Settings class extending BaseSettings with env_prefix='ASYNC_CRUD_MCP_'",
-        "env_nested_delimiter='__' for nested config overrides",
-        "Settings.from_file(config_path) class method for per-user config loading",
-        "Port validation: ge=1024, le=65535 or null",
-        "Host validation: non-empty string",
-        "get_settings() singleton accessor with _force_reload option",
-        "_strip_comment_fields() for _/$-prefixed comment removal"
+        {
+          "id": "AC-d24.1",
+          "text": "All five commands: start, stop, restart, status, logs",
+          "verifiable_signal": "@app.command() for all five"
+        },
+        {
+          "id": "AC-d24.2",
+          "text": "start() sets daemon.enabled=True; stop() sets daemon.enabled=False in config",
+          "verifiable_signal": "mutate_config(daemon_enabled=True/False) pattern in start/stop"
+        },
+        {
+          "id": "AC-d24.3",
+          "text": "logs supports --follow/-f and --lines/-n",
+          "verifiable_signal": "follow and lines options present in logs()"
+        },
+        {
+          "id": "AC-d24.4",
+          "text": "status supports --json/-j and --all/-a",
+          "verifiable_signal": "json_output and all_users options in status()"
+        },
+        {
+          "id": "AC-d24.5",
+          "text": "logs checks ProgramData fallback path on Windows",
+          "verifiable_signal": "PROGRAMDATA alternate log path check when primary not found on win32"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-003",
+          "relevance": "daemon start/stop = config mutation, no process signals or admin"
+        }
       ]
     },
     {
       "id": "d25",
-      "path": "src/async_crud_mcp/server.py",
-      "description": "MCP server entry point with port pre-flight check (ADR-012), health endpoint, and SSE transport",
+      "path": "src/async_crud_mcp/cli/config_cmd.py",
+      "description": "Config subcommand group: init, show, edit, validate",
       "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md (Config Commands)",
       "acceptance_criteria": [
-        "Server entry point callable via python -m async_crud_mcp.server",
-        "Port pre-flight check using socket.bind() before mcp.run() (ADR-012)",
-        "Exit code 48 on EADDRINUSE (port conflict)",
-        "Health endpoint at /health returning status, version, uptime",
-        "SSE transport on localhost by default",
-        "Localhost binding security (127.0.0.1 default)",
-        "Logs security warning for non-localhost binding"
-      ]
+        {
+          "id": "AC-d25.1",
+          "text": "Four commands: init, show, edit, validate",
+          "verifiable_signal": "@app.command() for all four"
+        },
+        {
+          "id": "AC-d25.2",
+          "text": "init accepts --force/-f, --port/-p, --no-interactive, --username/-u",
+          "verifiable_signal": "All four options present in init() signature"
+        },
+        {
+          "id": "AC-d25.3",
+          "text": "init uses DEFAULT_PORT (8422) as default",
+          "verifiable_signal": "Default port prompt/argument is 8422"
+        },
+        {
+          "id": "AC-d25.4",
+          "text": "init creates parent directories",
+          "verifiable_signal": "config_path.parent.mkdir(parents=True, exist_ok=True) before write"
+        },
+        {
+          "id": "AC-d25.5",
+          "text": "validate exits with code 1 on invalid config",
+          "verifiable_signal": "raise typer.Exit(1) in validate() on exception"
+        }
+      ],
+      "supporting_context": []
     },
     {
       "id": "d26",
-      "path": "scripts/setup.bat",
-      "description": "Windows installer wrapper - thin shell wrapper (~40 lines) that delegates to installer.py",
-      "type": "script",
+      "path": "src/async_crud_mcp/cli/setup_cmd.py",
+      "description": "Per-user setup wizard: port discovery, directories, config, Claude Code CLI (no admin required)",
+      "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md (Setup Command) + INSTALLER.template.md (Per-User Setup)",
       "acceptance_criteria": [
-        "Thin wrapper that finds Python and runs installer.py",
-        "Admin privilege check and UAC elevation",
-        "Passes command-line arguments through",
-        "Double-click friendly (no terminal required)",
-        "Uses ONLY batch commands (no Python)"
+        {
+          "id": "AC-d26.1",
+          "text": "setup accepts --port/-p, --no-interactive, --force/-f",
+          "verifiable_signal": "All three options in setup() signature"
+        },
+        {
+          "id": "AC-d26.2",
+          "text": "find_available_port(DEFAULT_PORT) called when port not specified",
+          "verifiable_signal": "find_available_port(DEFAULT_PORT) in port discovery step"
+        },
+        {
+          "id": "AC-d26.3",
+          "text": "Creates config and logs dirs with mkdir(parents=True, exist_ok=True)",
+          "verifiable_signal": "Both .mkdir(parents=True, exist_ok=True) calls present"
+        },
+        {
+          "id": "AC-d26.4",
+          "text": "Calls configure_claude_code(port=port)",
+          "verifiable_signal": "configure_claude_code() imported and called with port"
+        },
+        {
+          "id": "AC-d26.5",
+          "text": "Health check to http://127.0.0.1:{port}/health with 5s timeout",
+          "verifiable_signal": "httpx.get(f'http://127.0.0.1:{port}/health', timeout=5)"
+        },
+        {
+          "id": "AC-d26.6",
+          "text": "No admin privilege requirement",
+          "verifiable_signal": "No is_admin() check in setup command"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/SSOT/port-assignment.md",
+          "relevance": "find_available_port() for setup wizard"
+        }
       ]
     },
     {
       "id": "d27",
-      "path": "scripts/setup.sh",
-      "description": "Unix installer wrapper - thin shell wrapper that delegates to installer.py for macOS/Linux",
-      "type": "script",
+      "path": "src/async_crud_mcp/cli/install_cmd.py",
+      "description": "quick-install and uninstall top-level commands",
+      "type": "module",
+      "spec_section": "CLI_COMMANDS.template.md (Quick Install and Uninstall)",
       "acceptance_criteria": [
-        "Thin wrapper that finds Python and runs installer.py",
-        "Checks for python3 or python on PATH",
-        "Passes command-line arguments through",
-        "Executable permissions (chmod +x)"
+        {
+          "id": "AC-d27.1",
+          "text": "quick_install accepts --force/-f, --port/-p, --no-start",
+          "verifiable_signal": "All three options in quick_install()"
+        },
+        {
+          "id": "AC-d27.2",
+          "text": "quick_install flow: install service, write config, start service, enable daemon",
+          "verifiable_signal": "installer.install(), config write, installer.start(), mutate_config(daemon_enabled=True)"
+        },
+        {
+          "id": "AC-d27.3",
+          "text": "uninstall accepts --keep-config/--remove-config and --keep-logs/--remove-logs",
+          "verifiable_signal": "Boolean flag pairs with keep_config=True, keep_logs=True defaults"
+        },
+        {
+          "id": "AC-d27.4",
+          "text": "uninstall requires confirmation unless --force",
+          "verifiable_signal": "typer.confirm() call; skipped when force=True"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/common/quick_install.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d28",
       "path": "scripts/installer.py",
-      "description": "Stdlib-only Python installer (~1100 lines) - handles install/uninstall/interactive menu, uv bootstrap, venv creation, pywin32 configuration, service installation",
+      "description": "Stdlib-only three-stage installer with interactive menu, uv venv, pywin32 DLL setup, manifest registration",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (One-Command Install, Three-Stage Architecture)",
       "acceptance_criteria": [
-        "Uses ONLY Python stdlib (no third-party imports)",
-        "Interactive menu when run without arguments (Install/Reinstall/Uninstall/Quit)",
-        "install subcommand with --force, --port options",
-        "uninstall subcommand with --all option",
-        "Checks privileges (admin on Windows)",
-        "Preflight checks (Python version >= 3.10, disk space, permissions)",
-        "Locates project root via pyproject.toml",
-        "Downloads and installs uv package manager with pip fallback",
-        "Creates venv with uv venv --managed-python (ADR-010)",
-        "Installs package via uv pip install (fallback to pip)",
-        "Configures pywin32 DLLs for Windows Service (GAP-5)",
-        "Installs OS service via direct CreateService API (GAP-4)",
-        "Runs setup wizard and server tests",
-        "Exit codes: 0=success, 1=failed, 130=cancelled"
+        {
+          "id": "AC-d28.1",
+          "text": "Stdlib-only (no third-party imports at module level)",
+          "verifiable_signal": "All imports are from Python stdlib"
+        },
+        {
+          "id": "AC-d28.2",
+          "text": "Interactive menu: 1) Install, 2) Reinstall, 3) Uninstall, q) Quit",
+          "verifiable_signal": "Menu with those four options shown without arguments"
+        },
+        {
+          "id": "AC-d28.3",
+          "text": "Creates venv with uv venv --managed-python (ADR-010)",
+          "verifiable_signal": "subprocess.run([uv_path, 'venv', str(venv_dir), '--managed-python'])"
+        },
+        {
+          "id": "AC-d28.4",
+          "text": "_configure_pythonservice() copies python3XX.dll, pythoncom3XX.dll, pywintypes3XX.dll, pythonservice.exe to venv root (GAP-5)",
+          "verifiable_signal": "Function present that copies those four DLL/exe files"
+        },
+        {
+          "id": "AC-d28.5",
+          "text": "Registers in ~/.claude/mcp-daemons.json via register_in_manifest(name='async-crud-mcp', defaultPort=8422)",
+          "verifiable_signal": "register_in_manifest() called with correct app name and port"
+        },
+        {
+          "id": "AC-d28.6",
+          "text": "Preflight: Python >= 3.10, disk space, permissions",
+          "verifiable_signal": "sys.version_info >= (3, 10) check; shutil.disk_usage() or equivalent"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/installer.py",
+          "relevance": "Reference ~1100-line stdlib-only installer"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-010",
+          "relevance": "uv venv --managed-python for stable venv independent of installer Python"
+        },
+        {
+          "path": "resources/SSOT/mcp-daemons-manifest.md",
+          "relevance": "Manifest registration schema for port discovery"
+        }
       ]
     },
     {
       "id": "d29",
       "path": "scripts/uninstaller.py",
-      "description": "Stdlib-only Python uninstaller for clean removal of the application",
+      "description": "Stdlib-only uninstaller with manifest deregistration",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Related Snippets)",
       "acceptance_criteria": [
-        "Uses ONLY Python stdlib",
-        "Stops running service",
-        "Removes service registration",
-        "Optional removal of config and logs",
-        "Prompt for confirmation before destructive actions"
+        {
+          "id": "AC-d29.1",
+          "text": "Stdlib-only",
+          "verifiable_signal": "No third-party imports at module level"
+        },
+        {
+          "id": "AC-d29.2",
+          "text": "Stops and unregisters OS service",
+          "verifiable_signal": "Service stop then uninstall steps present"
+        },
+        {
+          "id": "AC-d29.3",
+          "text": "Calls deregister_from_manifest('async-crud-mcp') to remove from ~/.claude/mcp-daemons.json",
+          "verifiable_signal": "deregister_from_manifest(name='async-crud-mcp') or equivalent present"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/uninstaller.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/mcp-daemons-manifest.md",
+          "relevance": "Uninstaller must remove manifest entry"
+        }
       ]
     },
     {
       "id": "d30",
-      "path": "scripts/bootstrap_uv.py",
-      "description": "Cross-platform uv package manager bootstrap utility - downloads and installs uv binary",
+      "path": "scripts/setup.bat",
+      "description": "Windows thin wrapper (~40 lines) delegating all logic to installer.py",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Three-Stage Installer: setup.bat -> installer.py -> CLI setup)",
       "acceptance_criteria": [
-        "install_uv() downloads uv binary for current platform",
-        "pip_install_with_uv() uses uv for package installation",
-        "create_venv_with_uv() creates venv using uv",
-        "Cross-platform download URLs (Windows/macOS Intel/ARM/Linux x64/ARM)",
-        "Fallback to pip if uv installation fails"
+        {
+          "id": "AC-d30.1",
+          "text": "Delegates to installer.py passing arguments through",
+          "verifiable_signal": "python installer.py %* or equivalent call"
+        },
+        {
+          "id": "AC-d30.2",
+          "text": "40 lines or fewer",
+          "verifiable_signal": "wc -l scripts/setup.bat <= 40"
+        },
+        {
+          "id": "AC-d30.3",
+          "text": "Error if Python not found",
+          "verifiable_signal": "Python not found error with installation suggestion"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/setup.bat",
+          "relevance": "Reference thin wrapper"
+        }
       ]
     },
     {
       "id": "d31",
-      "path": "scripts/build_installer.py",
-      "description": "Python Embedded Bundle builder - creates standalone distribution with embedded Python, vendored dependencies, and uv",
+      "path": "scripts/setup.sh",
+      "description": "Unix thin wrapper delegating to installer.py",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Three-Stage Installer: setup.sh -> installer.py -> CLI setup)",
       "acceptance_criteria": [
-        "Downloads Python embeddable package",
-        "Creates ._pth file for isolation",
-        "Vendors all dependencies into Lib/site-packages",
-        "Includes uv binary",
-        "Creates launcher scripts (bin/async-crud-mcp.bat)",
-        "Outputs compressed zip (~50-65 MB)"
+        {
+          "id": "AC-d31.1",
+          "text": "Delegates to installer.py with arguments pass-through",
+          "verifiable_signal": "python3 installer.py \"$@\" or equivalent"
+        },
+        {
+          "id": "AC-d31.2",
+          "text": "Has shebang line",
+          "verifiable_signal": "#!/usr/bin/env bash or #!/bin/sh on first line"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/setup.sh",
+          "relevance": "Reference thin wrapper"
+        }
       ]
     },
     {
       "id": "d32",
-      "path": "scripts/configure_claude_code.py",
-      "description": "Claude Code CLI configuration script - adds MCP server entry to Claude Code/Desktop config",
+      "path": "scripts/bootstrap_uv.py",
+      "description": "Cross-platform uv bootstrap utility with pip fallback",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Package Manager: uv) + PYTHON_STACK.template.md",
       "acceptance_criteria": [
-        "Configures Claude Code CLI with MCP server SSE endpoint",
-        "Reads/writes Claude Desktop config at platform-appropriate path",
-        "Adds mcpServers entry with type:sse and localhost URL",
-        "Handles existing config without overwriting other entries"
+        {
+          "id": "AC-d32.1",
+          "text": "install_uv() downloads platform-specific binary",
+          "verifiable_signal": "install_uv() with platform/arch detection and download URLs"
+        },
+        {
+          "id": "AC-d32.2",
+          "text": "pip_install_with_uv() falls back to pip on uv failure",
+          "verifiable_signal": "try: uv pip install except: pip install fallback with warning"
+        },
+        {
+          "id": "AC-d32.3",
+          "text": "create_venv_with_uv(uv_path, venv_dir) present",
+          "verifiable_signal": "def create_venv_with_uv(uv_path, venv_dir) defined"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/bootstrap_uv.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-004",
+          "relevance": "Always include pip fallback; 10-100x faster with uv"
+        }
       ]
     },
     {
       "id": "d33",
-      "path": "scripts/test_server.py",
-      "description": "Post-install server verification script - validates server is functioning after installation",
+      "path": "scripts/build_installer.py",
+      "description": "Bundle builder creating portable zip with embedded Python and dependencies",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Python Embedded Bundle)",
       "acceptance_criteria": [
-        "Checks server health endpoint",
-        "Validates port connectivity",
-        "--port option for custom port",
-        "--skip-logs option to skip log file age check",
-        "--log-age option for max log age",
-        "Clear pass/fail output"
+        {
+          "id": "AC-d33.1",
+          "text": "Produces dist/async-crud-mcp-v{version}-win64.zip",
+          "verifiable_signal": "Output path matches dist/ with version-tagged filename"
+        },
+        {
+          "id": "AC-d33.2",
+          "text": "--no-uv flag supported",
+          "verifiable_signal": "--no-uv argument skips uv bundling"
+        },
+        {
+          "id": "AC-d33.3",
+          "text": "Bundle includes python/, uv/, Lib/site-packages/",
+          "verifiable_signal": "Directories created in bundle match spec structure"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/build_installer.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/architectural-decisions.md#ADR-002",
+          "relevance": "Embedded bundle: ~50-65MB, ._pth isolation"
+        }
       ]
     },
     {
       "id": "d34",
-      "path": "scripts/test_server.bat",
-      "description": "Windows wrapper for test_server.py - double-click friendly",
+      "path": "scripts/configure_claude_code.py",
+      "description": "Claude Code CLI configuration: updates ~/.claude.json mcpServers and registers in mcp-daemons.json",
       "type": "script",
+      "spec_section": "CLI_COMMANDS.template.md (Setup, Step 5) + PORT_DISCOVERY.template.md",
       "acceptance_criteria": [
-        "Thin wrapper that runs test_server.py via Python",
-        "Double-click friendly"
+        {
+          "id": "AC-d34.1",
+          "text": "configure_claude_code(port) adds async-crud-mcp SSE entry to ~/.claude.json",
+          "verifiable_signal": "Adds/updates {\"async-crud-mcp\": {\"type\": \"sse\", \"url\": \"http://localhost:{port}/sse\"}}"
+        },
+        {
+          "id": "AC-d34.2",
+          "text": "register_in_manifest(name='async-crud-mcp', configPath=..., defaultPort=8422) called",
+          "verifiable_signal": "Registers in ~/.claude/mcp-daemons.json with correct schema fields"
+        },
+        {
+          "id": "AC-d34.3",
+          "text": "Handles missing ~/.claude.json gracefully",
+          "verifiable_signal": "Creates file with empty structure if not exists"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/configure_claude_code.py",
+          "relevance": "Reference implementation"
+        },
+        {
+          "path": "resources/SSOT/mcp-daemons-manifest.md",
+          "relevance": "Manifest schema: name, configPath, defaultPort, host, urlPath, type"
+        },
+        {
+          "path": "templates/PORT_DISCOVERY.template.md",
+          "relevance": "register_in_manifest() function signature and manifest update pattern"
+        }
       ]
     },
     {
       "id": "d35",
-      "path": "scripts/test_server.sh",
-      "description": "Unix wrapper for test_server.py - double-click friendly",
+      "path": "scripts/test_server.py",
+      "description": "Post-install server verification: health check and log file validation",
       "type": "script",
+      "spec_section": "INSTALLER.template.md (Post-Install Verification)",
       "acceptance_criteria": [
-        "Thin wrapper that runs test_server.py via Python",
-        "Executable permissions"
+        {
+          "id": "AC-d35.1",
+          "text": "Accepts --port, --skip-logs, --log-age arguments",
+          "verifiable_signal": "CLI argument parsing for --port (int), --skip-logs (flag), --log-age (int)"
+        },
+        {
+          "id": "AC-d35.2",
+          "text": "Checks GET http://127.0.0.1:{port}/health",
+          "verifiable_signal": "HTTP GET to /health endpoint"
+        },
+        {
+          "id": "AC-d35.3",
+          "text": "Log file age check unless --skip-logs",
+          "verifiable_signal": "Log mtime check skipped when --skip-logs present"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/test_server.py",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d36",
-      "path": "src/async_crud_mcp/models/__init__.py",
-      "description": "Models package init",
-      "type": "module",
+      "path": "scripts/test_server.bat",
+      "description": "Windows wrapper for test_server.py",
+      "type": "script",
+      "spec_section": "INSTALLER.template.md (Related Snippets)",
       "acceptance_criteria": [
-        "Package initializer for models subpackage"
+        {
+          "id": "AC-d36.1",
+          "text": "Delegates to test_server.py passing arguments",
+          "verifiable_signal": "python test_server.py %* or equivalent"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/test_server.bat",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d37",
-      "path": "src/async_crud_mcp/models/requests.py",
-      "description": "Pydantic request models for MCP tool inputs",
-      "type": "module",
+      "path": "scripts/test_server.sh",
+      "description": "Unix wrapper for test_server.py",
+      "type": "script",
+      "spec_section": "INSTALLER.template.md (Related Snippets)",
       "acceptance_criteria": [
-        "Pydantic v2 BaseModel classes for tool request schemas",
-        "Proper field validation with Field() descriptors"
+        {
+          "id": "AC-d37.1",
+          "text": "Delegates to test_server.py with arguments pass-through and shebang",
+          "verifiable_signal": "python3 test_server.py \"$@\"; #!/usr/bin/env bash shebang"
+        }
+      ],
+      "supporting_context": [
+        {
+          "path": "resources/snippets/scripts/test_server.sh",
+          "relevance": "Reference implementation"
+        }
       ]
     },
     {
       "id": "d38",
-      "path": "src/async_crud_mcp/models/responses.py",
-      "description": "Pydantic response models for MCP tool outputs",
+      "path": "src/async_crud_mcp/daemon/windows/__init__.py",
+      "description": "Windows daemon subpackage init (required for Python package structure)",
       "type": "module",
+      "spec_section": "PYPROJECT.template.md (Package Layout)",
       "acceptance_criteria": [
-        "Pydantic v2 BaseModel classes for tool response schemas",
-        "Consistent response structure across tools"
-      ]
-    },
-    {
-      "id": "d39",
-      "path": "src/async_crud_mcp/core/__init__.py",
-      "description": "Core package init",
-      "type": "module",
-      "acceptance_criteria": [
-        "Package initializer for core subpackage"
-      ]
-    },
-    {
-      "id": "d40",
-      "path": "src/async_crud_mcp/core/file_io.py",
-      "description": "Async file I/O operations",
-      "type": "module",
-      "acceptance_criteria": [
-        "Async read/write file operations",
-        "Proper error handling for I/O failures"
-      ]
-    },
-    {
-      "id": "d41",
-      "path": "src/async_crud_mcp/core/path_validator.py",
-      "description": "Path validation and sanitization for file operations",
-      "type": "module",
-      "acceptance_criteria": [
-        "Path validation to prevent directory traversal",
-        "Path sanitization and normalization"
-      ]
-    },
-    {
-      "id": "d42",
-      "path": "src/async_crud_mcp/core/lock_manager.py",
-      "description": "File locking manager for concurrent access control",
-      "type": "module",
-      "acceptance_criteria": [
-        "File-level locking for concurrent operations",
-        "Lock acquisition and release"
-      ]
-    },
-    {
-      "id": "d43",
-      "path": "src/async_crud_mcp/core/persistence.py",
-      "description": "Persistence layer for operation state and recovery",
-      "type": "module",
-      "acceptance_criteria": [
-        "Operation state persistence",
-        "Recovery from interrupted operations"
-      ]
-    },
-    {
-      "id": "d44",
-      "path": "src/async_crud_mcp/core/diff_engine.py",
-      "description": "Diff engine for file update operations",
-      "type": "module",
-      "acceptance_criteria": [
-        "Diff generation and application",
-        "Support for partial file updates"
-      ]
-    },
-    {
-      "id": "d45",
-      "path": "src/async_crud_mcp/core/file_watcher.py",
-      "description": "File system watcher for detecting external changes",
-      "type": "module",
-      "acceptance_criteria": [
-        "Watches file system for changes using watchdog",
-        "Notifies on create/modify/delete events"
-      ]
-    },
-    {
-      "id": "d46",
-      "path": "src/async_crud_mcp/tools/__init__.py",
-      "description": "Tools package init with tool registration",
-      "type": "module",
-      "acceptance_criteria": [
-        "Package initializer for tools subpackage",
-        "Tool registration/discovery mechanism"
-      ]
-    },
-    {
-      "id": "d47",
-      "path": "src/async_crud_mcp/tools/async_read.py",
-      "description": "Async file read MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file reading",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d48",
-      "path": "src/async_crud_mcp/tools/async_write.py",
-      "description": "Async file write MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file writing",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d49",
-      "path": "src/async_crud_mcp/tools/async_update.py",
-      "description": "Async file update MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file updating/patching",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d50",
-      "path": "src/async_crud_mcp/tools/async_delete.py",
-      "description": "Async file delete MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file deletion",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d51",
-      "path": "src/async_crud_mcp/tools/async_list.py",
-      "description": "Async directory listing MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async directory listing",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d52",
-      "path": "src/async_crud_mcp/tools/async_append.py",
-      "description": "Async file append MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file appending",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d53",
-      "path": "src/async_crud_mcp/tools/async_rename.py",
-      "description": "Async file rename MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for async file renaming/moving",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d54",
-      "path": "src/async_crud_mcp/tools/async_batch_read.py",
-      "description": "Async batch file read MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for reading multiple files in one operation",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d55",
-      "path": "src/async_crud_mcp/tools/async_batch_write.py",
-      "description": "Async batch file write MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for writing multiple files in one operation",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d56",
-      "path": "src/async_crud_mcp/tools/async_batch_update.py",
-      "description": "Async batch file update MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for updating multiple files in one operation",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d57",
-      "path": "src/async_crud_mcp/tools/async_status.py",
-      "description": "Async file status MCP tool",
-      "type": "module",
-      "acceptance_criteria": [
-        "MCP tool for checking file status/metadata",
-        "Proper error handling and response format"
-      ]
-    },
-    {
-      "id": "d58",
-      "path": "tests/__init__.py",
-      "description": "Tests package init",
-      "type": "test",
-      "acceptance_criteria": [
-        "Package initializer for tests"
-      ]
-    },
-    {
-      "id": "d59",
-      "path": "tests/test_config.py",
-      "description": "Tests for configuration module - pydantic validation, env overrides, from_file loading",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests DaemonConfig validation (port range, host non-empty)",
-        "Tests Settings env var overrides",
-        "Tests Settings.from_file() loading",
-        "Tests comment field stripping",
-        "Tests default config generation"
-      ]
-    },
-    {
-      "id": "d60",
-      "path": "tests/test_server.py",
-      "description": "Tests for server module",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests server startup and health endpoint",
-        "Tests port pre-flight check (ADR-012)"
-      ]
-    },
-    {
-      "id": "d61",
-      "path": "tests/test_file_io.py",
-      "description": "Tests for core file I/O operations",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests async read/write operations",
-        "Tests error handling for missing files"
-      ]
-    },
-    {
-      "id": "d62",
-      "path": "tests/test_path_validator.py",
-      "description": "Tests for path validation",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests path sanitization",
-        "Tests directory traversal prevention"
-      ]
-    },
-    {
-      "id": "d63",
-      "path": "tests/test_lock_manager.py",
-      "description": "Tests for lock manager",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests lock acquisition and release",
-        "Tests concurrent access scenarios"
-      ]
-    },
-    {
-      "id": "d64",
-      "path": "tests/test_persistence.py",
-      "description": "Tests for persistence layer",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests state persistence",
-        "Tests recovery scenarios"
-      ]
-    },
-    {
-      "id": "d65",
-      "path": "tests/test_diff_engine.py",
-      "description": "Tests for diff engine",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests diff generation",
-        "Tests diff application"
-      ]
-    },
-    {
-      "id": "d66",
-      "path": "tests/test_file_watcher.py",
-      "description": "Tests for file watcher",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests change detection",
-        "Tests event notification"
-      ]
-    },
-    {
-      "id": "d67",
-      "path": "tests/test_tools/test_async_read.py",
-      "description": "Tests for async_read tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests reading existing files",
-        "Tests error on missing files"
-      ]
-    },
-    {
-      "id": "d68",
-      "path": "tests/test_tools/test_async_write.py",
-      "description": "Tests for async_write tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests writing new files",
-        "Tests overwrite behavior"
-      ]
-    },
-    {
-      "id": "d69",
-      "path": "tests/test_tools/test_async_update.py",
-      "description": "Tests for async_update tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests partial file updates",
-        "Tests error handling"
-      ]
-    },
-    {
-      "id": "d70",
-      "path": "tests/test_tools/test_async_delete.py",
-      "description": "Tests for async_delete tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests file deletion",
-        "Tests error on missing files"
-      ]
-    },
-    {
-      "id": "d71",
-      "path": "tests/test_tools/test_async_list.py",
-      "description": "Tests for async_list tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests directory listing",
-        "Tests filtering and patterns"
-      ]
-    },
-    {
-      "id": "d72",
-      "path": "tests/test_tools/test_async_append.py",
-      "description": "Tests for async_append tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests appending to existing files",
-        "Tests creating new files via append"
-      ]
-    },
-    {
-      "id": "d73",
-      "path": "tests/test_tools/test_async_rename.py",
-      "description": "Tests for async_rename tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests file renaming",
-        "Tests cross-directory moves"
-      ]
-    },
-    {
-      "id": "d74",
-      "path": "tests/test_tools/test_async_batch_read.py",
-      "description": "Tests for async_batch_read tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests batch reading multiple files",
-        "Tests partial failure handling"
-      ]
-    },
-    {
-      "id": "d75",
-      "path": "tests/test_tools/test_async_batch_write.py",
-      "description": "Tests for async_batch_write tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests batch writing multiple files",
-        "Tests atomicity on failure"
-      ]
-    },
-    {
-      "id": "d76",
-      "path": "tests/test_tools/test_async_batch_update.py",
-      "description": "Tests for async_batch_update tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests batch updating multiple files",
-        "Tests partial failure handling"
-      ]
-    },
-    {
-      "id": "d77",
-      "path": "tests/test_tools/test_async_status.py",
-      "description": "Tests for async_status tool",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests file status retrieval",
-        "Tests error on missing files"
-      ]
-    },
-    {
-      "id": "d78",
-      "path": "tests/test_cli/__init__.py",
-      "description": "CLI tests package init",
-      "type": "test",
-      "acceptance_criteria": [
-        "Package initializer for CLI tests"
-      ]
-    },
-    {
-      "id": "d79",
-      "path": "tests/test_cli/test_bootstrap_cmd.py",
-      "description": "Tests for bootstrap CLI commands",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests bootstrap install command",
-        "Tests bootstrap status command",
-        "Tests admin privilege checking"
-      ]
-    },
-    {
-      "id": "d80",
-      "path": "tests/test_cli/test_daemon_cmd.py",
-      "description": "Tests for daemon CLI commands",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests daemon start/stop/restart commands",
-        "Tests daemon status with --json",
-        "Tests config mutation behavior (ADR-003)"
-      ]
-    },
-    {
-      "id": "d81",
-      "path": "tests/test_cli/test_config_cmd.py",
-      "description": "Tests for config CLI commands",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests config init with defaults",
-        "Tests config show",
-        "Tests config validate"
-      ]
-    },
-    {
-      "id": "d82",
-      "path": "tests/test_cli/test_setup_cmd.py",
-      "description": "Tests for setup CLI command",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests setup wizard flow",
-        "Tests --no-interactive mode",
-        "Tests port discovery"
-      ]
-    },
-    {
-      "id": "d83",
-      "path": "tests/test_cli/test_install_cmd.py",
-      "description": "Tests for quick-install and uninstall commands",
-      "type": "test",
-      "acceptance_criteria": [
-        "Tests quick-install flow",
-        "Tests uninstall with --keep-config/--remove-config"
-      ]
-    },
-    {
-      "id": "d84",
-      "path": "tests/test_tools/__init__.py",
-      "description": "Tools tests package init",
-      "type": "test",
-      "acceptance_criteria": [
-        "Package initializer for tools tests"
-      ]
-    },
-    {
-      "id": "d85",
-      "path": ".gitignore",
-      "description": "Git ignore file with Python, venv, and build artifact patterns",
-      "type": "config",
-      "acceptance_criteria": [
-        "Ignores __pycache__/, .ruff_cache/",
-        "Ignores .venv/, venv/, dist/, build/",
-        "Ignores *.egg-info/",
-        "Ignores .env files",
-        "Ignores .serena/, .claude-context/"
-      ]
-    },
-    {
-      "id": "d86",
-      "path": "LICENSE",
-      "description": "MIT license file",
-      "type": "doc",
-      "acceptance_criteria": [
-        "Contains MIT license text"
-      ]
-    },
-    {
-      "id": "d87",
-      "path": "README.md",
-      "description": "Project README with installation instructions, usage examples, and architecture overview",
-      "type": "doc",
-      "acceptance_criteria": [
-        "Project description and purpose",
-        "Installation instructions (quick install, setup.bat/setup.sh)",
-        "Usage examples for CLI commands",
-        "Architecture overview with two-layer design"
-      ]
+        {
+          "id": "AC-d38.1",
+          "text": "File exists to make windows/ a proper Python package",
+          "verifiable_signal": "File exists at path (may be empty)"
+        }
+      ],
+      "supporting_context": []
     }
   ]
 }

@@ -1,448 +1,542 @@
 {
   "total_deliverables": 87,
-  "total_score": 207.8,
+  "total_score": 280.61,
   "partitions": [
     {
       "partition_id": 1,
       "deliverables": [
         {
-          "id": "d16",
-          "path": "src/async_crud_mcp/daemon/windows/dispatcher.py",
-          "score": 7.9
-        },
-        {
-          "id": "d63",
-          "path": "tests/test_lock_manager.py",
-          "score": 5.81
-        },
-        {
-          "id": "d69",
-          "path": "tests/test_tools/test_async_update.py",
-          "score": 5.6
-        },
-        {
-          "id": "d59",
-          "path": "tests/test_config.py",
-          "score": 5.5
-        },
-        {
-          "id": "d28",
-          "path": "scripts/installer.py",
-          "score": 5.4
-        },
-        {
-          "id": "d12",
-          "path": "src/async_crud_mcp/daemon/installer.py",
-          "score": 4.95
-        },
-        {
-          "id": "d66",
-          "path": "tests/test_file_watcher.py",
-          "score": 4.83
-        },
-        {
-          "id": "d42",
-          "path": "src/async_crud_mcp/core/lock_manager.py",
-          "score": 4.79
-        },
-        {
-          "id": "d65",
-          "path": "tests/test_diff_engine.py",
-          "score": 4.69
-        },
-        {
-          "id": "d82",
-          "path": "tests/test_cli/test_setup_cmd.py",
-          "score": 4.33
-        },
-        {
-          "id": "d64",
-          "path": "tests/test_persistence.py",
-          "score": 4.25
-        },
-        {
-          "id": "d77",
-          "path": "tests/test_tools/test_async_status.py",
-          "score": 4.22
-        },
-        {
-          "id": "d11",
-          "path": "src/async_crud_mcp/daemon/config_init.py",
-          "score": 4.21
-        },
-        {
-          "id": "d15",
-          "path": "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
-          "score": 4.2
-        },
-        {
-          "id": "d25",
-          "path": "src/async_crud_mcp/server.py",
-          "score": 4.17
-        },
-        {
-          "id": "d33",
-          "path": "scripts/test_server.py",
-          "score": 4.01
-        },
-        {
-          "id": "d62",
-          "path": "tests/test_path_validator.py",
-          "score": 3.95
-        },
-        {
-          "id": "d5",
-          "path": "src/async_crud_mcp/daemon/paths.py",
-          "score": 3.85
-        },
-        {
-          "id": "d45",
-          "path": "src/async_crud_mcp/core/file_watcher.py",
-          "score": 3.72
-        },
-        {
-          "id": "d6",
-          "path": "src/async_crud_mcp/daemon/bootstrap_daemon.py",
-          "score": 3.51
-        },
-        {
-          "id": "d61",
-          "path": "tests/test_file_io.py",
-          "score": 3.48
-        },
-        {
-          "id": "d38",
-          "path": "src/async_crud_mcp/models/responses.py",
-          "score": 3.3
-        },
-        {
-          "id": "d40",
-          "path": "src/async_crud_mcp/core/file_io.py",
-          "score": 3.14
-        },
-        {
-          "id": "d71",
-          "path": "tests/test_tools/test_async_list.py",
-          "score": 2.92
-        },
-        {
-          "id": "d22",
-          "path": "src/async_crud_mcp/cli/setup_cmd.py",
-          "score": 2.87
-        },
-        {
-          "id": "d76",
-          "path": "tests/test_tools/test_async_batch_update.py",
-          "score": 2.83
-        },
-        {
-          "id": "d72",
-          "path": "tests/test_tools/test_async_append.py",
-          "score": 2.8
-        },
-        {
-          "id": "d44",
-          "path": "src/async_crud_mcp/core/diff_engine.py",
-          "score": 2.77
-        },
-        {
-          "id": "d29",
-          "path": "scripts/uninstaller.py",
-          "score": 2.76
-        },
-        {
-          "id": "d73",
-          "path": "tests/test_tools/test_async_rename.py",
-          "score": 2.73
-        },
-        {
-          "id": "d31",
-          "path": "scripts/build_installer.py",
-          "score": 2.72
-        },
-        {
-          "id": "d9",
-          "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
-          "score": 2.69
-        },
-        {
-          "id": "d83",
-          "path": "tests/test_cli/test_install_cmd.py",
-          "score": 2.67
-        },
-        {
-          "id": "d49",
-          "path": "src/async_crud_mcp/tools/async_update.py",
-          "score": 2.61
-        },
-        {
-          "id": "d20",
-          "path": "src/async_crud_mcp/cli/daemon_cmd.py",
-          "score": 2.59
-        },
-        {
-          "id": "d87",
-          "path": "README.md",
-          "score": 2.58
-        },
-        {
-          "id": "d80",
-          "path": "tests/test_cli/test_daemon_cmd.py",
-          "score": 2.47
-        },
-        {
-          "id": "d8",
-          "path": "src/async_crud_mcp/daemon/config_watcher.py",
-          "score": 2.46
-        },
-        {
-          "id": "d43",
-          "path": "src/async_crud_mcp/core/persistence.py",
-          "score": 2.46
-        },
-        {
-          "id": "d60",
-          "path": "tests/test_server.py",
-          "score": 2.46
-        },
-        {
-          "id": "d67",
-          "path": "tests/test_tools/test_async_read.py",
-          "score": 2.4
-        },
-        {
-          "id": "d75",
-          "path": "tests/test_tools/test_async_batch_write.py",
-          "score": 2.35
-        },
-        {
-          "id": "d23",
-          "path": "src/async_crud_mcp/cli/install_cmd.py",
-          "score": 2.34
-        },
-        {
-          "id": "d74",
-          "path": "tests/test_tools/test_async_batch_read.py",
-          "score": 2.18
-        },
-        {
-          "id": "d30",
-          "path": "scripts/bootstrap_uv.py",
-          "score": 2.17
-        },
-        {
-          "id": "d68",
-          "path": "tests/test_tools/test_async_write.py",
-          "score": 2.13
-        },
-        {
-          "id": "d24",
-          "path": "src/async_crud_mcp/config.py",
-          "score": 2.1
-        },
-        {
-          "id": "d51",
-          "path": "src/async_crud_mcp/tools/async_list.py",
-          "score": 1.94
-        },
-        {
-          "id": "d19",
-          "path": "src/async_crud_mcp/cli/bootstrap_cmd.py",
-          "score": 1.91
-        },
-        {
-          "id": "d81",
-          "path": "tests/test_cli/test_config_cmd.py",
-          "score": 1.87
-        },
-        {
-          "id": "d10",
-          "path": "src/async_crud_mcp/daemon/logging_setup.py",
-          "score": 1.86
-        },
-        {
-          "id": "d70",
-          "path": "tests/test_tools/test_async_delete.py",
-          "score": 1.79
-        },
-        {
-          "id": "d32",
-          "path": "scripts/configure_claude_code.py",
-          "score": 1.76
-        },
-        {
-          "id": "d53",
-          "path": "src/async_crud_mcp/tools/async_rename.py",
-          "score": 1.71
-        },
-        {
-          "id": "d37",
-          "path": "src/async_crud_mcp/models/requests.py",
-          "score": 1.68
-        },
-        {
-          "id": "d17",
-          "path": "src/async_crud_mcp/daemon/windows/session_detector.py",
-          "score": 1.65
-        },
-        {
-          "id": "d52",
-          "path": "src/async_crud_mcp/tools/async_append.py",
-          "score": 1.63
-        },
-        {
-          "id": "d7",
-          "path": "src/async_crud_mcp/daemon/session_detector.py",
-          "score": 1.62
-        },
-        {
-          "id": "d50",
-          "path": "src/async_crud_mcp/tools/async_delete.py",
-          "score": 1.5
-        },
-        {
-          "id": "d21",
-          "path": "src/async_crud_mcp/cli/config_cmd.py",
-          "score": 1.42
-        },
-        {
-          "id": "d57",
-          "path": "src/async_crud_mcp/tools/async_status.py",
-          "score": 1.39
-        },
-        {
-          "id": "d41",
-          "path": "src/async_crud_mcp/core/path_validator.py",
-          "score": 1.33
-        },
-        {
-          "id": "d48",
-          "path": "src/async_crud_mcp/tools/async_write.py",
-          "score": 1.3
-        },
-        {
-          "id": "d13",
-          "path": "src/async_crud_mcp/daemon/health.py",
-          "score": 1.17
-        },
-        {
-          "id": "d47",
-          "path": "src/async_crud_mcp/tools/async_read.py",
-          "score": 1.11
-        },
-        {
-          "id": "d56",
-          "path": "src/async_crud_mcp/tools/async_batch_update.py",
-          "score": 1.01
-        },
-        {
-          "id": "d55",
-          "path": "src/async_crud_mcp/tools/async_batch_write.py",
-          "score": 0.96
-        },
-        {
-          "id": "d54",
-          "path": "src/async_crud_mcp/tools/async_batch_read.py",
-          "score": 0.95
-        },
-        {
-          "id": "d79",
-          "path": "tests/test_cli/test_bootstrap_cmd.py",
-          "score": 0.92
-        },
-        {
-          "id": "d36",
-          "path": "src/async_crud_mcp/models/__init__.py",
-          "score": 0.91
-        },
-        {
-          "id": "d4",
-          "path": "src/async_crud_mcp/daemon/__init__.py",
-          "score": 0.82
-        },
-        {
-          "id": "d27",
-          "path": "scripts/setup.sh",
-          "score": 0.8
-        },
-        {
-          "id": "d26",
-          "path": "scripts/setup.bat",
-          "score": 0.76
-        },
-        {
-          "id": "d1",
-          "path": "pyproject.toml",
-          "score": 0.63
-        },
-        {
-          "id": "d85",
-          "path": ".gitignore",
-          "score": 0.52
-        },
-        {
-          "id": "d14",
-          "path": "src/async_crud_mcp/daemon/windows/__init__.py",
-          "score": 0.51
-        },
-        {
           "id": "d2",
           "path": "src/async_crud_mcp/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
         },
         {
           "id": "d3",
           "path": "src/async_crud_mcp/__main__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d4",
+          "path": "src/async_crud_mcp/daemon/__init__.py",
+          "score": 1.09,
+          "spec_section": ""
+        },
+        {
+          "id": "d5",
+          "path": "src/async_crud_mcp/daemon/paths.py",
+          "score": 5.13,
+          "spec_section": ""
+        },
+        {
+          "id": "d6",
+          "path": "src/async_crud_mcp/daemon/bootstrap_daemon.py",
+          "score": 4.68,
+          "spec_section": ""
+        },
+        {
+          "id": "d7",
+          "path": "src/async_crud_mcp/daemon/session_detector.py",
+          "score": 2.16,
+          "spec_section": ""
+        },
+        {
+          "id": "d8",
+          "path": "src/async_crud_mcp/daemon/config_watcher.py",
+          "score": 3.28,
+          "spec_section": ""
+        },
+        {
+          "id": "d9",
+          "path": "src/async_crud_mcp/daemon/graceful_shutdown.py",
+          "score": 3.59,
+          "spec_section": ""
+        },
+        {
+          "id": "d10",
+          "path": "src/async_crud_mcp/daemon/logging_setup.py",
+          "score": 2.48,
+          "spec_section": ""
+        },
+        {
+          "id": "d11",
+          "path": "src/async_crud_mcp/daemon/config_init.py",
+          "score": 5.61,
+          "spec_section": ""
+        },
+        {
+          "id": "d12",
+          "path": "src/async_crud_mcp/daemon/installer.py",
+          "score": 6.6,
+          "spec_section": ""
+        },
+        {
+          "id": "d13",
+          "path": "src/async_crud_mcp/daemon/health.py",
+          "score": 1.56,
+          "spec_section": ""
+        },
+        {
+          "id": "d14",
+          "path": "src/async_crud_mcp/daemon/windows/__init__.py",
+          "score": 0.68,
+          "spec_section": ""
+        },
+        {
+          "id": "d15",
+          "path": "src/async_crud_mcp/daemon/windows/bootstrap_service.py",
+          "score": 5.6,
+          "spec_section": ""
+        },
+        {
+          "id": "d16",
+          "path": "src/async_crud_mcp/daemon/windows/dispatcher.py",
+          "score": 10.53,
+          "spec_section": ""
+        },
+        {
+          "id": "d17",
+          "path": "src/async_crud_mcp/daemon/windows/session_detector.py",
+          "score": 2.2,
+          "spec_section": ""
         },
         {
           "id": "d18",
           "path": "src/async_crud_mcp/cli/__init__.py",
-          "score": 0.5
+          "score": 0.55,
+          "spec_section": ""
         },
         {
-          "id": "d34",
-          "path": "scripts/test_server.bat",
-          "score": 0.5
+          "id": "d19",
+          "path": "src/async_crud_mcp/cli/bootstrap_cmd.py",
+          "score": 2.55,
+          "spec_section": ""
         },
         {
-          "id": "d35",
-          "path": "scripts/test_server.sh",
-          "score": 0.5
+          "id": "d20",
+          "path": "src/async_crud_mcp/cli/daemon_cmd.py",
+          "score": 3.45,
+          "spec_section": ""
+        },
+        {
+          "id": "d21",
+          "path": "src/async_crud_mcp/cli/config_cmd.py",
+          "score": 1.89,
+          "spec_section": ""
+        },
+        {
+          "id": "d22",
+          "path": "src/async_crud_mcp/cli/setup_cmd.py",
+          "score": 3.83,
+          "spec_section": ""
+        },
+        {
+          "id": "d23",
+          "path": "src/async_crud_mcp/cli/install_cmd.py",
+          "score": 3.12,
+          "spec_section": ""
+        },
+        {
+          "id": "d24",
+          "path": "src/async_crud_mcp/config.py",
+          "score": 3.33,
+          "spec_section": ""
+        },
+        {
+          "id": "d25",
+          "path": "src/async_crud_mcp/server.py",
+          "score": 5.61,
+          "spec_section": ""
+        },
+        {
+          "id": "d36",
+          "path": "src/async_crud_mcp/models/__init__.py",
+          "score": 1.21,
+          "spec_section": ""
+        },
+        {
+          "id": "d37",
+          "path": "src/async_crud_mcp/models/requests.py",
+          "score": 2.24,
+          "spec_section": ""
+        },
+        {
+          "id": "d38",
+          "path": "src/async_crud_mcp/models/responses.py",
+          "score": 4.4,
+          "spec_section": ""
         },
         {
           "id": "d39",
           "path": "src/async_crud_mcp/core/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d40",
+          "path": "src/async_crud_mcp/core/file_io.py",
+          "score": 4.19,
+          "spec_section": ""
+        },
+        {
+          "id": "d41",
+          "path": "src/async_crud_mcp/core/path_validator.py",
+          "score": 2.99,
+          "spec_section": ""
+        },
+        {
+          "id": "d42",
+          "path": "src/async_crud_mcp/core/lock_manager.py",
+          "score": 6.39,
+          "spec_section": ""
+        },
+        {
+          "id": "d43",
+          "path": "src/async_crud_mcp/core/persistence.py",
+          "score": 3.28,
+          "spec_section": ""
+        },
+        {
+          "id": "d44",
+          "path": "src/async_crud_mcp/core/diff_engine.py",
+          "score": 3.69,
+          "spec_section": ""
+        },
+        {
+          "id": "d45",
+          "path": "src/async_crud_mcp/core/file_watcher.py",
+          "score": 4.96,
+          "spec_section": ""
         },
         {
           "id": "d46",
           "path": "src/async_crud_mcp/tools/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d47",
+          "path": "src/async_crud_mcp/tools/async_read.py",
+          "score": 1.48,
+          "spec_section": ""
+        },
+        {
+          "id": "d48",
+          "path": "src/async_crud_mcp/tools/async_write.py",
+          "score": 1.83,
+          "spec_section": ""
+        },
+        {
+          "id": "d49",
+          "path": "src/async_crud_mcp/tools/async_update.py",
+          "score": 3.57,
+          "spec_section": ""
+        },
+        {
+          "id": "d50",
+          "path": "src/async_crud_mcp/tools/async_delete.py",
+          "score": 2.09,
+          "spec_section": ""
+        },
+        {
+          "id": "d51",
+          "path": "src/async_crud_mcp/tools/async_list.py",
+          "score": 2.59,
+          "spec_section": ""
+        },
+        {
+          "id": "d52",
+          "path": "src/async_crud_mcp/tools/async_append.py",
+          "score": 2.27,
+          "spec_section": ""
+        },
+        {
+          "id": "d53",
+          "path": "src/async_crud_mcp/tools/async_rename.py",
+          "score": 2.56,
+          "spec_section": ""
+        },
+        {
+          "id": "d54",
+          "path": "src/async_crud_mcp/tools/async_batch_read.py",
+          "score": 1.27,
+          "spec_section": ""
+        },
+        {
+          "id": "d55",
+          "path": "src/async_crud_mcp/tools/async_batch_write.py",
+          "score": 1.28,
+          "spec_section": ""
+        },
+        {
+          "id": "d56",
+          "path": "src/async_crud_mcp/tools/async_batch_update.py",
+          "score": 1.35,
+          "spec_section": ""
+        },
+        {
+          "id": "d57",
+          "path": "src/async_crud_mcp/tools/async_status.py",
+          "score": 1.85,
+          "spec_section": ""
         },
         {
           "id": "d58",
           "path": "tests/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d59",
+          "path": "tests/test_config.py",
+          "score": 7.33,
+          "spec_section": ""
+        },
+        {
+          "id": "d60",
+          "path": "tests/test_server.py",
+          "score": 3.28,
+          "spec_section": ""
+        },
+        {
+          "id": "d61",
+          "path": "tests/test_file_io.py",
+          "score": 4.64,
+          "spec_section": ""
+        },
+        {
+          "id": "d62",
+          "path": "tests/test_path_validator.py",
+          "score": 8.15,
+          "spec_section": ""
+        },
+        {
+          "id": "d63",
+          "path": "tests/test_lock_manager.py",
+          "score": 7.75,
+          "spec_section": ""
+        },
+        {
+          "id": "d64",
+          "path": "tests/test_persistence.py",
+          "score": 5.67,
+          "spec_section": ""
+        },
+        {
+          "id": "d65",
+          "path": "tests/test_diff_engine.py",
+          "score": 6.25,
+          "spec_section": ""
+        },
+        {
+          "id": "d66",
+          "path": "tests/test_file_watcher.py",
+          "score": 6.44,
+          "spec_section": ""
+        },
+        {
+          "id": "d67",
+          "path": "tests/test_tools/test_async_read.py",
+          "score": 3.2,
+          "spec_section": ""
+        },
+        {
+          "id": "d68",
+          "path": "tests/test_tools/test_async_write.py",
+          "score": 2.84,
+          "spec_section": ""
+        },
+        {
+          "id": "d69",
+          "path": "tests/test_tools/test_async_update.py",
+          "score": 7.47,
+          "spec_section": ""
+        },
+        {
+          "id": "d70",
+          "path": "tests/test_tools/test_async_delete.py",
+          "score": 2.39,
+          "spec_section": ""
+        },
+        {
+          "id": "d71",
+          "path": "tests/test_tools/test_async_list.py",
+          "score": 3.89,
+          "spec_section": ""
+        },
+        {
+          "id": "d72",
+          "path": "tests/test_tools/test_async_append.py",
+          "score": 3.73,
+          "spec_section": ""
+        },
+        {
+          "id": "d73",
+          "path": "tests/test_tools/test_async_rename.py",
+          "score": 3.64,
+          "spec_section": ""
+        },
+        {
+          "id": "d74",
+          "path": "tests/test_tools/test_async_batch_read.py",
+          "score": 2.91,
+          "spec_section": ""
+        },
+        {
+          "id": "d75",
+          "path": "tests/test_tools/test_async_batch_write.py",
+          "score": 3.13,
+          "spec_section": ""
+        },
+        {
+          "id": "d76",
+          "path": "tests/test_tools/test_async_batch_update.py",
+          "score": 3.77,
+          "spec_section": ""
+        },
+        {
+          "id": "d77",
+          "path": "tests/test_tools/test_async_status.py",
+          "score": 5.63,
+          "spec_section": ""
         },
         {
           "id": "d78",
           "path": "tests/test_cli/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d79",
+          "path": "tests/test_cli/test_bootstrap_cmd.py",
+          "score": 1.23,
+          "spec_section": ""
+        },
+        {
+          "id": "d80",
+          "path": "tests/test_cli/test_daemon_cmd.py",
+          "score": 3.29,
+          "spec_section": ""
+        },
+        {
+          "id": "d81",
+          "path": "tests/test_cli/test_config_cmd.py",
+          "score": 2.49,
+          "spec_section": ""
+        },
+        {
+          "id": "d82",
+          "path": "tests/test_cli/test_setup_cmd.py",
+          "score": 5.77,
+          "spec_section": ""
+        },
+        {
+          "id": "d83",
+          "path": "tests/test_cli/test_install_cmd.py",
+          "score": 3.56,
+          "spec_section": ""
         },
         {
           "id": "d84",
           "path": "tests/test_tools/__init__.py",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d26",
+          "path": "scripts/setup.bat",
+          "score": 1.01,
+          "spec_section": ""
+        },
+        {
+          "id": "d27",
+          "path": "scripts/setup.sh",
+          "score": 1.07,
+          "spec_section": ""
+        },
+        {
+          "id": "d28",
+          "path": "scripts/installer.py",
+          "score": 7.2,
+          "spec_section": ""
+        },
+        {
+          "id": "d29",
+          "path": "scripts/uninstaller.py",
+          "score": 3.68,
+          "spec_section": ""
+        },
+        {
+          "id": "d30",
+          "path": "scripts/bootstrap_uv.py",
+          "score": 2.89,
+          "spec_section": ""
+        },
+        {
+          "id": "d31",
+          "path": "scripts/build_installer.py",
+          "score": 3.63,
+          "spec_section": ""
+        },
+        {
+          "id": "d32",
+          "path": "scripts/configure_claude_code.py",
+          "score": 2.35,
+          "spec_section": ""
+        },
+        {
+          "id": "d33",
+          "path": "scripts/test_server.py",
+          "score": 5.35,
+          "spec_section": ""
+        },
+        {
+          "id": "d34",
+          "path": "scripts/test_server.bat",
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d35",
+          "path": "scripts/test_server.sh",
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d1",
+          "path": "pyproject.toml",
+          "score": 0.84,
+          "spec_section": ""
+        },
+        {
+          "id": "d85",
+          "path": ".gitignore",
+          "score": 0.69,
+          "spec_section": ""
         },
         {
           "id": "d86",
           "path": "LICENSE",
-          "score": 0.5
+          "score": 0.5,
+          "spec_section": ""
+        },
+        {
+          "id": "d87",
+          "path": "README.md",
+          "score": 3.44,
+          "spec_section": ""
         }
       ],
-      "total_score": 207.8
+      "cluster_keys": [
+        "src",
+        "tests",
+        "scripts",
+        "_root"
+      ],
+      "total_score": 280.61
     }
   ],
-  "budget_per_partition": 500.0
+  "budget_per_partition": 400.0,
+  "cluster_count": 4
 }

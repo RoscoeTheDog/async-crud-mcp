@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Union
 
-from async_crud_mcp.core import HashRegistry, PathValidationError, PathValidator
+from async_crud_mcp.core import AccessDeniedError, HashRegistry, PathValidationError, PathValidator
 from async_crud_mcp.models import (
     AsyncListRequest,
     DirectoryEntry,
@@ -32,9 +32,15 @@ async def async_list(
         ListSuccessResponse with directory entries, or ErrorResponse on failure
     """
     try:
-        # 1. Validate path using PathValidator
+        # 1. Validate path and access policy
         try:
-            validated_path = path_validator.validate(request.path)
+            validated_path = path_validator.validate_operation(request.path, "list")
+        except AccessDeniedError as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ACCESS_DENIED,
+                message=str(e),
+                path=request.path,
+            )
         except PathValidationError as e:
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,

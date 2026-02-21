@@ -1,0 +1,77 @@
+{
+  "story_id": "6",
+  "validation_id": "-6",
+  "phase": "a",
+  "status": "failed",
+  "completed_at": "2026-02-17T08:39:46Z",
+  "structural_checks": {
+    "A": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "B": {
+      "passed": true,
+      "blocking": false,
+      "blocked": false
+    },
+    "C": {
+      "passed": false,
+      "blocking": false,
+      "blocked": false,
+      "errors": [
+        "P0 acceptance criteria without test coverage: AC-6.1, AC-6.2, AC-6.3, AC-6.4"
+      ]
+    },
+    "D": {
+      "passed": true,
+      "blocking": true,
+      "blocked": false
+    },
+    "J": {
+      "passed": false,
+      "blocking": true,
+      "blocked": false,
+      "errors": [
+        "Coverage 0.0% below threshold 80% (scope: scoped)"
+      ]
+    }
+  },
+  "failing_checks": [
+    "C",
+    "J"
+  ],
+  "failing_checks_summary": {
+    "C": {
+      "reason": "P0 acceptance criteria lack test coverage",
+      "acs_without_tests": [
+        "AC-6.1",
+        "AC-6.2",
+        "AC-6.3",
+        "AC-6.4"
+      ]
+    },
+    "J": {
+      "reason": "Coverage 0.0% below threshold 80%",
+      "coverage": 0.0,
+      "threshold": 0.8,
+      "touched_files": [
+        "pyproject.toml"
+      ]
+    }
+  },
+  "error_signatures": [
+    "TestCoverageError:AC-6.1:missing_test",
+    "TestCoverageError:AC-6.2:missing_test",
+    "TestCoverageError:AC-6.3:missing_test",
+    "TestCoverageError:AC-6.4:missing_test",
+    "CoverageError:pyproject.toml:coverage_0_percent"
+  ],
+  "convergence": {
+    "pattern": "passed",
+    "action": "done",
+    "history_length": 1
+  },
+  "phase_outcome": "FAILED_BLOCKING_CHECK_J",
+  "notes": "Check J (coverage validation) is blocking and failed with 0% coverage. Story implementation lacks test coverage for pyproject.toml changes. Phase B will not be dispatched."
+}

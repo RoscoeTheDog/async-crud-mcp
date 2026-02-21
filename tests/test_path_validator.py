@@ -609,3 +609,302 @@ class TestAccessRules:
         # Should fail with PathValidationError (base dir), not AccessDeniedError
         with pytest.raises(PathValidationError, match="outside allowed base directories"):
             validator.validate_operation(str(file_path), "write")
+
+
+class TestGlobPatternRules:
+    """Test glob pattern matching in access rules."""
+
+    def _make_rule(self, path, operations, action, priority=0):
+        return PathRule(path=path, operations=operations, action=action, priority=priority)
+
+    def test_glob_star_env_denies_dotenv_files(self, tmp_path):
+        """Glob pattern **/.env blocks .env files anywhere."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        env_file = base_dir / ".env"
+        env_file.touch()
+
+        rules = [self._make_rule("**/.env", ["*"], "deny", priority=200)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError, match="denied"):
+            validator.validate_operation(str(env_file), "read")
+
+    def test_glob_star_pem_denies_pem_files(self, tmp_path):
+        """Glob pattern **/*.pem blocks PEM files anywhere."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        subdir = base_dir / "certs"
+        subdir.mkdir()
+        pem_file = subdir / "server.pem"
+        pem_file.touch()
+
+        rules = [self._make_rule("**/*.pem", ["*"], "deny", priority=200)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError, match="denied"):
+            validator.validate_operation(str(pem_file), "read")
+
+    def test_glob_does_not_match_non_matching_file(self, tmp_path):
+        """Glob pattern **/*.pem does not block non-PEM files."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        txt_file = base_dir / "readme.txt"
+        txt_file.touch()
+
+        rules = [self._make_rule("**/*.pem", ["*"], "deny", priority=200)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        result = validator.validate_operation(str(txt_file), "read")
+        assert result.is_absolute()
+
+    def test_glob_credentials_pattern(self, tmp_path):
+        """Glob pattern **/credentials* blocks any file with credentials in name."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        creds_file = base_dir / "credentials.json"
+        creds_file.touch()
+
+        rules = [self._make_rule("**/credentials*", ["read", "write"], "deny", priority=200)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(creds_file), "read")
+
+    def test_glob_and_prefix_rules_coexist(self, tmp_path):
+        """Glob rules and prefix rules can coexist and both work."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        output_dir = base_dir / "output"
+        output_dir.mkdir()
+        env_file = base_dir / ".env"
+        env_file.touch()
+        out_file = output_dir / "result.json"
+        out_file.touch()
+
+        rules = [
+            self._make_rule("**/.env", ["*"], "deny", priority=200),
+            self._make_rule(str(output_dir), ["write"], "allow", priority=100),
+        ]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="deny",
+        )
+
+        # Glob rule blocks .env
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(env_file), "read")
+
+        # Prefix rule allows write to output dir
+        result = validator.validate_operation(str(out_file), "write")
+        assert result.is_absolute()
+
+    def test_glob_env_star_blocks_env_variants(self, tmp_path):
+        """Glob pattern **/.env.* blocks .env.local, .env.production, etc."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        env_local = base_dir / ".env.local"
+        env_local.touch()
+
+        rules = [self._make_rule("**/.env.*", ["*"], "deny", priority=200)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(env_local), "read")
+
+
+class TestReadOperationEnforcement:
+    """Test that read/list operations are now subject to access rules."""
+
+    def _make_rule(self, path, operations, action, priority=0):
+        return PathRule(path=path, operations=operations, action=action, priority=priority)
+
+    def test_read_operation_denied_by_rule(self, tmp_path):
+        """A deny rule for 'read' operations blocks reads."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        secret_dir = base_dir / "secrets"
+        secret_dir.mkdir()
+        file_path = secret_dir / "key.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(secret_dir), ["read"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError, match="denied"):
+            validator.validate_operation(str(file_path), "read")
+
+    def test_list_operation_denied_by_rule(self, tmp_path):
+        """A deny rule for 'list' operations blocks directory listing."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        secret_dir = base_dir / "secrets"
+        secret_dir.mkdir()
+
+        rules = [self._make_rule(str(secret_dir), ["list"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError, match="denied"):
+            validator.validate_operation(str(secret_dir), "list")
+
+    def test_wildcard_blocks_read_and_write(self, tmp_path):
+        """Wildcard '*' in operations blocks both read and write."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        protected = base_dir / "protected"
+        protected.mkdir()
+        file_path = protected / "data.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(protected), ["*"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "read")
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "write")
+
+    def test_read_allowed_when_only_write_denied(self, tmp_path):
+        """Read is allowed when only write operations are denied."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(base_dir), ["write"], "deny", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="allow",
+        )
+
+        # Read should pass (rule only applies to write)
+        result = validator.validate_operation(str(file_path), "read")
+        assert result.is_absolute()
+
+
+class TestDefaultReadPolicy:
+    """Test default_read_policy configuration."""
+
+    def _make_rule(self, path, operations, action, priority=0):
+        return PathRule(path=path, operations=operations, action=action, priority=priority)
+
+    def test_default_read_policy_deny_blocks_reads(self, tmp_path):
+        """When default_read_policy='deny', unmatched reads are blocked."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=[],
+            default_destructive_policy="allow",
+            default_read_policy="deny",
+        )
+
+        with pytest.raises(AccessDeniedError, match="no access rules configured"):
+            validator.validate_operation(str(file_path), "read")
+
+    def test_default_read_policy_allow_permits_reads(self, tmp_path):
+        """When default_read_policy='allow', unmatched reads pass."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=[],
+            default_destructive_policy="deny",
+            default_read_policy="allow",
+        )
+
+        # Read should pass even though destructive default is deny
+        result = validator.validate_operation(str(file_path), "read")
+        assert result.is_absolute()
+
+        # Write should still be blocked by destructive default
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(file_path), "write")
+
+    def test_list_uses_read_policy(self, tmp_path):
+        """List operations use default_read_policy, not default_destructive_policy."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=[],
+            default_destructive_policy="allow",
+            default_read_policy="deny",
+        )
+
+        with pytest.raises(AccessDeniedError):
+            validator.validate_operation(str(base_dir), "list")
+
+    def test_backward_compat_default_read_allow(self, tmp_path):
+        """Default constructor has default_read_policy='allow' for backward compat."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        file_path = base_dir / "file.txt"
+        file_path.touch()
+
+        # Default constructor: no access_rules, both defaults are "allow"
+        validator = PathValidator([str(base_dir)])
+
+        result = validator.validate_operation(str(file_path), "read")
+        assert result.is_absolute()
+
+    def test_read_policy_with_matching_allow_rule(self, tmp_path):
+        """An allow rule permits reads even when default_read_policy='deny'."""
+        base_dir = tmp_path / "project"
+        base_dir.mkdir()
+        public_dir = base_dir / "public"
+        public_dir.mkdir()
+        file_path = public_dir / "readme.txt"
+        file_path.touch()
+
+        rules = [self._make_rule(str(public_dir), ["read"], "allow", priority=100)]
+        validator = PathValidator(
+            [str(base_dir)],
+            access_rules=rules,
+            default_destructive_policy="deny",
+            default_read_policy="deny",
+        )
+
+        result = validator.validate_operation(str(file_path), "read")
+        assert result.is_absolute()

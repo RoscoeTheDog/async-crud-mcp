@@ -2,24 +2,21 @@
   "story_id": "2",
   "phase": "a",
   "status": "passed",
-  "completed_at": "2026-02-13T08:15:00Z",
+  "completed_at": "2026-02-17T07:15:00Z",
   "planning_output": {
-    "implementation_plan": "Restructure CLI __init__.py to match spec d18: (1) Change setup from a subgroup (add_typer) to a direct top-level command using app.command() that delegates to the existing wizard logic in setup_cmd.py. (2) Register quick-install and uninstall as top-level commands on the main app rather than nesting them under the 'install' subgroup. (3) Add a new 'version' top-level command that imports and prints __version__ from async_crud_mcp.__init__. The install_cmd module retains its functions but they get registered directly on the main app instead of via add_typer. The setup_cmd module's wizard function gets wrapped or imported as a direct command. Existing test files need updates to test via the main app rather than submodule apps for the promoted commands.",
+    "implementation_plan": "Add an HTTP GET /health endpoint to server.py using FastMCP's `custom_route` decorator. This endpoint returns JSON with status, version, and uptime fields via plain HTTP (not MCP protocol). The existing `check_health()` function from `daemon/health.py` already provides the core health data; the new route reuses it and enriches with version/uptime, mirroring the existing `health_tool()` MCP tool logic. The endpoint returns HTTP 200 for healthy/degraded status and HTTP 503 for unhealthy status. The `scripts/test_server.py` already expects this endpoint at `/health` (line 300) so AC-2.4 is already satisfied once the endpoint exists. Unit tests will be added to `tests/test_server.py` to verify the new route.",
     "files_to_modify": [
-      "src/async_crud_mcp/cli/__init__.py",
-      "src/async_crud_mcp/cli/setup_cmd.py",
-      "src/async_crud_mcp/cli/install_cmd.py",
-      "tests/test_cli/test_install_cmd.py",
-      "tests/test_cli/test_setup_cmd.py"
+      "src/async_crud_mcp/server.py",
+      "tests/test_server.py"
     ],
-    "estimated_complexity": "medium",
+    "estimated_complexity": "low",
     "ac_breakdown": {
-      "AC-2.1": "Change setup from add_typer(setup_cmd.app, name='setup') to a direct top-level command. Two approaches: (A) Use app.command(name='setup') decorator on a function in __init__.py that calls the wizard logic, or (B) keep the wizard function in setup_cmd.py but register it directly via app.command(). Approach B is cleaner -- import the wizard function from setup_cmd and register it as: app.command(name='setup', help='Interactive setup wizard')(setup_cmd.wizard). The setup_cmd module can still define its own Typer app for standalone testing, but the main registration uses app.command(). This means 'async-crud-mcp setup' runs the wizard directly instead of requiring 'async-crud-mcp setup wizard'.",
-      "AC-2.2": "Register quick-install as a top-level command. Currently quick_install lives in install_cmd.py as @app.command() on install_cmd's local Typer app. Change __init__.py to import the function and register it: app.command(name='quick-install', help='Run full setup sequence')(install_cmd.quick_install). Remove the add_typer(install_cmd.app, name='install') line. The install_cmd module keeps its functions but they get registered on the main app.",
-      "AC-2.3": "Register uninstall as a top-level command. Same approach as AC-2.2: app.command(name='uninstall', help='Stop and uninstall the daemon service')(install_cmd.uninstall). This makes 'async-crud-mcp uninstall' work directly.",
-      "AC-2.4": "Add a version command. Create a simple function in __init__.py: @app.command() def version(): import from async_crud_mcp import __version__; typer.echo(f'async-crud-mcp {__version__}'). Alternatively use typer's built-in version callback, but a standalone command is clearer and matches the spec ('version command exists showing __version__')."
+      "AC-2.1": "Add `@mcp.custom_route('/health', methods=['GET'])` handler that calls `check_health()`, enriches with `version` (from `__version__`) and `uptime` (from `server_start_time`), and returns the result as a Starlette `JSONResponse`. Response JSON contains: status (healthy|degraded|unhealthy), version (string), uptime (float seconds), plus existing health fields (config_readable, daemon_enabled, logs_dir_exists, port_listening, host, port, message). File: `src/async_crud_mcp/server.py`. Add import for `starlette.requests.Request` and `starlette.responses.JSONResponse` (already transitive deps via FastMCP).",
+      "AC-2.2": "The `custom_route` decorator registers a plain HTTP route on the Starlette ASGI app that FastMCP builds for SSE transport. This route is accessible via standard HTTP GET without any MCP protocol handshake. No additional work needed beyond using `custom_route`.",
+      "AC-2.3": "In the handler, check `health_data['status']`: if `'unhealthy'` return `JSONResponse(health_data, status_code=503)`, otherwise return `JSONResponse(health_data, status_code=200)`. This maps healthy/degraded to 200 and unhealthy to 503.",
+      "AC-2.4": "`scripts/test_server.py` `check_server_connectivity()` (line 272-317) already makes an HTTP GET to `http://{host}:{port}/health` and checks for 200 response. Once the endpoint exists, this test script will work. No changes needed to `scripts/test_server.py`. For unit tests, add a test class in `tests/test_server.py` that verifies the custom route is registered and the handler returns correct status codes."
     },
-    "testing_strategy": "Update test_install_cmd.py to test quick-install and uninstall via the main app (from async_crud_mcp.cli import app) instead of the install_cmd subapp, since commands are now top-level. Similarly update test_setup_cmd.py to invoke 'setup' as a direct command on the main app. Add a new test for the version command verifying it outputs the __version__ string. Tests can go in an existing test file or a small addition to the CLI test suite. Use CliRunner with the main app for all top-level command tests.",
+    "testing_strategy": "Add a `TestHealthEndpoint` class in `tests/test_server.py` with tests: (1) Verify the `/health` route is registered in `mcp._additional_http_routes`. (2) Test the health endpoint handler function directly by constructing a mock Starlette Request and verifying it returns JSONResponse with correct fields (status, version, uptime). (3) Test that unhealthy status returns 503 by mocking `check_health()` to return unhealthy status. (4) Test that healthy status returns 200. The existing `scripts/test_server.py` integration test already covers AC-2.4 and needs no changes.",
     "dependencies": []
   }
 }
