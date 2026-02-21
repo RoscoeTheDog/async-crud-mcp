@@ -113,7 +113,7 @@ def setup_logging(
         logger.add(
             str(log_dir / "server.log"),
             level=log_level,
-            format=None if serialize_file else FILE_FORMAT,
+            format=FILE_FORMAT,
             rotation="10 MB",
             retention="7 days",
             compression="gz",

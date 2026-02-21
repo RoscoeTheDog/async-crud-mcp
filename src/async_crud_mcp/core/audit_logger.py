@@ -1,14 +1,15 @@
 """Structured audit logging for MCP tool calls.
 
-Writes JSONL entries to global and per-project log files, and emits
-structured loguru messages for real-time visibility.  Every tool call
-is recorded with session context, timing, and outcome.
+Uses loguru sinks for 3-tier JSONL output (project, user, system).
+Each tier gets rotation, retention, compression, and async-safety
+via ``serialize=True`` and ``enqueue=True``.
+
+Every tool call is recorded with session context, timing, and outcome.
 """
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from loguru import logger
@@ -42,56 +43,131 @@ class AuditConfig:
     include_details: bool = True
 
 
+def _audit_filter(record):
+    """Loguru filter: only capture messages with audit=True in extra."""
+    return record["extra"].get("audit", False)
+
+
 class AuditLogger:
-    """Fire-and-forget audit logger writing JSONL + loguru entries."""
+    """Audit logger using loguru sinks for 3-tier JSONL output."""
 
-    def __init__(self, global_log_dir: Path, config: AuditConfig) -> None:
-        self._global_log_dir = global_log_dir
+    def __init__(
+        self,
+        config: AuditConfig,
+        user_log_dir: Path | None = None,
+        system_log_dir: Path | None = None,
+    ) -> None:
         self._config = config
-        if config.enabled and config.log_to_global:
-            self._global_log_dir.mkdir(parents=True, exist_ok=True)
+        self._project_sink_id: int | None = None
+        self._current_project_root: Path | None = None
+        self._sink_ids: list[int] = []
 
-    def log(self, entry: AuditEntry, project_root: Path | None = None) -> None:
-        """Write an audit entry to loguru + JSONL files."""
+        if not config.enabled:
+            return
+
+        # Tier 2: User-level sink (LOCALAPPDATA/async-crud-mcp/logs/)
+        if config.log_to_global and user_log_dir is not None:
+            user_log_dir.mkdir(parents=True, exist_ok=True)
+            sid = logger.add(
+                str(user_log_dir / "audit.log"),
+                filter=_audit_filter,
+                serialize=True,
+                rotation="10 MB",
+                retention="30 days",
+                compression="gz",
+                enqueue=True,
+                level="INFO",
+            )
+            self._sink_ids.append(sid)
+
+        # Tier 3: System-level sink (ProgramData/async-crud-mcp/logs/)
+        if config.log_to_global and system_log_dir is not None:
+            try:
+                system_log_dir.mkdir(parents=True, exist_ok=True)
+                sid = logger.add(
+                    str(system_log_dir / "audit.log"),
+                    filter=_audit_filter,
+                    serialize=True,
+                    rotation="10 MB",
+                    retention="90 days",
+                    compression="gz",
+                    enqueue=True,
+                    level="INFO",
+                )
+                self._sink_ids.append(sid)
+            except PermissionError:
+                pass  # Non-admin users may not have ProgramData write access
+
+    def set_project(self, project_root: Path | None) -> None:
+        """Add/replace the project-level loguru sink when project activates."""
+        if not self._config.enabled or not self._config.log_to_project:
+            return
+
+        # Remove old project sink
+        if self._project_sink_id is not None:
+            try:
+                logger.remove(self._project_sink_id)
+            except ValueError:
+                pass
+            self._project_sink_id = None
+            self._current_project_root = None
+
+        if project_root is None:
+            return
+
+        project_log_dir = project_root / ".async-crud-mcp" / "logs"
+        project_log_dir.mkdir(parents=True, exist_ok=True)
+        self._project_sink_id = logger.add(
+            str(project_log_dir / "audit.log"),
+            filter=_audit_filter,
+            serialize=True,
+            rotation="5 MB",
+            retention="14 days",
+            compression="gz",
+            enqueue=True,
+            level="INFO",
+        )
+        self._current_project_root = project_root
+
+    def log(self, entry: AuditEntry) -> None:
+        """Emit an audit entry via loguru with all fields bound."""
         if not self._config.enabled:
             return
 
         # Respect config flags
-        if not self._config.include_args:
-            entry.args_summary = {}
-        if not self._config.include_details:
-            entry.details = None
+        args = entry.args_summary if self._config.include_args else {}
+        details = entry.details if self._config.include_details else None
 
-        record = asdict(entry)
-        line = json.dumps(record, default=str)
-
-        # 1. Loguru (structured binding for downstream sinks)
         logger.bind(
+            audit=True,
             session_id=entry.session_id,
+            client_id=entry.client_id,
+            request_id=entry.request_id,
+            project_root=entry.project_root,
+            tool_name=entry.tool_name,
+            args_summary=args,
+            result_status=entry.result_status,
+            result_code=entry.result_code,
+            duration_ms=entry.duration_ms,
+            details=details,
+        ).info(
+            "audit: {tool} -> {status} ({duration_ms}ms)",
             tool=entry.tool_name,
             status=entry.result_status,
             duration_ms=entry.duration_ms,
-        ).info(
-            "audit: {tool} -> {status}",
-            tool=entry.tool_name,
-            status=entry.result_status,
         )
 
-        # 2. Global JSONL (all projects, all sessions)
-        if self._config.log_to_global:
-            self._append(self._global_log_dir / "audit.jsonl", line)
-
-        # 3. Per-project JSONL
-        if self._config.log_to_project and project_root is not None:
-            project_log_dir = project_root / ".async-crud-mcp" / "logs"
-            project_log_dir.mkdir(parents=True, exist_ok=True)
-            self._append(project_log_dir / "audit.jsonl", line)
-
-    @staticmethod
-    def _append(path: Path, line: str) -> None:
-        """Append a single JSONL line.  Never raises."""
-        try:
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except OSError:
-            pass  # Audit must never break tool execution
+    def close(self) -> None:
+        """Remove all audit sinks (for shutdown/testing)."""
+        for sid in self._sink_ids:
+            try:
+                logger.remove(sid)
+            except ValueError:
+                pass
+        self._sink_ids.clear()
+        if self._project_sink_id is not None:
+            try:
+                logger.remove(self._project_sink_id)
+            except ValueError:
+                pass
+            self._project_sink_id = None

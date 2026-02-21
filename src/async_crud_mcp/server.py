@@ -55,7 +55,8 @@ from async_crud_mcp.core import (
 from async_crud_mcp.core.audit_logger import AuditConfig as AuditConfigDC
 from async_crud_mcp.daemon.config_watcher import ConfigWatcher, atomic_write_config
 from async_crud_mcp.daemon.health import check_health
-from async_crud_mcp.daemon.paths import get_config_file_path, get_data_dir
+from async_crud_mcp.daemon.logging_setup import setup_logging
+from async_crud_mcp.daemon.paths import get_config_file_path, get_logs_dir, get_shared_dir
 from async_crud_mcp.models import (
     AsyncAppendRequest,
     AsyncBatchReadRequest,
@@ -182,7 +183,7 @@ class AuditMiddleware(Middleware):
                 duration_ms=duration_ms,
                 details={"exception": str(exc)},
             )
-            audit_logger.log(entry, project_root=_active_project_root)
+            audit_logger.log(entry)
             raise
 
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -201,7 +202,7 @@ class AuditMiddleware(Middleware):
             duration_ms=duration_ms,
             details=details,
         )
-        audit_logger.log(entry, project_root=_active_project_root)
+        audit_logger.log(entry)
 
         return result
 
@@ -290,9 +291,8 @@ shell_provider = ShellProvider()
 shell_validator = ShellValidator(settings.shell.deny_patterns)
 background_registry = BackgroundTaskRegistry()
 
-# Audit logger (dual-write: global JSONL + per-project JSONL + loguru)
+# Audit logger (3-tier loguru JSONL: project + user + system)
 audit_logger = AuditLogger(
-    global_log_dir=get_data_dir() / "logs",
     config=AuditConfigDC(
         enabled=settings.audit.enabled,
         log_to_project=settings.audit.log_to_project,
@@ -300,6 +300,8 @@ audit_logger = AuditLogger(
         include_args=settings.audit.include_args,
         include_details=settings.audit.include_details,
     ),
+    user_log_dir=get_logs_dir(),
+    system_log_dir=get_shared_dir() / "logs",
 )
 
 
@@ -311,6 +313,7 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        audit_logger.close()
         await background_registry.shutdown()
         logger.info("Background task registry shut down")
 
@@ -987,6 +990,9 @@ async def activate_project_tool(project_root: str) -> dict:
     _active_project_root = root
     _config_warning = None
 
+    # Activate project-level audit sink
+    audit_logger.set_project(root)
+
     # Create .async-crud-mcp/ dir if it doesn't exist (but not the config file)
     config_dir = root / PROJECT_CONFIG_DIR
     config_dir.mkdir(exist_ok=True)
@@ -1166,6 +1172,13 @@ def main():
     Called by dispatcher (``from async_crud_mcp.server import main; main()``)
     and also via ``python -m async_crud_mcp.server``.
     """
+    # Set up loguru file logging for the MCP server process
+    setup_logging(
+        log_level=settings.daemon.log_level,
+        log_dir=get_logs_dir(),
+        service_mode=True,
+    )
+
     host = settings.daemon.host
     port = settings.daemon.port or 8720  # Default to 8720 if None
 

@@ -64,11 +64,28 @@ class TestGetLogsDirFallback:
     """Test get_logs_dir_fallback function."""
 
     @patch('test_server.platform.system')
-    def test_windows_path(self, mock_system):
-        """Test Windows logs directory path."""
+    def test_windows_path_programdata_exists(self, mock_system, tmp_path):
+        """Test Windows returns ProgramData logs when that directory exists."""
         mock_system.return_value = 'Windows'
+        pd_logs = tmp_path / 'async-crud-mcp' / 'logs'
+        pd_logs.mkdir(parents=True)
 
-        with patch.dict('os.environ', {'LOCALAPPDATA': 'C:\\Users\\Test\\AppData\\Local'}):
+        with patch.dict('os.environ', {
+            'PROGRAMDATA': str(tmp_path),
+            'LOCALAPPDATA': 'C:\\Users\\Test\\AppData\\Local',
+        }):
+            result = test_server.get_logs_dir_fallback()
+            assert result == pd_logs
+
+    @patch('test_server.platform.system')
+    def test_windows_path_localappdata_fallback(self, mock_system, tmp_path):
+        """Test Windows falls back to LOCALAPPDATA when ProgramData logs don't exist."""
+        mock_system.return_value = 'Windows'
+        # ProgramData dir exists but NOT the logs subdirectory
+        with patch.dict('os.environ', {
+            'PROGRAMDATA': str(tmp_path),
+            'LOCALAPPDATA': 'C:\\Users\\Test\\AppData\\Local',
+        }):
             result = test_server.get_logs_dir_fallback()
             expected = Path('C:\\Users\\Test\\AppData\\Local') / 'async-crud-mcp' / 'logs'
             assert result == expected
@@ -174,12 +191,17 @@ class TestCheckLogFileAge:
     @patch('test_server.time.time')
     @patch('test_server.Path')
     @patch('test_server.glob.glob')
-    def test_log_file_within_age(self, mock_glob, mock_path_class, mock_time, mock_print):
+    @patch('test_server.get_logs_dir_fallback')
+    def test_log_file_within_age(self, mock_fallback, mock_glob, mock_path_class, mock_time, mock_print):
         """Test when newest log file is within max age."""
-        # Mock logs_dir (needs to be set up before the function runs)
+        # Mock fallback dir (also serves as only candidate when imports fail)
         mock_logs_dir = MagicMock()
         mock_logs_dir.exists.return_value = True
-        mock_logs_dir.__truediv__ = lambda self, other: f'/path/to/logs/{other}'
+        mock_logs_dir.resolve.return_value = Path('/path/to/logs')
+        mock_logs_dir.__truediv__ = lambda self, other: MagicMock(
+            __str__=lambda x: f'/path/to/logs/{other}',
+        )
+        mock_fallback.return_value = mock_logs_dir
 
         # Mock log files
         log_file_path = '/path/to/logs/recent.log'
@@ -199,16 +221,7 @@ class TestCheckLogFileAge:
         mock_path_instance.name = 'recent.log'
         mock_path_class.return_value = mock_path_instance
 
-        # Mock the import attempt in check_log_file_age
-        def mock_import(name, *args, **kwargs):
-            if name == 'async_crud_mcp.daemon.paths':
-                mock_module = MagicMock()
-                mock_module.get_logs_dir.return_value = mock_logs_dir
-                return mock_module
-            raise ImportError(f"No module named '{name}'")
-
-        with patch('builtins.__import__', side_effect=mock_import):
-            result = test_server.check_log_file_age(168)
+        result = test_server.check_log_file_age(168)
 
         assert result == 'pass'
 
@@ -216,12 +229,17 @@ class TestCheckLogFileAge:
     @patch('test_server.time.time')
     @patch('test_server.Path')
     @patch('test_server.glob.glob')
-    def test_multiple_log_files_finds_newest(self, mock_glob, mock_path_class, mock_time, mock_print):
+    @patch('test_server.get_logs_dir_fallback')
+    def test_multiple_log_files_finds_newest(self, mock_fallback, mock_glob, mock_path_class, mock_time, mock_print):
         """Test that the newest log file is correctly identified."""
-        # Mock logs_dir
+        # Mock fallback dir
         mock_logs_dir = MagicMock()
         mock_logs_dir.exists.return_value = True
-        mock_logs_dir.__truediv__ = lambda self, other: f'/path/to/logs/{other}'
+        mock_logs_dir.resolve.return_value = Path('/path/to/logs')
+        mock_logs_dir.__truediv__ = lambda self, other: MagicMock(
+            __str__=lambda x: f'/path/to/logs/{other}',
+        )
+        mock_fallback.return_value = mock_logs_dir
 
         # Mock multiple log files
         mock_glob.return_value = ['/path/to/logs/old.log', '/path/to/logs/newer.log']
@@ -246,16 +264,7 @@ class TestCheckLogFileAge:
 
         mock_path_class.side_effect = path_side_effect
 
-        # Mock the import attempt in check_log_file_age
-        def mock_import(name, *args, **kwargs):
-            if name == 'async_crud_mcp.daemon.paths':
-                mock_module = MagicMock()
-                mock_module.get_logs_dir.return_value = mock_logs_dir
-                return mock_module
-            raise ImportError(f"No module named '{name}'")
-
-        with patch('builtins.__import__', side_effect=mock_import):
-            result = test_server.check_log_file_age(168)
+        result = test_server.check_log_file_age(168)
 
         assert result == 'pass'
 
@@ -272,7 +281,7 @@ class TestCheckServerConnectivity:
         mock_config_path.exists.return_value = True
         mock_get_config_paths.return_value = mock_config_path
 
-        config_data = json.dumps({"host": "127.0.0.1", "port": 8765})
+        config_data = json.dumps({"daemon": {"host": "127.0.0.1", "port": 8720}})
 
         with patch('builtins.open', mock_open(read_data=config_data)):
             mock_response = MagicMock()
@@ -297,7 +306,7 @@ class TestCheckServerConnectivity:
         mock_config_path.exists.return_value = True
         mock_get_config_paths.return_value = mock_config_path
 
-        config_data = json.dumps({"host": "127.0.0.1", "port": 7777})
+        config_data = json.dumps({"daemon": {"host": "127.0.0.1", "port": 7777}})
 
         with patch('builtins.open', mock_open(read_data=config_data)):
             mock_response = MagicMock()
