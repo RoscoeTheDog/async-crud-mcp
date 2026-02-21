@@ -269,6 +269,16 @@ class CrudConfig(BaseModel):
     content_scan_enabled: bool = True
 
 
+class AuditConfig(BaseModel):
+    """Audit logging configuration."""
+
+    enabled: bool = Field(default=True, description="Enable audit logging")
+    log_to_project: bool = Field(default=True, description="Write JSONL to per-project .async-crud-mcp/logs/")
+    log_to_global: bool = Field(default=True, description="Write JSONL to global data dir logs/")
+    include_args: bool = Field(default=True, description="Include args_summary in audit entries")
+    include_details: bool = Field(default=True, description="Include result details in audit entries")
+
+
 class PersistenceConfig(BaseModel):
     """Persistence layer configuration section."""
 
@@ -323,6 +333,7 @@ class Settings(BaseSettings):
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     shell: ShellConfig = Field(default_factory=ShellConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
+    audit: AuditConfig = Field(default_factory=AuditConfig)
 
     model_config = SettingsConfigDict(
         env_prefix="ASYNC_CRUD_MCP_",

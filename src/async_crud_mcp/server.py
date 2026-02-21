@@ -19,6 +19,7 @@ import socket
 import sys
 import time
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -39,6 +40,8 @@ from async_crud_mcp.config import (
     load_project_config,
 )
 from async_crud_mcp.core import (
+    AuditEntry,
+    AuditLogger,
     BackgroundTaskRegistry,
     ContentScanner,
     HashRegistry,
@@ -47,9 +50,10 @@ from async_crud_mcp.core import (
     ShellProvider,
     ShellValidator,
 )
+from async_crud_mcp.core.audit_logger import AuditConfig as AuditConfigDC
 from async_crud_mcp.daemon.config_watcher import ConfigWatcher, atomic_write_config
 from async_crud_mcp.daemon.health import check_health
-from async_crud_mcp.daemon.paths import get_config_file_path
+from async_crud_mcp.daemon.paths import get_config_file_path, get_data_dir
 from async_crud_mcp.models import (
     AsyncAppendRequest,
     AsyncBatchReadRequest,
@@ -92,6 +96,112 @@ _ACTIVATION_EXEMPT_TOOLS = frozenset({
     "crud_activate_project",  # The activation tool itself
     "health_tool",            # Health check is infrastructure, not project-scoped
 })
+
+# Large-content arg keys that get truncated in audit entries
+_TRUNCATE_ARG_KEYS = frozenset({"content"})
+_TRUNCATE_THRESHOLD = 200
+
+
+def _extract_args_summary(args: dict) -> dict:
+    """Extract loggable args, truncating large content values."""
+    summary = dict(args)
+    for key in _TRUNCATE_ARG_KEYS:
+        if key in summary and isinstance(summary[key], str) and len(summary[key]) > _TRUNCATE_THRESHOLD:
+            summary[key] = f"<{len(summary[key])} chars>"
+    return summary
+
+
+def _parse_tool_result(result: ToolResult) -> tuple[str, str | None, dict | None]:
+    """Extract status/code/details from a ToolResult."""
+    if not result.content:
+        return ("empty", None, None)
+    first = result.content[0]
+    text = first.text if hasattr(first, "text") else str(first)
+    try:
+        data = json.loads(text)
+        status = data.get("status", "ok") if isinstance(data, dict) else "ok"
+        error_code = data.get("error_code") if isinstance(data, dict) else None
+        details: dict = {}
+        if isinstance(data, dict):
+            for key in ("exit_code", "matched_pattern", "task_id"):
+                if key in data:
+                    details[key] = data[key]
+        return (status, error_code, details or None)
+    except (json.JSONDecodeError, TypeError, IndexError):
+        return ("ok", None, None)
+
+
+class AuditMiddleware(Middleware):
+    """Log every MCP tool call with session/project context."""
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext,
+        call_next: CallNext,
+    ) -> ToolResult:
+        start = time.monotonic()
+
+        # Extract session info from FastMCP context
+        session_id = "unknown"
+        client_id = None
+        request_id = "unknown"
+        if context.fastmcp_context:
+            try:
+                session_id = context.fastmcp_context.session_id
+            except Exception:
+                pass
+            client_id = getattr(context.fastmcp_context, "client_id", None)
+            try:
+                request_id = context.fastmcp_context.request_id
+            except Exception:
+                pass
+
+        tool_name = context.message.name
+        args = _extract_args_summary(context.message.arguments or {})
+
+        # Execute the actual tool (inner middleware + handler)
+        result_status = "ok"
+        result_code = None
+        details = None
+        try:
+            result = await call_next(context)
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            entry = AuditEntry(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                session_id=session_id,
+                client_id=client_id,
+                request_id=request_id,
+                project_root=str(_active_project_root) if _active_project_root else None,
+                tool_name=tool_name,
+                args_summary=args,
+                result_status="error",
+                result_code=type(exc).__name__,
+                duration_ms=duration_ms,
+                details={"exception": str(exc)},
+            )
+            audit_logger.log(entry, project_root=_active_project_root)
+            raise
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        result_status, result_code, details = _parse_tool_result(result)
+
+        entry = AuditEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            session_id=session_id,
+            client_id=client_id,
+            request_id=request_id,
+            project_root=str(_active_project_root) if _active_project_root else None,
+            tool_name=tool_name,
+            args_summary=args,
+            result_status=result_status,
+            result_code=result_code,
+            duration_ms=duration_ms,
+            details=details,
+        )
+        audit_logger.log(entry, project_root=_active_project_root)
+
+        return result
 
 
 class ProjectActivationMiddleware(Middleware):
@@ -151,6 +261,18 @@ shell_provider = ShellProvider()
 shell_validator = ShellValidator(settings.shell.deny_patterns)
 background_registry = BackgroundTaskRegistry()
 
+# Audit logger (dual-write: global JSONL + per-project JSONL + loguru)
+audit_logger = AuditLogger(
+    global_log_dir=get_data_dir() / "logs",
+    config=AuditConfigDC(
+        enabled=settings.audit.enabled,
+        log_to_project=settings.audit.log_to_project,
+        log_to_global=settings.audit.log_to_global,
+        include_args=settings.audit.include_args,
+        include_details=settings.audit.include_details,
+    ),
+)
+
 
 @contextlib.asynccontextmanager
 async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
@@ -166,7 +288,8 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
 
 # Initialize FastMCP server instance
 mcp = FastMCP(APP_NAME, lifespan=_server_lifespan)
-mcp.add_middleware(ProjectActivationMiddleware())
+mcp.add_middleware(AuditMiddleware())              # Outermost: captures all tool calls
+mcp.add_middleware(ProjectActivationMiddleware())  # Inner: activation gate
 
 # Per-project activation state
 _active_project_root: Path | None = None
@@ -876,7 +999,7 @@ async def get_config_tool(section: str | None = None) -> dict:
     Returns:
         Configuration dict with project activation status.
     """
-    valid_sections = ("crud", "daemon", "persistence", "watcher", "shell", "search")
+    valid_sections = ("crud", "daemon", "persistence", "watcher", "shell", "search", "audit")
 
     if section is not None and section not in valid_sections:
         return {"error": f"Invalid section '{section}'. Valid: {', '.join(valid_sections)}"}
@@ -898,6 +1021,7 @@ async def get_config_tool(section: str | None = None) -> dict:
         "watcher": settings.watcher.model_dump(),
         "shell": settings.shell.model_dump(),
         "search": settings.search.model_dump(),
+        "audit": settings.audit.model_dump(),
     }
 
     # If a project is active with local config, overlay project config into crud section

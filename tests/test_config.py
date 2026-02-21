@@ -8,6 +8,7 @@ from async_crud_mcp.config import (
     APP_NAME,
     PROJECT_CONFIG_DIR,
     PROJECT_CONFIG_FILE,
+    AuditConfig,
     CrudConfig,
     DaemonConfig,
     PersistenceConfig,
@@ -810,3 +811,50 @@ class TestProjectConfigShellFields:
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
             ProjectConfig(shell_deny_patterns_mode="invalid")
+
+
+# =============================================================================
+# AuditConfig tests
+# =============================================================================
+
+
+class TestAuditConfig:
+    """Test AuditConfig model."""
+
+    def test_default_values(self):
+        config = AuditConfig()
+        assert config.enabled is True
+        assert config.log_to_project is True
+        assert config.log_to_global is True
+        assert config.include_args is True
+        assert config.include_details is True
+
+    def test_disabled(self):
+        config = AuditConfig(enabled=False)
+        assert config.enabled is False
+
+    def test_settings_has_audit(self):
+        settings = Settings()
+        assert hasattr(settings, "audit")
+        assert isinstance(settings.audit, AuditConfig)
+
+    def test_settings_audit_defaults(self):
+        settings = Settings()
+        assert settings.audit.enabled is True
+        assert settings.audit.log_to_project is True
+        assert settings.audit.log_to_global is True
+
+    def test_json_config_loading(self, tmp_path):
+        """Test audit config can be loaded from JSON."""
+        config_file = tmp_path / "config.json"
+        config_data = {
+            "audit": {
+                "enabled": False,
+                "log_to_project": False,
+            }
+        }
+        config_file.write_text(json.dumps(config_data), encoding="utf-8")
+        settings = get_settings(config_file)
+        assert settings.audit.enabled is False
+        assert settings.audit.log_to_project is False
+        assert settings.audit.log_to_global is True  # default preserved

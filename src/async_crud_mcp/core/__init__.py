@@ -1,5 +1,6 @@
 """Core functionality package."""
 
+from .audit_logger import AuditEntry, AuditLogger
 from .background_tasks import BackgroundTask, BackgroundTaskRegistry
 from .content_scanner import ContentScanner, ContentScanResult
 from .diff_engine import check_patch_applicability, compute_diff, compute_json_diff, compute_unified_diff
@@ -13,6 +14,8 @@ from .shell_validator import ShellValidator
 
 __all__ = [
     "AccessDeniedError",
+    "AuditEntry",
+    "AuditLogger",
     "BackgroundTask",
     "BackgroundTaskRegistry",
     "ContentScanner",
