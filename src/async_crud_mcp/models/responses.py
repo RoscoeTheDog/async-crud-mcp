@@ -25,6 +25,12 @@ class ErrorCode(StrEnum):
     RENAME_ERROR = "RENAME_ERROR"
     DIR_NOT_FOUND = "DIR_NOT_FOUND"
     SERVER_ERROR = "SERVER_ERROR"
+    COMMAND_DENIED = "COMMAND_DENIED"
+    COMMAND_TIMEOUT = "COMMAND_TIMEOUT"
+    SHELL_DISABLED = "SHELL_DISABLED"
+    SEARCH_DISABLED = "SEARCH_DISABLED"
+    TASK_NOT_FOUND = "TASK_NOT_FOUND"
+    INVALID_PATTERN = "INVALID_PATTERN"
 
 
 # Success Response Models
@@ -328,3 +334,84 @@ class BatchUpdateResponse(BaseModel):
     status: Literal["ok"] = "ok"
     results: list[UpdateSuccessResponse | ContentionResponse | ErrorResponse] = Field(..., description="Per-file results")
     summary: BatchSummary = Field(..., description="Batch summary")
+
+
+# =============================================================================
+# Shell extension response models
+# =============================================================================
+
+
+class ExecSuccessResponse(BaseModel):
+    """Success response for foreground async_exec."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    command: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_ms: int
+    timestamp: str
+
+
+class ExecDeniedResponse(BaseModel):
+    """Denied response when a command matches a deny pattern."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["denied"] = "denied"
+    command: str
+    matched_pattern: str
+    reason: str
+    timestamp: str
+
+
+class ExecBackgroundResponse(BaseModel):
+    """Response for background async_exec."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["background"] = "background"
+    task_id: str
+    command: str
+    timestamp: str
+
+
+class WaitResponse(BaseModel):
+    """Response for async_wait tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    waited_seconds: float
+    reason: str
+    task_result: dict | None = None
+    timestamp: str
+
+
+class SearchMatch(BaseModel):
+    """A single search match."""
+
+    model_config = ConfigDict(frozen=True)
+
+    file: str
+    line_number: int
+    line_content: str
+    context_before: list[str] = Field(default_factory=list)
+    context_after: list[str] = Field(default_factory=list)
+
+
+class SearchResponse(BaseModel):
+    """Response for async_search tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    pattern: str
+    matches: list[SearchMatch] = Field(default_factory=list)
+    total_matches: int
+    files_searched: int
+    output_mode: str
+    truncated: bool = False
+    timestamp: str

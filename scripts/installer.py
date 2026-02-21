@@ -16,6 +16,34 @@ EXIT_FAILED = 1
 EXIT_CANCELLED = 130
 
 
+# ============================================================
+# Console Output (ANSI colors for terminals)
+# ============================================================
+
+
+class Colors:
+    """ANSI color codes (disabled on Windows without ANSI support)."""
+
+    RESET = "\033[0m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+
+    @classmethod
+    def init(cls):
+        """Enable ANSI colors on Windows 10+."""
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            except Exception:
+                cls.RESET = cls.RED = cls.GREEN = cls.YELLOW = ""
+                cls.BOLD = cls.DIM = ""
+
+
 def check_privileges():
     """Check if running with admin privileges on Windows (no-op on Unix)."""
     system = platform.system()
@@ -69,7 +97,56 @@ def run_preflight_checks(target_dir):
     except Exception as e:
         checks.append(("Write permissions", False, f"Permission check failed: {e}"))
 
+    # Check 4: Git Bash available (Windows only, required for shell extension)
+    if sys.platform == "win32":
+        bash_path = _find_git_bash()
+        if bash_path:
+            checks.append(("Git Bash", True, f"Found at {bash_path}"))
+        else:
+            checks.append((
+                "Git Bash", False,
+                "Not found. Install Git for Windows: https://git-scm.com/downloads/win"
+            ))
+
     return checks
+
+
+def _find_git_bash():
+    """Find Git Bash on Windows for shell extension support.
+
+    Returns:
+        Path to bash.exe if found, None otherwise.
+    """
+    # 1. Env var
+    env_path = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+    if env_path and os.path.isfile(env_path):
+        return env_path
+
+    # 2. bash on PATH
+    bash_on_path = shutil.which("bash")
+    if bash_on_path:
+        return bash_on_path
+
+    # 3. Derive from git
+    git_path = shutil.which("git")
+    if git_path:
+        git_dir = Path(git_path).resolve().parent
+        for candidate in (
+            git_dir.parent / "bin" / "bash.exe",
+            git_dir / "bash.exe",
+        ):
+            if candidate.is_file():
+                return str(candidate)
+
+    # 4. Known paths
+    for known in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ):
+        if os.path.isfile(known):
+            return known
+
+    return None
 
 
 def get_platform_paths():
@@ -538,7 +615,12 @@ def do_install(force=False, port=None):
         print("[FORCE] Force reinstall enabled - will overwrite existing installation")
         if paths["venv_dir"].exists():
             print(f"[FORCE] Removing existing venv at {paths['venv_dir']}")
-            shutil.rmtree(paths["venv_dir"])
+            if not _robust_rmtree(paths["venv_dir"]):
+                print("[FATAL] Cannot remove existing venv. A process may still be "
+                      "locking files.", file=sys.stderr)
+                print("        Close any terminals or editors using the venv and retry.",
+                      file=sys.stderr)
+                return EXIT_FAILED
         if paths["config_file"].exists():
             print(f"[FORCE] Removing existing config at {paths['config_file']}")
             paths["config_file"].unlink()
@@ -647,7 +729,7 @@ def do_test():
     test_script = script_dir / "test_server.py"
 
     try:
-        subprocess.run([sys.executable, str(test_script)], check=True)
+        subprocess.run([sys.executable, str(test_script), "--no-prompt"], check=True)
         return EXIT_SUCCESS
     except subprocess.CalledProcessError:
         return EXIT_FAILED
@@ -715,6 +797,78 @@ def _find_running_processes(names):
         except (subprocess.TimeoutExpired, OSError):
             pass
     return found
+
+
+def _kill_venv_python(venv_dir):
+    """Kill any python.exe processes running from the given venv directory.
+
+    On Windows, after stopping a service, child python.exe processes from
+    the venv may linger and hold file locks preventing venv deletion.
+    Uses PowerShell Get-CimInstance (works on Windows 10/11, no wmic dependency).
+    """
+    if platform.system() != "Windows":
+        return
+    try:
+        ps_cmd = (
+            "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" "
+            "| Select-Object ProcessId,ExecutablePath "
+            "| ForEach-Object { $_.ProcessId.ToString() + '|' + $_.ExecutablePath }"
+        )
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=15
+        )
+        venv_lower = str(venv_dir).lower()
+        for line in result.stdout.strip().splitlines():
+            line = line.strip()
+            if "|" not in line:
+                continue
+            pid_str, exe_path = line.split("|", 1)
+            if exe_path and venv_lower in exe_path.lower():
+                try:
+                    pid = int(pid_str)
+                    subprocess.run(
+                        ["taskkill", "/F", "/PID", str(pid)],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    print(f"[INFO] Killed venv python.exe (PID {pid})")
+                except (ValueError, subprocess.TimeoutExpired, OSError):
+                    pass
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+
+def _robust_rmtree(path, retries=3, delay=2):
+    """Remove a directory tree with retry logic for Windows locked files.
+
+    On Windows, file handles may take a moment to release after killing
+    processes.  This retries with increasing delays and clears read-only
+    flags on permission errors.
+    """
+    import time as _time
+    import stat
+
+    def _on_error(func, fpath, _exc_info):
+        """Handle rmtree errors by clearing read-only and retrying."""
+        try:
+            os.chmod(fpath, stat.S_IWRITE)
+            func(fpath)
+        except OSError:
+            pass  # Will be retried at the outer level
+
+    for attempt in range(retries):
+        try:
+            shutil.rmtree(path, onerror=_on_error)
+            return True
+        except (PermissionError, OSError) as exc:
+            if attempt < retries - 1:
+                wait = delay * (attempt + 1)
+                print(f"[WARN] Removal blocked ({exc}), retrying in {wait}s...")
+                _time.sleep(wait)
+            else:
+                print(f"[ERROR] Could not remove {path} after {retries} attempts: {exc}")
+                return False
+    return False
 
 
 def _kill_process(name, pid=None):
@@ -855,54 +1009,52 @@ def do_reinstall():
     time.sleep(2)  # Give Windows SCM time to process the stop
     print("[REINSTALL] Cleaning up blocking processes (ADR-017)...")
     kill_blocking_processes()
-    time.sleep(1)  # Give SCM time to finalize after handle cleanup
+    paths = get_platform_paths()
+    _kill_venv_python(paths["venv_dir"])
+    time.sleep(1)  # Give OS time to release file handles after process kill
     return do_install(force=True)
 
 
-def show_menu():
-    """Show interactive menu and handle user selection."""
-    try:
-        while True:
-            print("\n" + "="*60)
-            print("async-crud-mcp Installer Menu")
-            print("="*60)
-            print("1. Install async-crud-mcp")
-            print("2. Reinstall async-crud-mcp")
-            print("3. Uninstall async-crud-mcp")
-            print("4. Test installation")
-            print("5. Quit")
-            print("="*60)
+def interactive_menu():
+    """Display interactive menu and return user's choice.
 
-            try:
-                choice = input("\nSelect an option (1-5): ").strip()
-            except (KeyboardInterrupt, EOFError):
-                print("\n[INFO] Cancelled by user")
-                return EXIT_CANCELLED
+    Returns:
+        Tuple of (command_string, options_dict) where command is one of:
+        "install", "reinstall", "uninstall", "test", or "quit".
+    """
+    Colors.init()
 
-            if choice == "1":
-                exit_code = do_install()
-                if exit_code != EXIT_SUCCESS:
-                    print("\n[ERROR] Installation failed", file=sys.stderr)
-            elif choice == "2":
-                exit_code = do_reinstall()
-                if exit_code != EXIT_SUCCESS:
-                    print("\n[ERROR] Reinstall failed", file=sys.stderr)
-            elif choice == "3":
-                exit_code = do_uninstall()
-                if exit_code != EXIT_SUCCESS:
-                    print("\n[ERROR] Uninstall failed", file=sys.stderr)
-            elif choice == "4":
-                exit_code = do_test()
-                if exit_code != EXIT_SUCCESS:
-                    print("\n[ERROR] Test failed", file=sys.stderr)
-            elif choice == "5":
-                print("\n[INFO] Quitting")
-                return EXIT_SUCCESS
-            else:
-                print("\n[ERROR] Invalid choice. Please enter 1-5.", file=sys.stderr)
-    except KeyboardInterrupt:
-        print("\n[INFO] Cancelled by user")
-        return EXIT_CANCELLED
+    print("\n" + "=" * 48)
+    print("  async-crud-mcp Setup")
+    print("=" * 48)
+    print()
+    print("  Select an action:")
+    print()
+    print(f"    {Colors.BOLD}1{Colors.RESET}) Install (fresh installation)")
+    print(f"    {Colors.BOLD}2{Colors.RESET}) Reinstall (force recreate venv)")
+    print(f"    {Colors.BOLD}3{Colors.RESET}) Uninstall")
+    print(f"    {Colors.BOLD}4{Colors.RESET}) Test (verify server is running)")
+    print(f"    {Colors.BOLD}5{Colors.RESET}) Quit")
+    print()
+
+    while True:
+        try:
+            choice = input("  Enter choice [1-5]: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            return "quit", {}
+
+        if choice == "1":
+            return "install", {}
+        elif choice == "2":
+            return "reinstall", {}
+        elif choice == "3":
+            return "uninstall", {}
+        elif choice == "4":
+            return "test", {}
+        elif choice == "5":
+            return "quit", {}
+        else:
+            print(f"  {Colors.RED}Invalid choice. Please enter 1-5.{Colors.RESET}")
 
 
 def main():
@@ -961,8 +1113,24 @@ Examples:
             return do_configure()
         elif args.command == "test":
             return do_test()
-        else:  # menu
-            return show_menu()
+        else:  # menu — loop back after each action
+            while True:
+                command, _options = interactive_menu()
+                if command == "quit":
+                    print("\n  Goodbye!")
+                    return EXIT_SUCCESS
+                elif command == "install":
+                    do_install()
+                elif command == "reinstall":
+                    do_reinstall()
+                elif command == "uninstall":
+                    do_uninstall()
+                elif command == "test":
+                    do_test()
+                else:
+                    continue
+                # Pause so the user can read output before menu redraws
+                input("\nPress Enter to return to menu...")
     except KeyboardInterrupt:
         print("\n[INFO] Cancelled by user")
         return EXIT_CANCELLED

@@ -6,13 +6,21 @@ import pytest
 
 from async_crud_mcp.config import (
     APP_NAME,
+    PROJECT_CONFIG_DIR,
+    PROJECT_CONFIG_FILE,
     CrudConfig,
     DaemonConfig,
     PersistenceConfig,
+    ProjectConfig,
+    SearchConfig,
     Settings,
+    ShellConfig,
+    ShellDenyPattern,
     WatcherConfig,
+    _default_deny_patterns,
     _strip_comment_fields,
     get_settings,
+    load_project_config,
 )
 from async_crud_mcp.daemon.config_init import DEFAULT_PORT, generate_default_config
 
@@ -548,3 +556,257 @@ def test_generate_default_config_uses_default_port():
     config = generate_default_config()
     assert config["daemon"]["port"] == DEFAULT_PORT
     assert config["daemon"]["port"] == 8720
+
+
+# =============================================================================
+# ProjectConfig and load_project_config tests
+# =============================================================================
+
+
+class TestProjectConfigConstants:
+    """Test project config constants."""
+
+    def test_project_config_dir(self):
+        """Test PROJECT_CONFIG_DIR is .async-crud-mcp."""
+        assert PROJECT_CONFIG_DIR == ".async-crud-mcp"
+
+    def test_project_config_file(self):
+        """Test PROJECT_CONFIG_FILE is config.json."""
+        assert PROJECT_CONFIG_FILE == "config.json"
+
+
+class TestProjectConfigModel:
+    """Test ProjectConfig pydantic model."""
+
+    def test_default_values(self):
+        """Test ProjectConfig defaults match expected values."""
+        pc = ProjectConfig()
+        assert pc.base_directories == []
+        assert pc.access_rules == []
+        assert pc.access_policy_file is None
+        assert pc.default_destructive_policy == "allow"
+        assert pc.default_read_policy == "allow"
+        assert pc.content_scan_rules == []
+        assert pc.content_scan_enabled is True
+
+    def test_validates_from_dict(self):
+        """Test ProjectConfig validates correctly from a dict."""
+        data = {
+            "base_directories": ["/tmp/project"],
+            "content_scan_enabled": False,
+            "default_read_policy": "deny",
+        }
+        pc = ProjectConfig.model_validate(data)
+        assert pc.base_directories == ["/tmp/project"]
+        assert pc.content_scan_enabled is False
+        assert pc.default_read_policy == "deny"
+
+    def test_validates_with_access_rules(self):
+        """Test ProjectConfig validates access_rules correctly."""
+        data = {
+            "access_rules": [
+                {"path": "**/.env", "operations": ["*"], "action": "deny", "priority": 200}
+            ]
+        }
+        pc = ProjectConfig.model_validate(data)
+        assert len(pc.access_rules) == 1
+        assert pc.access_rules[0].path == "**/.env"
+        assert pc.access_rules[0].action == "deny"
+
+    def test_validates_with_content_scan_rules(self):
+        """Test ProjectConfig validates content_scan_rules correctly."""
+        data = {
+            "content_scan_rules": [
+                {"name": "api_key", "pattern": r"AKIA[0-9A-Z]{16}", "action": "deny"}
+            ]
+        }
+        pc = ProjectConfig.model_validate(data)
+        assert len(pc.content_scan_rules) == 1
+        assert pc.content_scan_rules[0].name == "api_key"
+
+    def test_invalid_policy_rejected(self):
+        """Test ProjectConfig rejects invalid policy values."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            ProjectConfig(default_read_policy="invalid")
+
+    def test_partial_dict_uses_defaults(self):
+        """Test that omitted fields use defaults."""
+        pc = ProjectConfig.model_validate({"content_scan_enabled": False})
+        assert pc.base_directories == []  # default
+        assert pc.default_destructive_policy == "allow"  # default
+        assert pc.content_scan_enabled is False  # overridden
+
+
+class TestLoadProjectConfig:
+    """Test load_project_config function."""
+
+    def test_returns_none_when_file_missing(self, tmp_path):
+        """Test load_project_config returns None when no config file exists."""
+        result = load_project_config(tmp_path)
+        assert result is None
+
+    def test_returns_none_when_dir_missing(self, tmp_path):
+        """Test load_project_config returns None when .async-crud-mcp/ doesn't exist."""
+        result = load_project_config(tmp_path / "nonexistent")
+        assert result is None
+
+    def test_loads_valid_config(self, tmp_path):
+        """Test load_project_config loads a valid config file."""
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({
+            "base_directories": [str(tmp_path)],
+            "content_scan_enabled": False,
+        }), encoding="utf-8")
+
+        result = load_project_config(tmp_path)
+        assert result is not None
+        assert result.base_directories == [str(tmp_path)]
+        assert result.content_scan_enabled is False
+
+    def test_strips_comment_fields(self, tmp_path):
+        """Test load_project_config strips comment fields."""
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({
+            "_comment": "This should be stripped",
+            "$schema": "http://example.com",
+            "content_scan_enabled": False,
+        }), encoding="utf-8")
+
+        result = load_project_config(tmp_path)
+        assert result is not None
+        assert result.content_scan_enabled is False
+
+    def test_raises_on_invalid_json(self, tmp_path):
+        """Test load_project_config raises on invalid JSON."""
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text("not valid json {{{", encoding="utf-8")
+
+        with pytest.raises(json.JSONDecodeError):
+            load_project_config(tmp_path)
+
+    def test_raises_on_invalid_config(self, tmp_path):
+        """Test load_project_config raises on invalid config values."""
+        from pydantic import ValidationError
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({
+            "default_read_policy": "invalid_value",
+        }), encoding="utf-8")
+
+        with pytest.raises(ValidationError):
+            load_project_config(tmp_path)
+
+
+# =============================================================================
+# ShellConfig and SearchConfig tests
+# =============================================================================
+
+
+class TestShellConfig:
+    """Test ShellConfig model."""
+
+    def test_default_values(self):
+        config = ShellConfig()
+        assert config.enabled is True
+        assert config.max_command_length == 8192
+        assert config.timeout_default == 30.0
+        assert config.timeout_max == 300.0
+        assert config.env_inherit is True
+        assert len(config.env_strip) > 0
+        assert config.cwd_override is None
+
+    def test_default_deny_patterns(self):
+        config = ShellConfig()
+        assert len(config.deny_patterns) > 0
+        # Check some known patterns exist
+        pattern_strs = [p.pattern for p in config.deny_patterns]
+        assert any("cat" in p for p in pattern_strs)
+        assert any("rm" in p for p in pattern_strs)
+        assert any("sudo" in p for p in pattern_strs)
+
+    def test_custom_deny_patterns(self):
+        custom = [ShellDenyPattern(pattern=r"\bfoo\b", reason="no foo")]
+        config = ShellConfig(deny_patterns=custom)
+        assert len(config.deny_patterns) == 1
+        assert config.deny_patterns[0].pattern == r"\bfoo\b"
+
+    def test_env_strip_defaults(self):
+        config = ShellConfig()
+        assert "ANTHROPIC_API_KEY" in config.env_strip
+        assert "GITHUB_TOKEN" in config.env_strip
+
+    def test_settings_has_shell(self):
+        settings = Settings()
+        assert hasattr(settings, "shell")
+        assert isinstance(settings.shell, ShellConfig)
+
+    def test_disabled(self):
+        config = ShellConfig(enabled=False)
+        assert config.enabled is False
+
+
+class TestSearchConfig:
+    """Test SearchConfig model."""
+
+    def test_default_values(self):
+        config = SearchConfig()
+        assert config.enabled is True
+        assert config.max_results == 100
+        assert config.max_file_size_bytes == 1_048_576
+        assert config.timeout_default == 30.0
+
+    def test_custom_values(self):
+        config = SearchConfig(max_results=50, max_file_size_bytes=512_000)
+        assert config.max_results == 50
+        assert config.max_file_size_bytes == 512_000
+
+    def test_settings_has_search(self):
+        settings = Settings()
+        assert hasattr(settings, "search")
+        assert isinstance(settings.search, SearchConfig)
+
+
+class TestDefaultDenyPatterns:
+    """Test _default_deny_patterns function."""
+
+    def test_returns_list(self):
+        patterns = _default_deny_patterns()
+        assert isinstance(patterns, list)
+        assert len(patterns) >= 16
+
+    def test_all_have_pattern_and_reason(self):
+        patterns = _default_deny_patterns()
+        for p in patterns:
+            assert p.pattern
+            assert p.reason
+
+
+class TestProjectConfigShellFields:
+    """Test ProjectConfig shell extension fields."""
+
+    def test_default_shell_fields(self):
+        pc = ProjectConfig()
+        assert pc.shell_enabled is None
+        assert pc.shell_deny_patterns == []
+        assert pc.shell_deny_patterns_mode == "extend"
+
+    def test_shell_enabled_override(self):
+        pc = ProjectConfig(shell_enabled=False)
+        assert pc.shell_enabled is False
+
+    def test_shell_deny_patterns_replace(self):
+        pc = ProjectConfig(shell_deny_patterns_mode="replace")
+        assert pc.shell_deny_patterns_mode == "replace"
+
+    def test_shell_deny_patterns_invalid_mode(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            ProjectConfig(shell_deny_patterns_mode="invalid")

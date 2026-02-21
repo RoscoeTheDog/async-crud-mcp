@@ -54,7 +54,10 @@ class TestRunPreflightChecks:
         target_dir.mkdir()
         results = installer.run_preflight_checks(target_dir)
 
-        assert len(results) == 3
+        # 3 base checks + 1 Git Bash check on Windows
+        import sys
+        expected = 4 if sys.platform == "win32" else 3
+        assert len(results) == expected
         # Python version check (we're running >= 3.10 in test env)
         assert results[0][0] == "Python version"
         assert results[0][1] is True

@@ -35,10 +35,18 @@ class JsonConfigSettingsSource(PydanticBaseSettingsSource):
         return None, "", False
 
     def __call__(self) -> dict[str, Any]:
-        """Load configuration from JSON file."""
+        """Load configuration from JSON file.
+
+        Strips comment fields and any keys not matching Settings model fields
+        to prevent ValidationError from extra keys in the config file.
+        """
         if self.json_file.exists():
             with open(self.json_file, encoding="utf-8") as f:
-                return json.load(f)
+                raw = json.load(f)
+            cleaned = _strip_comment_fields(raw)
+            # Only keep keys that match Settings model fields
+            valid_keys = set(self.settings_cls.model_fields.keys())
+            return {k: v for k, v in cleaned.items() if k in valid_keys}
         return {}
 
 
@@ -74,10 +82,135 @@ class PathRule(BaseModel):
     path: str = Field(..., description="Path prefix to match against (resolved relative to cwd)")
     operations: list[str] = Field(
         ...,
-        description='Operation types this rule applies to: "write", "update", "delete", "rename", or "*" for all',
+        description='Operation types this rule applies to: "read", "list", "write", "update", "delete", "rename", or "*" for all',
     )
     action: Literal["allow", "deny"] = Field(..., description="Whether to allow or deny the operation")
     priority: int = Field(default=0, description="Rule priority (higher = evaluated first)")
+
+
+class ContentRule(BaseModel):
+    """A content-level scanning rule for detecting sensitive data in file reads."""
+
+    name: str = Field(..., description="Human-readable label (shown in error messages)")
+    pattern: str = Field(..., description="Regex pattern to match against file content lines")
+    action: Literal["deny", "allow"] = Field(
+        default="deny",
+        description="'deny' blocks the read (default), 'allow' exempts matched content",
+    )
+    priority: int = Field(default=0, description="Higher priority rules evaluated first")
+
+
+PROJECT_CONFIG_DIR = ".async-crud-mcp"
+PROJECT_CONFIG_FILE = "config.json"
+
+
+class ShellDenyPattern(BaseModel):
+    """A single deny pattern for shell command validation."""
+
+    pattern: str = Field(..., description="Regex pattern to match against commands")
+    reason: str = Field(..., description="Human-readable reason shown when command is denied")
+
+
+def _default_deny_patterns() -> list[ShellDenyPattern]:
+    """Return the built-in shell deny patterns.
+
+    These block file I/O commands that should use CRUD tools instead,
+    plus dangerous system commands.
+    """
+    return [
+        ShellDenyPattern(pattern=r"\bcat\b", reason="Use async_read_tool for file reading"),
+        ShellDenyPattern(pattern=r"\bhead\b", reason="Use async_read_tool with offset/limit"),
+        ShellDenyPattern(pattern=r"\btail\b", reason="Use async_read_tool with offset/limit"),
+        ShellDenyPattern(pattern=r"\bsed\b", reason="Use async_update_tool for file editing"),
+        ShellDenyPattern(pattern=r"\bawk\b", reason="Use async_read_tool + async_update_tool"),
+        ShellDenyPattern(pattern=r"\btee\b", reason="Use async_write_tool for file writing"),
+        ShellDenyPattern(pattern=r"\becho\b.*>", reason="Use async_write_tool for file writing"),
+        ShellDenyPattern(pattern=r"\bprintf\b.*>", reason="Use async_write_tool for file writing"),
+        ShellDenyPattern(pattern=r"\bcp\b", reason="Use async_read_tool + async_write_tool"),
+        ShellDenyPattern(pattern=r"\bmv\b", reason="Use async_rename_tool for file renaming"),
+        ShellDenyPattern(pattern=r"\brm\b", reason="Use async_delete_tool for file deletion"),
+        ShellDenyPattern(pattern=r"\bchmod\b", reason="File permission changes not allowed"),
+        ShellDenyPattern(pattern=r"\bchown\b", reason="File ownership changes not allowed"),
+        ShellDenyPattern(pattern=r"\bdd\b", reason="Block device operations not allowed"),
+        ShellDenyPattern(pattern=r"\bmkfs\b", reason="Filesystem operations not allowed"),
+        ShellDenyPattern(pattern=r"\b(sudo|su)\b", reason="Privilege escalation not allowed"),
+    ]
+
+
+class ShellConfig(BaseModel):
+    """Shell execution configuration."""
+
+    enabled: bool = Field(default=True, description="Whether shell execution is enabled")
+    deny_patterns: list[ShellDenyPattern] = Field(
+        default_factory=_default_deny_patterns,
+        description="Patterns that deny command execution",
+    )
+    max_command_length: int = Field(
+        default=8192, ge=1, description="Maximum command string length"
+    )
+    timeout_default: float = Field(
+        default=30.0, gt=0, description="Default command timeout in seconds"
+    )
+    timeout_max: float = Field(
+        default=300.0, gt=0, description="Maximum allowed command timeout in seconds"
+    )
+    env_inherit: bool = Field(
+        default=True, description="Inherit current environment variables"
+    )
+    env_strip: list[str] = Field(
+        default_factory=lambda: [
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+        ],
+        description="Environment variables to strip before execution",
+    )
+    cwd_override: str | None = Field(
+        default=None, description="Override working directory for commands"
+    )
+
+
+class SearchConfig(BaseModel):
+    """Search tool configuration."""
+
+    enabled: bool = Field(default=True, description="Whether search is enabled")
+    max_results: int = Field(default=100, ge=1, description="Maximum search results")
+    max_file_size_bytes: int = Field(
+        default=1_048_576, ge=1, description="Skip files larger than this (1MB default)"
+    )
+    timeout_default: float = Field(
+        default=30.0, gt=0, description="Default search timeout in seconds"
+    )
+
+
+class ProjectConfig(BaseModel):
+    """Per-project config loaded from .async-crud-mcp/config.json.
+
+    Contains only project-scoped CRUD policy fields. When loaded, values
+    from the local config replace (not merge with) the corresponding
+    CrudConfig fields. If a field is absent, the global default applies.
+    """
+
+    base_directories: list[str] = Field(default_factory=list)
+    access_rules: list[PathRule] = Field(default_factory=list)
+    access_policy_file: str | None = None
+    default_destructive_policy: Literal["allow", "deny"] = "allow"
+    default_read_policy: Literal["allow", "deny"] = "allow"
+    content_scan_rules: list[ContentRule] = Field(default_factory=list)
+    content_scan_enabled: bool = True
+    shell_enabled: bool | None = Field(
+        default=None, description="Override shell.enabled for this project"
+    )
+    shell_deny_patterns: list[ShellDenyPattern] = Field(
+        default_factory=list,
+        description="Additional deny patterns for this project",
+    )
+    shell_deny_patterns_mode: Literal["extend", "replace"] = Field(
+        default="extend",
+        description="Whether project patterns extend or replace global patterns",
+    )
 
 
 class CrudConfig(BaseModel):
@@ -92,6 +225,9 @@ class CrudConfig(BaseModel):
     access_rules: list[PathRule] = Field(default_factory=list)
     access_policy_file: str | None = None
     default_destructive_policy: Literal["allow", "deny"] = "allow"
+    default_read_policy: Literal["allow", "deny"] = "allow"
+    content_scan_rules: list[ContentRule] = Field(default_factory=list)
+    content_scan_enabled: bool = True
 
 
 class PersistenceConfig(BaseModel):
@@ -146,6 +282,8 @@ class Settings(BaseSettings):
     crud: CrudConfig = Field(default_factory=CrudConfig)
     persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)
     watcher: WatcherConfig = Field(default_factory=WatcherConfig)
+    shell: ShellConfig = Field(default_factory=ShellConfig)
+    search: SearchConfig = Field(default_factory=SearchConfig)
 
     model_config = SettingsConfigDict(
         env_prefix="ASYNC_CRUD_MCP_",
@@ -248,3 +386,26 @@ def get_settings(config_path: Path | str | None = None, *, _force_reload: bool =
         _settings_cache = settings
 
     return settings
+
+
+def load_project_config(project_root: Path) -> ProjectConfig | None:
+    """Load project-local config from .async-crud-mcp/config.json.
+
+    Returns None if the file doesn't exist (use global defaults).
+
+    Args:
+        project_root: Path to the project root directory.
+
+    Returns:
+        ProjectConfig instance, or None if no local config file exists.
+
+    Raises:
+        json.JSONDecodeError: If the config file contains invalid JSON.
+        pydantic.ValidationError: If the config data fails validation.
+    """
+    config_path = project_root / PROJECT_CONFIG_DIR / PROJECT_CONFIG_FILE
+    if not config_path.exists():
+        return None
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
+    cleaned = _strip_comment_fields(raw)
+    return ProjectConfig.model_validate(cleaned)

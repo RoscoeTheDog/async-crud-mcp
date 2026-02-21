@@ -1,5 +1,6 @@
 """Tests for FastMCP server module."""
 
+import json
 import socket
 import tempfile
 from pathlib import Path
@@ -7,7 +8,14 @@ from unittest.mock import patch
 
 import pytest
 
-from async_crud_mcp.server import _check_port_available, mcp
+from async_crud_mcp.server import (
+    ProjectActivationMiddleware,
+    _ACTIVATION_EXEMPT_TOOLS,
+    _apply_project_config,
+    _check_port_available,
+    _deep_merge,
+    mcp,
+)
 
 
 class TestPortPreflightCheck:
@@ -106,7 +114,7 @@ class TestFastMCPServer:
         assert mcp.name == "async-crud-mcp"
 
     def test_tools_registered(self):
-        """Test that all 11 CRUD tools + health tool are registered."""
+        """Test that all 11 CRUD + 3 shell + 1 health + 3 config tools are registered."""
         # Get registered tool names from the FastMCP instance
         # FastMCP stores tools in _tool_manager._tools dict
         tool_names = list(mcp._tool_manager._tools.keys())
@@ -123,16 +131,22 @@ class TestFastMCPServer:
             "async_batch_read_tool",
             "async_batch_write_tool",
             "async_batch_update_tool",
+            "async_exec_tool",
+            "async_wait_tool",
+            "async_search_tool",
             "health_tool",
+            "crud_activate_project",
+            "crud_get_config",
+            "crud_update_config",
         ]
 
         for expected_tool in expected_tools:
             assert expected_tool in tool_names, f"Tool {expected_tool} not registered"
 
     def test_tool_count(self):
-        """Test that exactly 12 tools are registered (11 CRUD + 1 health)."""
+        """Test that exactly 18 tools are registered (11 CRUD + 3 shell + 1 health + 3 config)."""
         tool_count = len(mcp._tool_manager._tools)
-        assert tool_count == 12, f"Expected 12 tools, found {tool_count}"
+        assert tool_count == 18, f"Expected 18 tools, found {tool_count}"
 
 
 class TestToolWrappers:
@@ -327,3 +341,535 @@ class TestSharedDependencies:
 
         assert isinstance(server_start_time, float)
         assert server_start_time > 0
+
+
+class TestDeepMerge:
+    """Test _deep_merge helper function."""
+
+    def test_simple_merge(self):
+        """Test merging flat dicts."""
+        base = {"a": 1, "b": 2}
+        updates = {"b": 3, "c": 4}
+        result = _deep_merge(base, updates)
+        assert result == {"a": 1, "b": 3, "c": 4}
+
+    def test_nested_merge(self):
+        """Test merging nested dicts recursively."""
+        base = {"outer": {"a": 1, "b": 2}}
+        updates = {"outer": {"b": 3, "c": 4}}
+        result = _deep_merge(base, updates)
+        assert result == {"outer": {"a": 1, "b": 3, "c": 4}}
+
+    def test_list_replacement(self):
+        """Test that lists are replaced, not appended."""
+        base = {"items": [1, 2, 3]}
+        updates = {"items": [4, 5]}
+        result = _deep_merge(base, updates)
+        assert result == {"items": [4, 5]}
+
+    def test_new_keys(self):
+        """Test adding new keys."""
+        base = {"a": 1}
+        updates = {"b": 2}
+        result = _deep_merge(base, updates)
+        assert result == {"a": 1, "b": 2}
+
+    def test_empty_updates(self):
+        """Test merging with empty updates."""
+        base = {"a": 1}
+        result = _deep_merge(base, {})
+        assert result == {"a": 1}
+
+    def test_empty_base(self):
+        """Test merging into empty base."""
+        result = _deep_merge({}, {"a": 1})
+        assert result == {"a": 1}
+
+    def test_does_not_mutate_base(self):
+        """Test that base dict is not mutated."""
+        base = {"a": 1, "b": 2}
+        _deep_merge(base, {"b": 3})
+        assert base == {"a": 1, "b": 2}
+
+
+class TestApplyProjectConfig:
+    """Test _apply_project_config helper."""
+
+    def test_apply_with_none_uses_project_root_as_base(self, tmp_path):
+        """Test that None project_config uses project_root as sole base dir."""
+        import async_crud_mcp.server as srv
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        try:
+            _apply_project_config(tmp_path, None)
+            assert str(tmp_path) in [
+                str(d) for d in srv.path_validator._base_directories
+            ]
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+
+    def test_apply_with_project_config(self, tmp_path):
+        """Test that ProjectConfig fields are applied to path_validator and content_scanner."""
+        import async_crud_mcp.server as srv
+        from async_crud_mcp.config import ProjectConfig
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        try:
+            pc = ProjectConfig(
+                base_directories=[str(tmp_path)],
+                content_scan_enabled=False,
+                default_read_policy="deny",
+            )
+            _apply_project_config(tmp_path, pc)
+            assert str(tmp_path) in [
+                str(d) for d in srv.path_validator._base_directories
+            ]
+            assert srv.content_scanner._enabled is False
+            assert srv.path_validator._default_read_policy == "deny"
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+
+    def test_apply_with_empty_base_dirs_uses_project_root(self, tmp_path):
+        """Test that empty base_directories falls back to project_root."""
+        import async_crud_mcp.server as srv
+        from async_crud_mcp.config import ProjectConfig
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        try:
+            pc = ProjectConfig(base_directories=[])
+            _apply_project_config(tmp_path, pc)
+            assert str(tmp_path) in [
+                str(d) for d in srv.path_validator._base_directories
+            ]
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+
+
+class TestActivateProjectTool:
+    """Test crud_activate_project MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_activate_valid_project(self, tmp_path):
+        """Test activating a valid project directory."""
+        import async_crud_mcp.server as srv
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_task = srv._config_watcher_task
+        try:
+            tool = mcp._tool_manager._tools["crud_activate_project"]
+            result = await tool.fn(project_root=str(tmp_path))
+
+            assert result["project_root"] == str(tmp_path)
+            assert result["has_local_config"] is False
+            assert (tmp_path / ".async-crud-mcp").is_dir()
+        finally:
+            if srv._config_watcher_task is not None:
+                srv._config_watcher_task.cancel()
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._config_watcher_task = old_task
+
+    @pytest.mark.asyncio
+    async def test_activate_with_local_config(self, tmp_path):
+        """Test activating a project that has a local config file."""
+        import async_crud_mcp.server as srv
+
+        # Create local config
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        (config_dir / "config.json").write_text(
+            json.dumps({"content_scan_enabled": False}), encoding="utf-8"
+        )
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_task = srv._config_watcher_task
+        try:
+            tool = mcp._tool_manager._tools["crud_activate_project"]
+            result = await tool.fn(project_root=str(tmp_path))
+
+            assert result["has_local_config"] is True
+            assert result["content_scan_enabled"] is False
+        finally:
+            if srv._config_watcher_task is not None:
+                srv._config_watcher_task.cancel()
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._config_watcher_task = old_task
+
+    @pytest.mark.asyncio
+    async def test_activate_nonexistent_dir(self, tmp_path):
+        """Test activating a nonexistent directory returns error."""
+        tool = mcp._tool_manager._tools["crud_activate_project"]
+        result = await tool.fn(project_root=str(tmp_path / "nonexistent"))
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_activate_relative_path(self):
+        """Test activating with relative path returns error."""
+        tool = mcp._tool_manager._tools["crud_activate_project"]
+        result = await tool.fn(project_root="relative/path")
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_activate_with_invalid_config_falls_back(self, tmp_path):
+        """Test activating with invalid config falls back to defaults with warning."""
+        import async_crud_mcp.server as srv
+
+        # Create invalid local config
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        (config_dir / "config.json").write_text("not valid json", encoding="utf-8")
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_task = srv._config_watcher_task
+        old_warning = srv._config_warning
+        try:
+            tool = mcp._tool_manager._tools["crud_activate_project"]
+            result = await tool.fn(project_root=str(tmp_path))
+
+            # Should still activate but with warning
+            assert result["project_root"] == str(tmp_path)
+            assert "_config_warning" in result
+        finally:
+            if srv._config_watcher_task is not None:
+                srv._config_watcher_task.cancel()
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._config_watcher_task = old_task
+            srv._config_warning = old_warning
+
+
+class TestGetConfigTool:
+    """Test crud_get_config MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_get_full_config(self):
+        """Test getting full config without section filter."""
+        tool = mcp._tool_manager._tools["crud_get_config"]
+        result = await tool.fn(section=None)
+
+        assert "project" in result
+        assert "daemon" in result
+        assert "crud" in result
+        assert "persistence" in result
+        assert "watcher" in result
+
+    @pytest.mark.asyncio
+    async def test_get_crud_section(self):
+        """Test getting crud section only."""
+        tool = mcp._tool_manager._tools["crud_get_config"]
+        result = await tool.fn(section="crud")
+
+        assert "project" in result
+        assert "crud" in result
+        assert "daemon" not in result
+
+    @pytest.mark.asyncio
+    async def test_get_invalid_section(self):
+        """Test getting invalid section returns error."""
+        tool = mcp._tool_manager._tools["crud_get_config"]
+        result = await tool.fn(section="invalid")
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_get_config_shows_warning(self, tmp_path):
+        """Test that config warning appears in get_config output."""
+        import async_crud_mcp.server as srv
+
+        old_warning = srv._config_warning
+        try:
+            srv._config_warning = "Test warning message"
+            tool = mcp._tool_manager._tools["crud_get_config"]
+            result = await tool.fn(section=None)
+            assert result["_config_warning"] == "Test warning message"
+        finally:
+            srv._config_warning = old_warning
+
+
+class TestUpdateConfigTool:
+    """Test crud_update_config MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_update_without_active_project(self):
+        """Test update returns error when no project is activated."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = None
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(section="crud", updates={"content_scan_enabled": False})
+            assert "error" in result
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_update_non_crud_section(self, tmp_path):
+        """Test update rejects non-crud sections."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = tmp_path
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(section="daemon", updates={"port": 9999})
+            assert "error" in result
+            assert "global" in result["error"].lower() or "crud" in result["error"].lower()
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_update_creates_config_file(self, tmp_path):
+        """Test update creates .async-crud-mcp/config.json if it doesn't exist."""
+        import async_crud_mcp.server as srv
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_lkgc = srv._last_valid_project_config
+        old_warning = srv._config_warning
+        try:
+            srv._active_project_root = tmp_path
+            config_dir = tmp_path / ".async-crud-mcp"
+            config_dir.mkdir(exist_ok=True)
+
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(
+                section="crud",
+                updates={"content_scan_enabled": False},
+            )
+
+            assert result["updated"] is True
+            assert result["config"]["content_scan_enabled"] is False
+
+            # Verify file was created
+            config_file = config_dir / "config.json"
+            assert config_file.exists()
+            saved = json.loads(config_file.read_text(encoding="utf-8"))
+            assert saved["content_scan_enabled"] is False
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._last_valid_project_config = old_lkgc
+            srv._config_warning = old_warning
+
+    @pytest.mark.asyncio
+    async def test_update_merges_with_existing(self, tmp_path):
+        """Test update merges into existing config file."""
+        import async_crud_mcp.server as srv
+
+        # Create existing config
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(
+            json.dumps({"content_scan_enabled": True, "default_read_policy": "deny"}),
+            encoding="utf-8",
+        )
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_lkgc = srv._last_valid_project_config
+        old_warning = srv._config_warning
+        try:
+            srv._active_project_root = tmp_path
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(
+                section="crud",
+                updates={"content_scan_enabled": False},
+            )
+
+            assert result["updated"] is True
+            assert result["config"]["content_scan_enabled"] is False
+            # Original field preserved
+            assert result["config"]["default_read_policy"] == "deny"
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._last_valid_project_config = old_lkgc
+            srv._config_warning = old_warning
+
+    @pytest.mark.asyncio
+    async def test_update_rejects_invalid_values(self, tmp_path):
+        """Test update rejects invalid config values."""
+        import async_crud_mcp.server as srv
+
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = tmp_path
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(
+                section="crud",
+                updates={"default_read_policy": "invalid_value"},
+            )
+            assert "error" in result
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_update_handles_json_string_input(self, tmp_path):
+        """Test update handles updates passed as JSON string (MCP transport)."""
+        import async_crud_mcp.server as srv
+
+        config_dir = tmp_path / ".async-crud-mcp"
+        config_dir.mkdir()
+
+        old_pv = srv.path_validator
+        old_cs = srv.content_scanner
+        old_root = srv._active_project_root
+        old_lkgc = srv._last_valid_project_config
+        old_warning = srv._config_warning
+        try:
+            srv._active_project_root = tmp_path
+            tool = mcp._tool_manager._tools["crud_update_config"]
+            result = await tool.fn(
+                section="crud",
+                updates='{"content_scan_enabled": false}',
+            )
+            assert result["updated"] is True
+            assert result["config"]["content_scan_enabled"] is False
+        finally:
+            srv.path_validator = old_pv
+            srv.content_scanner = old_cs
+            srv._active_project_root = old_root
+            srv._last_valid_project_config = old_lkgc
+            srv._config_warning = old_warning
+
+
+class TestProjectActivationMiddleware:
+    """Test that CRUD tools require project activation."""
+
+    @pytest.fixture
+    def middleware(self):
+        return ProjectActivationMiddleware()
+
+    @staticmethod
+    def _make_context(tool_name, arguments=None):
+        """Create a MiddlewareContext for a tool call."""
+        from fastmcp.server.middleware import MiddlewareContext
+        from mcp.types import CallToolRequestParams
+
+        return MiddlewareContext(
+            message=CallToolRequestParams(
+                name=tool_name, arguments=arguments or {}
+            ),
+            source="client",
+            type="request",
+            method="tools/call",
+        )
+
+    @staticmethod
+    async def _passthrough(context):
+        """Dummy call_next that returns a sentinel ToolResult."""
+        from fastmcp.tools.tool import ToolResult
+        from mcp.types import TextContent
+
+        return ToolResult(
+            content=[TextContent(type="text", text="PASSTHROUGH")]
+        )
+
+    @pytest.mark.asyncio
+    async def test_crud_tool_rejected_without_activation(self, middleware):
+        """CRUD tools return error when no project is activated."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = None
+            ctx = self._make_context("async_read_tool", {"path": "/tmp/test.txt"})
+            result = await middleware.on_call_tool(ctx, self._passthrough)
+            assert result.content[0].text.startswith("Error: No project activated")
+            assert "crud_activate_project" in result.content[0].text
+            assert "async_read_tool" in result.content[0].text
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_exempt_tools_work_without_activation(self, middleware):
+        """Health tool and activate tool pass through without project activation."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = None
+            for tool_name in _ACTIVATION_EXEMPT_TOOLS:
+                ctx = self._make_context(tool_name)
+                result = await middleware.on_call_tool(ctx, self._passthrough)
+                assert result.content[0].text == "PASSTHROUGH", (
+                    f"{tool_name} should be exempt but was blocked"
+                )
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_get_config_requires_activation(self, middleware):
+        """crud_get_config requires activation (not exempt)."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = None
+            ctx = self._make_context("crud_get_config")
+            result = await middleware.on_call_tool(ctx, self._passthrough)
+            assert "crud_activate_project" in result.content[0].text
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_update_config_requires_activation(self, middleware):
+        """crud_update_config requires activation (not exempt)."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = None
+            ctx = self._make_context("crud_update_config", {
+                "section": "crud", "updates": {}
+            })
+            result = await middleware.on_call_tool(ctx, self._passthrough)
+            assert "crud_activate_project" in result.content[0].text
+        finally:
+            srv._active_project_root = old_root
+
+    @pytest.mark.asyncio
+    async def test_crud_tool_passes_after_activation(self, middleware, tmp_path):
+        """CRUD tools pass through middleware after project activation."""
+        import async_crud_mcp.server as srv
+
+        old_root = srv._active_project_root
+        try:
+            srv._active_project_root = tmp_path
+            ctx = self._make_context("async_read_tool", {"path": "/tmp/test.txt"})
+            result = await middleware.on_call_tool(ctx, self._passthrough)
+            assert result.content[0].text == "PASSTHROUGH"
+        finally:
+            srv._active_project_root = old_root
+
+    def test_exempt_tools_frozenset_contents(self):
+        """Verify the exempt tools set contains exactly the expected tools."""
+        assert _ACTIVATION_EXEMPT_TOOLS == frozenset({
+            "crud_activate_project",
+            "health_tool",
+        })

@@ -4,6 +4,7 @@ All request models use Pydantic v2 BaseModel with strict field typing.
 """
 
 from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -166,3 +167,40 @@ class AsyncBatchUpdateRequest(BaseModel):
     files: list[BatchUpdateItem] = Field(..., description="List of files to update")
     timeout: float = Field(default=30.0, description="Operation timeout in seconds")
     diff_format: Literal["json", "unified"] = Field(default="json", description="Diff format for contention responses")
+
+
+# =============================================================================
+# Shell extension request models
+# =============================================================================
+
+
+class ExecRequest(BaseModel):
+    """Request model for async_exec tool."""
+
+    command: str = Field(..., description="Shell command to execute")
+    timeout: float = Field(default=30.0, description="Command timeout in seconds")
+    cwd: str | None = Field(default=None, description="Working directory (default: project root)")
+    env: dict[str, str] | None = Field(default=None, description="Additional environment variables")
+    background: bool = Field(default=False, description="Run command in background")
+
+
+class WaitRequest(BaseModel):
+    """Request model for async_wait tool."""
+
+    seconds: float = Field(default=0.0, ge=0, description="Seconds to sleep (when no task_id)")
+    task_id: str | None = Field(default=None, description="Background task ID to wait for")
+
+
+class SearchRequest(BaseModel):
+    """Request model for async_search tool."""
+
+    pattern: str = Field(..., description="Regex pattern to search for")
+    path: str | None = Field(default=None, description="Search path (default: project root)")
+    glob: str = Field(default="*", description="Glob pattern to filter files")
+    recursive: bool = Field(default=True, description="Search subdirectories")
+    case_insensitive: bool = Field(default=False, description="Case-insensitive matching")
+    max_results: int = Field(default=100, ge=1, description="Maximum matches to return")
+    context_lines: int = Field(default=0, ge=0, le=10, description="Context lines before/after match")
+    output_mode: Literal["content", "files_with_matches", "count"] = Field(
+        default="content", description="Output mode"
+    )
