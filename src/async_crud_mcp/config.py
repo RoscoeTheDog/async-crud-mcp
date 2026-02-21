@@ -115,9 +115,10 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
     """Return the built-in shell deny patterns.
 
     These block file I/O commands that should use CRUD tools instead,
-    plus dangerous system commands.
+    plus dangerous system commands and interpreter-based bypasses.
     """
     return [
+        # -- File I/O commands (use CRUD tools instead) --
         ShellDenyPattern(pattern=r"\bcat\b", reason="Use async_read_tool for file reading"),
         ShellDenyPattern(pattern=r"\bhead\b", reason="Use async_read_tool with offset/limit"),
         ShellDenyPattern(pattern=r"\btail\b", reason="Use async_read_tool with offset/limit"),
@@ -129,11 +130,32 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
         ShellDenyPattern(pattern=r"\bcp\b", reason="Use async_read_tool + async_write_tool"),
         ShellDenyPattern(pattern=r"\bmv\b", reason="Use async_rename_tool for file renaming"),
         ShellDenyPattern(pattern=r"\brm\b", reason="Use async_delete_tool for file deletion"),
+        # -- Dangerous system commands --
         ShellDenyPattern(pattern=r"\bchmod\b", reason="File permission changes not allowed"),
         ShellDenyPattern(pattern=r"\bchown\b", reason="File ownership changes not allowed"),
         ShellDenyPattern(pattern=r"\bdd\b", reason="Block device operations not allowed"),
         ShellDenyPattern(pattern=r"\bmkfs\b", reason="Filesystem operations not allowed"),
         ShellDenyPattern(pattern=r"\b(sudo|su)\b", reason="Privilege escalation not allowed"),
+        # -- Interpreter inline-code flags (bypass prevention) --
+        # These block interpreters executing arbitrary inline code that could
+        # perform file I/O outside CRUD tool governance.
+        # Patterns match: cmd -e '...' or cmd -ne '...' (combined short flags)
+        ShellDenyPattern(
+            pattern=r"\bperl\b\s+(-\w*e\b|.*\s-e\s)",
+            reason="Inline code execution via perl -e not allowed; use CRUD tools for file I/O",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bruby\b\s+(-\w*e\b|.*\s-e\s)",
+            reason="Inline code execution via ruby -e not allowed; use CRUD tools for file I/O",
+        ),
+        ShellDenyPattern(
+            pattern=r"\b(python3?|python3?\.\d+)\b\s+(-\w*c\b|.*\s-c\s)",
+            reason="Inline code execution via python -c not allowed; use CRUD tools for file I/O",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bnode\b\s+(-\w*e\b|.*\s-e\s)",
+            reason="Inline code execution via node -e not allowed; use CRUD tools for file I/O",
+        ),
     ]
 
 
@@ -182,6 +204,23 @@ class SearchConfig(BaseModel):
     )
     timeout_default: float = Field(
         default=30.0, gt=0, description="Default search timeout in seconds"
+    )
+    exclude_dirs: list[str] = Field(
+        default_factory=lambda: [
+            ".venv",
+            "venv",
+            "node_modules",
+            ".git",
+            "__pycache__",
+            ".tox",
+            ".mypy_cache",
+            ".pytest_cache",
+            ".ruff_cache",
+            "dist",
+            "build",
+            ".egg-info",
+        ],
+        description="Directory names to exclude from search (matched against each path component)",
     )
 
 

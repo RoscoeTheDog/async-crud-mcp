@@ -13,10 +13,12 @@ Referenced by bootstrap_daemon.py and dispatcher.py
 """
 
 import asyncio
+import contextlib
 import json
 import socket
 import sys
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -121,10 +123,6 @@ class ProjectActivationMiddleware(Middleware):
         return await call_next(context)
 
 
-# Initialize FastMCP server instance
-mcp = FastMCP(APP_NAME)
-mcp.add_middleware(ProjectActivationMiddleware())
-
 # Module-level shared dependencies (initialized once before tool registration)
 # Load from global config file if it exists; fall back to defaults + env vars
 # if the file is somehow unreadable.
@@ -152,6 +150,23 @@ server_start_time = time.monotonic()  # Monotonic timestamp for async_status
 shell_provider = ShellProvider()
 shell_validator = ShellValidator(settings.shell.deny_patterns)
 background_registry = BackgroundTaskRegistry()
+
+
+@contextlib.asynccontextmanager
+async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
+    """Server lifespan handler for startup/shutdown of background services."""
+    await background_registry.start()
+    logger.info("Background task registry started")
+    try:
+        yield
+    finally:
+        await background_registry.shutdown()
+        logger.info("Background task registry shut down")
+
+
+# Initialize FastMCP server instance
+mcp = FastMCP(APP_NAME, lifespan=_server_lifespan)
+mcp.add_middleware(ProjectActivationMiddleware())
 
 # Per-project activation state
 _active_project_root: Path | None = None

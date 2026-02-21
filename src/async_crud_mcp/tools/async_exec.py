@@ -5,6 +5,9 @@ and optional background execution via anyio.
 """
 
 import os
+import signal
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -125,33 +128,94 @@ async def _exec_foreground(
     timeout: float,
     timestamp: str,
 ) -> ExecSuccessResponse | ErrorResponse:
-    """Run command in foreground with timeout."""
+    """Run command in foreground with timeout.
+
+    Uses open_process with explicit terminate/kill to ensure the child
+    process is actually stopped when the timeout expires, rather than
+    relying on cancel-scope propagation which may not kill the child
+    on all platforms.
+    """
     start = time.monotonic()
-    try:
-        with anyio.fail_after(timeout):
-            result = await anyio.run_process(
-                exec_args,
-                cwd=cwd,
-                env=env,
-                check=False,
-            )
-    except TimeoutError:
-        duration_ms = int((time.monotonic() - start) * 1000)
+    stdout_buf = bytearray()
+    stderr_buf = bytearray()
+    timed_out = False
+
+    # Use start_new_session on POSIX so we can kill the entire process group
+    kwargs: dict = {}
+    if sys.platform != "win32":
+        kwargs["start_new_session"] = True
+
+    exit_code = -1
+    async with await anyio.open_process(
+        exec_args,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **kwargs,
+    ) as process:
+
+        async def _drain_stdout() -> None:
+            if process.stdout:
+                async for chunk in process.stdout:
+                    stdout_buf.extend(chunk)
+
+        async def _drain_stderr() -> None:
+            if process.stderr:
+                async for chunk in process.stderr:
+                    stderr_buf.extend(chunk)
+
+        try:
+            with anyio.fail_after(timeout):
+                async with anyio.create_task_group() as tg:
+                    tg.start_soon(_drain_stdout)
+                    tg.start_soon(_drain_stderr)
+                await process.wait()
+        except TimeoutError:
+            timed_out = True
+            # Kill the process tree, not just the shell
+            _kill_process_tree(process.pid)
+            # Give it a moment to die, then force kill
+            with anyio.move_on_after(2.0):
+                await process.wait()
+            if process.returncode is None:
+                process.kill()
+
+        exit_code = process.returncode if process.returncode is not None else -1
+
+    duration_ms = int((time.monotonic() - start) * 1000)
+
+    if timed_out:
         return ErrorResponse(
             error_code=ErrorCode.COMMAND_TIMEOUT,
             message=f"Command timed out after {timeout}s.",
             details={"command": command, "timeout": timeout, "duration_ms": duration_ms},
         )
 
-    duration_ms = int((time.monotonic() - start) * 1000)
     return ExecSuccessResponse(
         command=command,
-        stdout=result.stdout.decode("utf-8", errors="replace") if result.stdout else "",
-        stderr=result.stderr.decode("utf-8", errors="replace") if result.stderr else "",
-        exit_code=result.returncode,
+        stdout=stdout_buf.decode("utf-8", errors="replace"),
+        stderr=stderr_buf.decode("utf-8", errors="replace"),
+        exit_code=exit_code,
         duration_ms=duration_ms,
         timestamp=timestamp,
     )
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Terminate a process and its children by PID.
+
+    On POSIX with start_new_session=True, sends SIGTERM to the entire
+    process group. On Windows, calls taskkill /T to kill the tree.
+    """
+    try:
+        if sys.platform != "win32":
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        else:
+            # taskkill /T kills the process tree on Windows
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass  # Process already exited
 
 
 async def _exec_background(
@@ -162,19 +226,13 @@ async def _exec_background(
     registry: BackgroundTaskRegistry,
     timestamp: str,
 ) -> ExecBackgroundResponse:
-    """Launch command in background and return immediately."""
+    """Launch command in background and return immediately.
+
+    Uses the registry's server-owned task group for structured concurrency,
+    so background tasks are properly cancelled on server shutdown.
+    """
     task = registry.create_task(command)
-
-    # Start background runner in a detached task group
-    # We use anyio's task group to ensure proper structured concurrency
-    async def _run() -> None:
-        await registry.run_background(task, exec_args, cwd=cwd, env=env)
-
-    # We need to start the background task without blocking.
-    # Use a standalone task via the current event loop.
-    import asyncio
-    loop = asyncio.get_running_loop()
-    loop.create_task(_run())
+    await registry.spawn_background(task, exec_args, cwd=cwd, env=env)
 
     return ExecBackgroundResponse(
         task_id=task.task_id,

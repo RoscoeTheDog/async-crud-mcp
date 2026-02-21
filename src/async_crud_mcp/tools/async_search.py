@@ -78,15 +78,18 @@ async def async_search(
     # 4. Clamp max_results
     max_results = min(request.max_results, search_config.max_results)
 
-    # 5. Collect files
+    # 5. Collect files, excluding configured directories
+    exclude_dirs = set(search_config.exclude_dirs)
     glob_pattern = request.glob
-    if request.recursive:
-        files = list(search_path.rglob(glob_pattern))
-    else:
-        files = list(search_path.glob(glob_pattern))
 
-    # Filter to files only (not directories)
-    files = [f for f in files if f.is_file()]
+    def _is_excluded(p: Path) -> bool:
+        """Check if any path component matches an excluded directory name."""
+        return bool(exclude_dirs.intersection(p.parts))
+
+    if request.recursive:
+        files = [f for f in search_path.rglob(glob_pattern) if f.is_file() and not _is_excluded(f.relative_to(search_path))]
+    else:
+        files = [f for f in search_path.glob(glob_pattern) if f.is_file() and not _is_excluded(f.relative_to(search_path))]
 
     # 6. Search files
     matches: list[SearchMatch] = []
