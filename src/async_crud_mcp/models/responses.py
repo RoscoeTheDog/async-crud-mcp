@@ -355,6 +355,7 @@ class ExecSuccessResponse(BaseModel):
     exit_code: int
     duration_ms: int
     timestamp: str
+    timeout_applied: float | None = Field(default=None, description="Effective timeout when clamped from requested value")
 
 
 class ExecDeniedResponse(BaseModel):

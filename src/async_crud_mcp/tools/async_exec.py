@@ -91,6 +91,7 @@ async def async_exec(
 
     # 4. Clamp timeout
     timeout = max(0.1, min(request.timeout, shell_config.timeout_max))
+    timeout_clamped = request.timeout != timeout
 
     # 5. Resolve cwd
     cwd: str | None = None
@@ -134,9 +135,21 @@ async def async_exec(
             request.command, exec_args, cwd, env, background_registry, timestamp
         )
     else:
-        return await _exec_foreground(
+        result = await _exec_foreground(
             request.command, exec_args, cwd, env, timeout, timestamp
         )
+        if timeout_clamped and isinstance(result, ExecSuccessResponse):
+            # Re-create with timeout_applied since model is frozen
+            result = ExecSuccessResponse(
+                command=result.command,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+                duration_ms=result.duration_ms,
+                timestamp=result.timestamp,
+                timeout_applied=timeout,
+            )
+        return result
 
 
 async def _exec_foreground(

@@ -48,7 +48,14 @@ async def async_search(
             message="Search is disabled in configuration.",
         )
 
-    # 2. Compile regex
+    # 2. Reject empty pattern
+    if not request.pattern:
+        return ErrorResponse(
+            error_code=ErrorCode.INVALID_PATTERN,
+            message="Search pattern cannot be empty.",
+        )
+
+    # 3. Compile regex
     flags = re.IGNORECASE if request.case_insensitive else 0
     try:
         pattern = re.compile(request.pattern, flags)
