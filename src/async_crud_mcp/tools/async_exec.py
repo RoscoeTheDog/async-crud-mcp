@@ -58,7 +58,21 @@ async def async_exec(
             message="Shell execution is disabled in configuration.",
         )
 
-    # 2. Check command length
+    # 2. Check empty/whitespace-only command
+    if not request.command.strip():
+        return ErrorResponse(
+            error_code=ErrorCode.COMMAND_DENIED,
+            message="Command cannot be empty or whitespace-only.",
+        )
+
+    # 2b. Check for null bytes
+    if "\x00" in request.command:
+        return ErrorResponse(
+            error_code=ErrorCode.COMMAND_DENIED,
+            message="Command contains null bytes.",
+        )
+
+    # 3. Check command length
     if len(request.command) > shell_config.max_command_length:
         return ErrorResponse(
             error_code=ErrorCode.COMMAND_DENIED,
@@ -81,7 +95,13 @@ async def async_exec(
     # 5. Resolve cwd
     cwd: str | None = None
     if request.cwd:
-        cwd = request.cwd
+        resolved = Path(request.cwd).resolve()
+        if project_root and not str(resolved).startswith(str(project_root.resolve())):
+            return ErrorResponse(
+                error_code=ErrorCode.PATH_OUTSIDE_BASE,
+                message=f"cwd is outside project root: {request.cwd}",
+            )
+        cwd = str(resolved)
     elif shell_config.cwd_override:
         cwd = shell_config.cwd_override
     elif project_root:
@@ -91,12 +111,11 @@ async def async_exec(
     env: dict[str, str] | None = None
     if shell_config.env_inherit:
         env = dict(os.environ)
-        # Strip sensitive vars
-        for key in shell_config.env_strip:
-            env.pop(key, None)
-        # Merge user-supplied env
         if request.env:
             env.update(request.env)
+        # Strip sensitive vars AFTER merge to prevent re-injection
+        for key in shell_config.env_strip:
+            env.pop(key, None)
     elif request.env:
         env = dict(request.env)
 

@@ -186,6 +186,9 @@ class ShellConfig(BaseModel):
             "AWS_SECRET_ACCESS_KEY",
             "GITHUB_TOKEN",
             "GH_TOKEN",
+            "LD_PRELOAD",
+            "LD_LIBRARY_PATH",
+            "DYLD_INSERT_LIBRARIES",
         ],
         description="Environment variables to strip before execution",
     )
