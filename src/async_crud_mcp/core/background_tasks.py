@@ -5,19 +5,31 @@ output and no pipe deadlocks.
 
 Tracks asyncio tasks for proper cancellation on shutdown. Completed
 tasks are reaped after a configurable TTL to prevent unbounded memory growth.
+
+PID persistence: Active process PIDs are written to a tasks.json file so
+that orphaned processes can be detected and killed on server restart.
 """
 
 import asyncio
+import json
 import os
 import signal
+import subprocess
 import sys
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
 
 
 # How long completed tasks stay in registry before reaping (seconds)
 _COMPLETED_TASK_TTL = 300.0  # 5 minutes
+
+# How long a running task is allowed before being killed as stale (seconds)
+_RUNNING_TASK_TTL = 600.0  # 10 minutes
 
 
 @dataclass
@@ -34,6 +46,7 @@ class BackgroundTask:
     _completion_event: asyncio.Event = field(default_factory=asyncio.Event)
     _process: asyncio.subprocess.Process | None = field(default=None, repr=False)
     _asyncio_task: asyncio.Task | None = field(default=None, repr=False)
+    _pid: int | None = field(default=None, repr=False)
 
     @property
     def is_complete(self) -> bool:
@@ -54,22 +67,143 @@ class BackgroundTask:
         return self.stderr_buffer.decode("utf-8", errors="replace")
 
 
+class _TaskPidTracker:
+    """Persists active task PIDs to disk for orphan detection across restarts.
+
+    Writes a JSON file containing PIDs and metadata for all running tasks.
+    On startup, reads this file to find processes that survived a crash.
+    """
+
+    def __init__(self, pid_file: Path) -> None:
+        self._pid_file = pid_file
+        self._entries: dict[str, dict[str, Any]] = {}
+
+    def record(self, task_id: str, pid: int, command: str) -> None:
+        """Record a new active task PID."""
+        self._entries[task_id] = {
+            "pid": pid,
+            "command": command[:200],
+            "started_at": time.time(),
+        }
+        self._flush()
+
+    def remove(self, task_id: str) -> None:
+        """Remove a completed task PID."""
+        if task_id in self._entries:
+            del self._entries[task_id]
+            self._flush()
+
+    def load_orphans(self) -> list[dict[str, Any]]:
+        """Load PIDs from a previous server session.
+
+        Returns list of entries with pid, command, started_at.
+        Clears the file after reading.
+        """
+        if not self._pid_file.exists():
+            return []
+        try:
+            with open(self._pid_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            entries = list(data.get("tasks", {}).values())
+            # Clear file immediately - we'll rebuild as new tasks spawn
+            self._flush()
+            return entries
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Could not read task PID file: {e}")
+            return []
+
+    def _flush(self) -> None:
+        """Write current entries to disk."""
+        try:
+            self._pid_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "version": 1,
+                "updated_at": time.time(),
+                "tasks": self._entries,
+            }
+            tmp = self._pid_file.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            tmp.replace(self._pid_file)
+        except OSError as e:
+            logger.warning(f"Could not write task PID file: {e}")
+
+
 class BackgroundTaskRegistry:
     """Manages background shell tasks with output capture.
 
     Uses asyncio.create_task for launching background work (required for
     non-blocking dispatch in request-response servers), while tracking
     tasks for proper cleanup on shutdown.
+
+    Features:
+    - Completed task reaping after TTL
+    - Stale running task detection and kill after running TTL
+    - PID persistence across restarts for orphan cleanup
+    - Process tree killing on Windows (taskkill /T /F)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        pid_file: Path | None = None,
+        running_task_ttl: float = _RUNNING_TASK_TTL,
+    ) -> None:
         self._tasks: dict[str, BackgroundTask] = {}
         self._reaper_task: asyncio.Task | None = None
+        self._running_task_ttl = running_task_ttl
+
+        # PID tracker for orphan detection
+        if pid_file is not None:
+            self._pid_tracker: _TaskPidTracker | None = _TaskPidTracker(pid_file)
+        else:
+            try:
+                from ..daemon.paths import get_data_dir
+                self._pid_tracker = _TaskPidTracker(get_data_dir() / "tasks.json")
+            except Exception:
+                # Running outside daemon context (e.g. unit tests) -- disable tracking
+                self._pid_tracker = None
 
     async def start(self) -> None:
-        """Start the reaper loop. Call once during server startup."""
+        """Start the reaper loop and clean up orphans. Call once during server startup."""
+        self._cleanup_orphans()
         if self._reaper_task is None:
             self._reaper_task = asyncio.create_task(self._reap_loop())
+
+    def _cleanup_orphans(self) -> None:
+        """Detect and kill orphaned processes from a previous server session.
+
+        Reads persisted PIDs, checks if they're still running, and kills
+        any that are still alive. This handles the case where the server
+        crashed and left processes running.
+        """
+        if self._pid_tracker is None:
+            return
+        orphans = self._pid_tracker.load_orphans()
+        if not orphans:
+            return
+
+        logger.info(f"Checking {len(orphans)} potentially orphaned processes")
+        killed = 0
+        for entry in orphans:
+            pid = entry.get("pid")
+            command = entry.get("command", "<unknown>")
+            started_at = entry.get("started_at", 0)
+            if pid is None:
+                continue
+
+            if _is_process_alive(pid):
+                age_s = time.time() - started_at if started_at else 0
+                logger.warning(
+                    f"Killing orphaned process PID={pid} "
+                    f"(age={age_s:.0f}s, cmd={command[:60]})"
+                )
+                _kill_process_tree(pid)
+                killed += 1
+            else:
+                logger.debug(f"Orphan PID={pid} already exited")
+
+        if killed > 0:
+            logger.info(f"Killed {killed} orphaned process(es)")
 
     async def shutdown(self) -> None:
         """Cancel all background tasks and kill running processes.
@@ -94,6 +228,9 @@ class BackgroundTaskRegistry:
                 # Cancel the asyncio task
                 if task._asyncio_task is not None and not task._asyncio_task.done():
                     task._asyncio_task.cancel()
+                # Remove from PID tracker
+                if self._pid_tracker is not None:
+                    self._pid_tracker.remove(task.task_id)
 
     def create_task(self, command: str) -> BackgroundTask:
         """Create and register a new background task."""
@@ -107,6 +244,8 @@ class BackgroundTaskRegistry:
 
     def remove(self, task_id: str) -> None:
         self._tasks.pop(task_id, None)
+        if self._pid_tracker is not None:
+            self._pid_tracker.remove(task_id)
 
     def list_active(self) -> list[BackgroundTask]:
         return [t for t in self._tasks.values() if not t.is_complete]
@@ -177,6 +316,11 @@ class BackgroundTaskRegistry:
                 **kwargs,
             )
             task._process = process
+            task._pid = process.pid
+
+            # Persist PID for orphan detection across restarts
+            if self._pid_tracker is not None:
+                self._pid_tracker.record(task.task_id, process.pid, task.command)
 
             async def _drain_stdout() -> None:
                 assert process.stdout is not None
@@ -199,7 +343,7 @@ class BackgroundTaskRegistry:
             await process.wait()
             task.exit_code = process.returncode
         except asyncio.CancelledError:
-            # Server shutdown -- kill the process
+            # Server shutdown or stale task kill -- kill the process
             if task._process is not None and task._process.returncode is None:
                 _kill_process_tree(task._process.pid)
                 try:
@@ -217,13 +361,18 @@ class BackgroundTaskRegistry:
             task._asyncio_task = None
             task.completed_at = time.monotonic()
             task._completion_event.set()
+            # Remove from PID tracker now that process is done
+            if self._pid_tracker is not None:
+                self._pid_tracker.remove(task.task_id)
 
     async def _reap_loop(self) -> None:
-        """Periodically remove completed tasks older than the TTL."""
+        """Periodically reap completed tasks and kill stale running tasks."""
         try:
             while True:
                 await asyncio.sleep(60.0)  # Check every minute
                 now = time.monotonic()
+
+                # Reap completed tasks older than TTL
                 to_remove = [
                     tid
                     for tid, t in self._tasks.items()
@@ -233,6 +382,28 @@ class BackgroundTaskRegistry:
                 ]
                 for tid in to_remove:
                     self._tasks.pop(tid, None)
+
+                # Kill stale running tasks that exceed the running TTL
+                for task in list(self._tasks.values()):
+                    if not task.is_complete:
+                        elapsed = now - task.started_at
+                        if elapsed > self._running_task_ttl:
+                            logger.warning(
+                                f"Killing stale task {task.task_id} "
+                                f"(running {elapsed:.0f}s > {self._running_task_ttl:.0f}s TTL, "
+                                f"cmd={task.command[:60]})"
+                            )
+                            # Kill the process tree
+                            if task._process is not None and task._process.returncode is None:
+                                _kill_process_tree(task._process.pid)
+                                try:
+                                    task._process.kill()
+                                except (OSError, ProcessLookupError):
+                                    pass
+                            # Cancel the asyncio task
+                            if task._asyncio_task is not None and not task._asyncio_task.done():
+                                task._asyncio_task.cancel()
+
         except asyncio.CancelledError:
             pass
 
@@ -251,12 +422,53 @@ class BackgroundTaskRegistry:
         await self._run_background(task, exec_args, cwd, env)
 
 
+def _is_process_alive(pid: int) -> bool:
+    """Check if a process with the given PID is still running."""
+    if sys.platform == "win32":
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return str(pid) in result.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+
 def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and its children by PID."""
-    try:
-        if sys.platform != "win32":
+    """Terminate a process and its entire child tree by PID.
+
+    On POSIX with start_new_session=True, sends SIGTERM to the entire
+    process group. On Windows, uses ``taskkill /T /F`` which recursively
+    kills the process tree (children, grandchildren, etc.). Falls back to
+    os.kill if taskkill is not available.
+    """
+    if sys.platform != "win32":
+        try:
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-        else:
-            os.kill(pid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        pass
+        except (OSError, ProcessLookupError):
+            pass
+    else:
+        try:
+            # taskkill /T kills child processes, /F forces termination
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            # taskkill not available (unlikely on Windows), fall back
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                pass
+        except (OSError, subprocess.TimeoutExpired):
+            pass

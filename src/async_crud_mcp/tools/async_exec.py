@@ -235,19 +235,34 @@ async def _exec_foreground(
 
 
 def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and its children by PID.
+    """Terminate a process and its entire child tree by PID.
 
     On POSIX with start_new_session=True, sends SIGTERM to the entire
-    process group. On Windows, calls taskkill /T to kill the tree.
+    process group. On Windows, uses ``taskkill /T /F`` which recursively
+    kills the process tree (children, grandchildren, etc.). Falls back to
+    os.kill if taskkill is not available.
     """
-    try:
-        if sys.platform != "win32":
+    if sys.platform != "win32":
+        try:
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-        else:
-            # taskkill /T kills the process tree on Windows
-            os.kill(pid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        pass  # Process already exited
+        except (OSError, ProcessLookupError):
+            pass  # Process already exited
+    else:
+        try:
+            # taskkill /T kills child processes, /F forces termination
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        except FileNotFoundError:
+            # taskkill not available (unlikely on Windows), fall back
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                pass
+        except (OSError, subprocess.TimeoutExpired):
+            pass  # Process already exited or taskkill hung
 
 
 async def _exec_background(
