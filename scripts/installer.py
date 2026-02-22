@@ -562,6 +562,15 @@ def install_service(venv_dir):
             text=True
         )
         print("[OK] Service installed")
+
+        # Set failure recovery actions (belt-and-suspenders with daemon installer)
+        if platform.system() == "Windows":
+            subprocess.run(
+                ["sc", "failure", "async-crud-mcp-daemon",
+                 "reset=", "86400", "actions=", "restart/5000/restart/10000/restart/30000"],
+                capture_output=True, text=True,
+            )
+
         return True
     except subprocess.CalledProcessError as e:
         print(f"[WARN] Service installation failed: {e.stderr}", file=sys.stderr)

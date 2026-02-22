@@ -346,6 +346,35 @@ def install_service(account=None):
             except Exception as e:
                 logger.warning(f"Could not set service description: {e}")
 
+            # Configure failure recovery actions - mirrors ADR-013 backoff
+            # at the SCM level so the daemon itself restarts on crash.
+            # Delays: 5s -> 10s -> 30s (matching BACKOFF_BASE_SECONDS progression)
+            # ResetPeriod: 86400s (24h) to reset failure counter
+            try:
+                hs3 = win32service.OpenService(
+                    hs, svc_name, win32service.SERVICE_CHANGE_CONFIG,
+                )
+                try:
+                    win32service.ChangeServiceConfig2(
+                        hs3,
+                        win32service.SERVICE_CONFIG_FAILURE_ACTIONS,
+                        {
+                            "ResetPeriod": 86400,
+                            "RebootMsg": "",
+                            "Command": "",
+                            "Actions": [
+                                (win32service.SC_ACTION_RESTART, 5000),
+                                (win32service.SC_ACTION_RESTART, 10000),
+                                (win32service.SC_ACTION_RESTART, 30000),
+                            ],
+                        },
+                    )
+                    logger.info("Configured service failure recovery actions")
+                finally:
+                    win32service.CloseServiceHandle(hs3)
+            except Exception as e:
+                logger.warning(f"Could not set failure recovery actions: {e}")
+
             # Write PythonClass to registry - CRITICAL for pythonservice.exe
             reg_path = f"SYSTEM\\CurrentControlSet\\Services\\{svc_name}\\PythonClass"
             try:
