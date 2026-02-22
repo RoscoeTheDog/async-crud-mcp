@@ -66,8 +66,14 @@ class TestShellValidatorDenyPatterns:
         allowed, pattern, reason = default_validator.validate("pip install requests")
         assert allowed
 
-    def test_python_allowed(self, default_validator):
+    def test_python_c_denied(self, default_validator):
+        """python -c is blocked to prevent inline code execution bypass."""
         allowed, pattern, reason = default_validator.validate("python -c 'print(1)'")
+        assert not allowed
+
+    def test_python_script_allowed(self, default_validator):
+        """Running a python script file is allowed."""
+        allowed, pattern, reason = default_validator.validate("python script.py")
         assert allowed
 
     def test_ls_allowed(self, default_validator):

@@ -357,7 +357,7 @@ class TestInstallService:
         venv_dir = tmp_path / "venv"
 
         assert installer.install_service(venv_dir) is True
-        args = mock_run.call_args[0][0]
+        args = mock_run.call_args_list[0][0][0]
         assert "python.exe" in args[0] or "python" in args[0]
         assert "get_installer" in args[2]
         assert "install()" in args[2]
