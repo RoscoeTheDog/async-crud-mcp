@@ -9,6 +9,7 @@ from .file_watcher import FileWatcher
 from .lock_manager import LockManager, LockTimeout, LockType
 from .path_validator import AccessDeniedError, PathValidationError, PathValidator
 from .persistence import StatePersistence
+from . import process_guard
 from .shell_provider import ShellNotFoundError, ShellProvider
 from .shell_validator import ShellValidator
 
@@ -39,4 +40,5 @@ __all__ = [
     "safe_rename",
     "StatePersistence",
     "FileWatcher",
+    "process_guard",
 ]

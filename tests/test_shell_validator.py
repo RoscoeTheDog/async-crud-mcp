@@ -103,6 +103,44 @@ class TestShellValidatorDenyPatterns:
         allowed, _, _ = default_validator.validate("chmod 755 script.sh")
         assert not allowed
 
+    def test_curl_allowed(self, default_validator):
+        """curl is a network tool, not a file I/O bypass."""
+        allowed, _, _ = default_validator.validate("curl http://example.com")
+        assert allowed
+
+    def test_curl_post_allowed(self, default_validator):
+        allowed, _, _ = default_validator.validate("curl -X POST -d @file http://api.example.com")
+        assert allowed
+
+    def test_wget_allowed(self, default_validator):
+        """wget is a network tool, not a file I/O bypass."""
+        allowed, _, _ = default_validator.validate("wget http://example.com/file.tar.gz")
+        assert allowed
+
+    def test_netcat_allowed(self, default_validator):
+        """netcat is a network debugging tool."""
+        allowed, _, _ = default_validator.validate("nc -zv localhost 8080")
+        assert allowed
+
+    def test_ncat_allowed(self, default_validator):
+        allowed, _, _ = default_validator.validate("ncat localhost 443")
+        assert allowed
+
+    def test_var_assign_chain_allowed(self, default_validator):
+        """VAR=value; command is legitimate shell syntax."""
+        allowed, _, _ = default_validator.validate("PYTHONPATH=/app; python script.py")
+        assert allowed
+
+    def test_bash_array_allowed(self, default_validator):
+        """Bash array assignment is legitimate shell syntax."""
+        allowed, _, _ = default_validator.validate('files=(*.txt)')
+        assert allowed
+
+    def test_shell_function_def_allowed(self, default_validator):
+        """Shell function definitions are legitimate."""
+        allowed, _, _ = default_validator.validate('cleanup() { echo done; }')
+        assert allowed
+
 
 class TestShellValidatorCustom:
     """Test custom patterns."""

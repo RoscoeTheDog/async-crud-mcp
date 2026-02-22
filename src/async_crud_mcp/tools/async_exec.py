@@ -1,9 +1,12 @@
 """Shell execution tool for MCP operations.
 
 Executes shell commands with deny-pattern validation, environment sanitization,
-and optional background execution via anyio.
+and optional background execution. Uses asyncio subprocesses with process
+containment (Job Objects on Windows, RLIMIT_NPROC on POSIX) to prevent fork
+bombs and runaway process creation.
 """
 
+import asyncio
 import os
 import signal
 import subprocess
@@ -12,8 +15,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import anyio
-
+from async_crud_mcp.core import process_guard
 from async_crud_mcp.core.background_tasks import BackgroundTaskRegistry
 from async_crud_mcp.core.shell_provider import ShellProvider
 from async_crud_mcp.core.shell_validator import ShellValidator
@@ -136,7 +138,8 @@ async def async_exec(
         )
     else:
         result = await _exec_foreground(
-            request.command, exec_args, cwd, env, timeout, timestamp
+            request.command, exec_args, cwd, env, timeout, timestamp,
+            process_limit=shell_config.process_limit,
         )
         if timeout_clamped and isinstance(result, ExecSuccessResponse):
             # Re-create with timeout_applied since model is frozen
@@ -159,61 +162,83 @@ async def _exec_foreground(
     env: dict[str, str] | None,
     timeout: float,
     timestamp: str,
+    process_limit: int = 50,
 ) -> ExecSuccessResponse | ErrorResponse:
-    """Run command in foreground with timeout.
+    """Run command in foreground with timeout and process containment.
 
-    Uses open_process with explicit terminate/kill to ensure the child
-    process is actually stopped when the timeout expires, rather than
-    relying on cancel-scope propagation which may not kill the child
-    on all platforms.
+    Uses asyncio subprocess with Job Object (Windows) or RLIMIT_NPROC
+    (POSIX) to contain fork bombs and runaway process creation.
     """
     start = time.monotonic()
     stdout_buf = bytearray()
     stderr_buf = bytearray()
     timed_out = False
+    job = None
 
-    # Use start_new_session on POSIX so we can kill the entire process group
-    kwargs: dict = {}
-    if sys.platform != "win32":
-        kwargs["start_new_session"] = True
+    extra_kwargs: dict = {}
+    if sys.platform == "win32":
+        job = process_guard.create_job(process_limit)
+        extra_kwargs["creationflags"] = (
+            process_guard.CREATE_SUSPENDED | process_guard.CREATE_NO_WINDOW
+        )
+    else:
+        extra_kwargs["preexec_fn"] = process_guard.make_preexec_fn(process_limit)
+        extra_kwargs["start_new_session"] = True
 
     exit_code = -1
-    async with await anyio.open_process(
-        exec_args,
-        cwd=cwd,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **kwargs,
-    ) as process:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *exec_args,
+            cwd=cwd,
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            **extra_kwargs,
+        )
+
+        if job is not None:
+            process_guard.assign_to_job(job, proc.pid)
+            process_guard.resume_process(proc.pid)
 
         async def _drain_stdout() -> None:
-            if process.stdout:
-                async for chunk in process.stdout:
-                    stdout_buf.extend(chunk)
+            assert proc.stdout is not None
+            while True:
+                chunk = await proc.stdout.read(8192)
+                if not chunk:
+                    break
+                stdout_buf.extend(chunk)
 
         async def _drain_stderr() -> None:
-            if process.stderr:
-                async for chunk in process.stderr:
-                    stderr_buf.extend(chunk)
+            assert proc.stderr is not None
+            while True:
+                chunk = await proc.stderr.read(8192)
+                if not chunk:
+                    break
+                stderr_buf.extend(chunk)
 
         try:
-            with anyio.fail_after(timeout):
-                async with anyio.create_task_group() as tg:
-                    tg.start_soon(_drain_stdout)
-                    tg.start_soon(_drain_stderr)
-                await process.wait()
-        except TimeoutError:
+            await asyncio.wait_for(
+                asyncio.gather(_drain_stdout(), _drain_stderr(), proc.wait()),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
             timed_out = True
-            # Kill the process tree, not just the shell
-            _kill_process_tree(process.pid)
-            # Give it a moment to die, then force kill
-            with anyio.move_on_after(2.0):
-                await process.wait()
-            if process.returncode is None:
-                process.kill()
+            if job is not None:
+                process_guard.terminate_job(job)
+            else:
+                _kill_process_tree(proc.pid)
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except (OSError, ProcessLookupError):
+                    pass
 
-        exit_code = process.returncode if process.returncode is not None else -1
+        exit_code = proc.returncode if proc.returncode is not None else -1
+    finally:
+        if job is not None:
+            process_guard.close_job(job)
 
     duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -235,12 +260,12 @@ async def _exec_foreground(
 
 
 def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and its entire child tree by PID.
+    """Terminate a process and its entire child tree by PID (fallback).
 
-    On POSIX with start_new_session=True, sends SIGTERM to the entire
-    process group. On Windows, uses ``taskkill /T /F`` which recursively
-    kills the process tree (children, grandchildren, etc.). Falls back to
-    os.kill if taskkill is not available.
+    On Windows, the primary kill path is via Job Object termination in
+    the process guard. This function serves as a fallback when the job
+    handle is unavailable. On POSIX with start_new_session=True, sends
+    SIGTERM to the entire process group.
     """
     if sys.platform != "win32":
         try:

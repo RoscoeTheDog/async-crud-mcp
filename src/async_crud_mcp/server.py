@@ -288,7 +288,7 @@ server_start_time = time.monotonic()  # Monotonic timestamp for async_status
 # Shell extension dependencies
 shell_provider = ShellProvider()
 shell_validator = ShellValidator(settings.shell.deny_patterns)
-background_registry = BackgroundTaskRegistry()
+background_registry = BackgroundTaskRegistry(process_limit=settings.shell.process_limit)
 
 # Audit logger (3-tier loguru JSONL: project + user + system)
 audit_logger = AuditLogger(

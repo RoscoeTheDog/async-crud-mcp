@@ -193,32 +193,6 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
             pattern=r"(^|[;&|]\s*)install\b",
             reason="install command not allowed; use CRUD tools",
         ),
-        ShellDenyPattern(
-            pattern=r"\bcurl\b",
-            reason="curl not allowed; use CRUD tools for file operations",
-        ),
-        ShellDenyPattern(
-            pattern=r"\bwget\b",
-            reason="wget not allowed; use CRUD tools for file operations",
-        ),
-        ShellDenyPattern(
-            pattern=r"\b(nc|ncat|netcat)\b",
-            reason="netcat not allowed",
-        ),
-        # -- Shell variable construction / dynamic command building --
-        ShellDenyPattern(
-            pattern=r"\b\w+=\S+\s*;",
-            reason="Inline variable assignment with chaining not allowed (command construction vector)",
-        ),
-        ShellDenyPattern(
-            pattern=r"\w+=\(",
-            reason="Bash array assignment not allowed (command construction vector)",
-        ),
-        # -- Fork bomb / shell function definition --
-        ShellDenyPattern(
-            pattern=r"\(\)\s*\{",
-            reason="Shell function definition not allowed (fork bomb vector)",
-        ),
     ]
 
 
@@ -257,6 +231,12 @@ class ShellConfig(BaseModel):
     )
     cwd_override: str | None = Field(
         default=None, description="Override working directory for commands"
+    )
+    process_limit: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+        description="Max concurrent processes per command (Job Object on Windows, RLIMIT_NPROC on POSIX)",
     )
 
 

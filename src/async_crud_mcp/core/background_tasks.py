@@ -1,7 +1,8 @@
 """Background task registry for long-running shell commands.
 
 Uses asyncio subprocesses for reliable background execution with streaming
-output and no pipe deadlocks.
+output and no pipe deadlocks. Process containment via Job Objects (Windows)
+or RLIMIT_NPROC (POSIX) prevents fork bombs and runaway process creation.
 
 Tracks asyncio tasks for proper cancellation on shutdown. Completed
 tasks are reaped after a configurable TTL to prevent unbounded memory growth.
@@ -23,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
+from async_crud_mcp.core import process_guard
 
 
 # How long completed tasks stay in registry before reaping (seconds)
@@ -47,6 +50,7 @@ class BackgroundTask:
     _process: asyncio.subprocess.Process | None = field(default=None, repr=False)
     _asyncio_task: asyncio.Task | None = field(default=None, repr=False)
     _pid: int | None = field(default=None, repr=False)
+    _job: Any = field(default=None, repr=False)
 
     @property
     def is_complete(self) -> bool:
@@ -150,10 +154,12 @@ class BackgroundTaskRegistry:
         self,
         pid_file: Path | None = None,
         running_task_ttl: float = _RUNNING_TASK_TTL,
+        process_limit: int = 50,
     ) -> None:
         self._tasks: dict[str, BackgroundTask] = {}
         self._reaper_task: asyncio.Task | None = None
         self._running_task_ttl = running_task_ttl
+        self._process_limit = process_limit
 
         # PID tracker for orphan detection
         if pid_file is not None:
@@ -243,9 +249,14 @@ class BackgroundTaskRegistry:
         # Kill all active processes and cancel their asyncio tasks
         for task in list(self._tasks.values()):
             if not task.is_complete:
-                # Kill the process tree first
-                if task._process is not None and task._process.returncode is None:
+                # Kill via Job Object first (Windows), then fallback to tree kill
+                if task._job is not None:
+                    process_guard.terminate_job(task._job)
+                    process_guard.close_job(task._job)
+                    task._job = None
+                elif task._process is not None and task._process.returncode is None:
                     _kill_process_tree(task._process.pid)
+                if task._process is not None and task._process.returncode is None:
                     try:
                         task._process.kill()
                     except (OSError, ProcessLookupError):
@@ -324,11 +335,19 @@ class BackgroundTaskRegistry:
 
         Uses pure asyncio subprocess APIs (not anyio) so that coroutines
         dispatched via asyncio.create_task execute correctly without needing
-        an anyio task context.
+        an anyio task context. Wraps the process in a Job Object (Windows)
+        or RLIMIT_NPROC (POSIX) for fork bomb containment.
         """
-        # Use start_new_session on POSIX so we can kill the process group
         kwargs: dict = {}
-        if sys.platform != "win32":
+        job = None
+
+        if sys.platform == "win32":
+            job = process_guard.create_job(self._process_limit)
+            kwargs["creationflags"] = (
+                process_guard.CREATE_SUSPENDED | process_guard.CREATE_NO_WINDOW
+            )
+        else:
+            kwargs["preexec_fn"] = process_guard.make_preexec_fn(self._process_limit)
             kwargs["start_new_session"] = True
 
         try:
@@ -342,6 +361,11 @@ class BackgroundTaskRegistry:
             )
             task._process = process
             task._pid = process.pid
+            task._job = job
+
+            if job is not None:
+                process_guard.assign_to_job(job, process.pid)
+                process_guard.resume_process(process.pid)
 
             # Persist PID for orphan detection across restarts
             if self._pid_tracker is not None:
@@ -372,8 +396,11 @@ class BackgroundTaskRegistry:
             task.exit_code = process.returncode
         except asyncio.CancelledError:
             # Server shutdown or stale task kill -- kill the process
-            if task._process is not None and task._process.returncode is None:
+            if task._job is not None:
+                process_guard.terminate_job(task._job)
+            elif task._process is not None and task._process.returncode is None:
                 _kill_process_tree(task._process.pid)
+            if task._process is not None and task._process.returncode is None:
                 try:
                     task._process.kill()
                 except (OSError, ProcessLookupError):
@@ -385,6 +412,9 @@ class BackgroundTaskRegistry:
             if task.exit_code is None:
                 task.exit_code = -1
         finally:
+            if task._job is not None:
+                process_guard.close_job(task._job)
+                task._job = None
             task._process = None
             task._asyncio_task = None
             task.completed_at = time.monotonic()
@@ -421,9 +451,14 @@ class BackgroundTaskRegistry:
                                 f"(running {elapsed:.0f}s > {self._running_task_ttl:.0f}s TTL, "
                                 f"cmd={task.command[:60]})"
                             )
-                            # Kill the process tree
-                            if task._process is not None and task._process.returncode is None:
+                            # Kill via Job Object first, then fallback
+                            if task._job is not None:
+                                process_guard.terminate_job(task._job)
+                                process_guard.close_job(task._job)
+                                task._job = None
+                            elif task._process is not None and task._process.returncode is None:
                                 _kill_process_tree(task._process.pid)
+                            if task._process is not None and task._process.returncode is None:
                                 try:
                                     task._process.kill()
                                 except (OSError, ProcessLookupError):
@@ -580,12 +615,12 @@ def _get_creation_time_posix_fallback(pid: int) -> float | None:
 
 
 def _kill_process_tree(pid: int) -> None:
-    """Terminate a process and its entire child tree by PID.
+    """Terminate a process and its entire child tree by PID (fallback).
 
-    On POSIX with start_new_session=True, sends SIGTERM to the entire
-    process group. On Windows, uses ``taskkill /T /F`` which recursively
-    kills the process tree (children, grandchildren, etc.). Falls back to
-    os.kill if taskkill is not available.
+    On Windows, the primary kill path is via Job Object termination in
+    the process guard. This function serves as a fallback when the job
+    handle is unavailable. On POSIX with start_new_session=True, sends
+    SIGTERM to the entire process group.
     """
     if sys.platform != "win32":
         try:

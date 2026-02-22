@@ -239,7 +239,8 @@ def install_package(venv_dir):
         # access C:\Users\<developer>\... and the service fails to import.
         subprocess.run(
             ["uv", "pip", "install", str(project_root),
-             "--python", str(python_path)],
+             "--python", str(python_path),
+             "--reinstall-package", "async-crud-mcp"],
             check=True,
             capture_output=True,
             text=True
