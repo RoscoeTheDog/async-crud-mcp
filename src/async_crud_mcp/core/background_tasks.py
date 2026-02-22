@@ -78,12 +78,13 @@ class _TaskPidTracker:
         self._pid_file = pid_file
         self._entries: dict[str, dict[str, Any]] = {}
 
-    def record(self, task_id: str, pid: int, command: str) -> None:
+    def record(self, task_id: str, pid: int, command: str, image: str = "") -> None:
         """Record a new active task PID."""
         self._entries[task_id] = {
             "pid": pid,
             "command": command[:200],
             "started_at": time.time(),
+            "image": image,
         }
         self._flush()
 
@@ -184,26 +185,49 @@ class BackgroundTaskRegistry:
 
         logger.info(f"Checking {len(orphans)} potentially orphaned processes")
         killed = 0
+        skipped = 0
         for entry in orphans:
             pid = entry.get("pid")
             command = entry.get("command", "<unknown>")
             started_at = entry.get("started_at", 0)
+            expected_image = entry.get("image", "")
             if pid is None:
                 continue
 
-            if _is_process_alive(pid):
-                age_s = time.time() - started_at if started_at else 0
-                logger.warning(
-                    f"Killing orphaned process PID={pid} "
-                    f"(age={age_s:.0f}s, cmd={command[:60]})"
-                )
-                _kill_process_tree(pid)
-                killed += 1
-            else:
+            if not _is_process_alive(pid):
                 logger.debug(f"Orphan PID={pid} already exited")
+                continue
 
-        if killed > 0:
-            logger.info(f"Killed {killed} orphaned process(es)")
+            # Guard against PID reuse: verify the process image matches
+            # what we originally spawned (e.g. "bash", "bash.exe").
+            # If the PID was reused by an unrelated process, skip it.
+            if expected_image:
+                actual_image = _get_process_image(pid)
+                if actual_image is not None:
+                    # Compare base names case-insensitively (bash vs bash.exe)
+                    expected_base = Path(expected_image).stem.lower()
+                    actual_base = Path(actual_image).stem.lower()
+                    if expected_base != actual_base:
+                        logger.info(
+                            f"Skipping PID={pid}: image mismatch "
+                            f"(expected={expected_image}, actual={actual_image}) "
+                            f"-- likely PID reuse by unrelated process"
+                        )
+                        skipped += 1
+                        continue
+
+            age_s = time.time() - started_at if started_at else 0
+            logger.warning(
+                f"Killing orphaned process PID={pid} "
+                f"(age={age_s:.0f}s, cmd={command[:60]})"
+            )
+            _kill_process_tree(pid)
+            killed += 1
+
+        if killed > 0 or skipped > 0:
+            logger.info(
+                f"Orphan cleanup: {killed} killed, {skipped} skipped (PID reuse)"
+            )
 
     async def shutdown(self) -> None:
         """Cancel all background tasks and kill running processes.
@@ -320,7 +344,12 @@ class BackgroundTaskRegistry:
 
             # Persist PID for orphan detection across restarts
             if self._pid_tracker is not None:
-                self._pid_tracker.record(task.task_id, process.pid, task.command)
+                # Store the shell image name so orphan cleanup can verify
+                # the PID still belongs to a shell process, not a reused PID
+                image = Path(exec_args[0]).name if exec_args else ""
+                self._pid_tracker.record(
+                    task.task_id, process.pid, task.command, image=image,
+                )
 
             async def _drain_stdout() -> None:
                 assert process.stdout is not None
@@ -441,6 +470,48 @@ def _is_process_alive(pid: int) -> bool:
             return True
         except (OSError, ProcessLookupError):
             return False
+
+
+def _get_process_image(pid: int) -> str | None:
+    """Get the image/executable name for a running process.
+
+    Returns the process name (e.g. "bash", "bash.exe") or None if the
+    process doesn't exist or the name can't be determined.
+    Used to verify a PID still belongs to a process we spawned, guarding
+    against PID reuse by unrelated processes.
+    """
+    if sys.platform == "win32":
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            # CSV format: "Image Name","PID","Session Name","Session#","Mem Usage"
+            for line in result.stdout.strip().splitlines():
+                if str(pid) in line:
+                    parts = line.strip('"').split('","')
+                    if parts:
+                        return parts[0]
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return None
+    else:
+        # POSIX: read /proc/{pid}/comm (Linux) or /proc/{pid}/cmdline
+        try:
+            comm_path = Path(f"/proc/{pid}/comm")
+            if comm_path.exists():
+                return comm_path.read_text().strip()
+            # Fallback: cmdline (first arg)
+            cmdline_path = Path(f"/proc/{pid}/cmdline")
+            if cmdline_path.exists():
+                cmdline = cmdline_path.read_bytes().split(b"\x00")
+                if cmdline and cmdline[0]:
+                    return Path(cmdline[0].decode("utf-8", errors="replace")).name
+        except (OSError, PermissionError):
+            pass
+        return None
 
 
 def _kill_process_tree(pid: int) -> None:
