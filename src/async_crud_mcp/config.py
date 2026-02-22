@@ -205,10 +205,19 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
             pattern=r"\b(nc|ncat|netcat)\b",
             reason="netcat not allowed",
         ),
-        # -- Fork bomb --
+        # -- Shell variable construction / dynamic command building --
         ShellDenyPattern(
-            pattern=r":\(\)\s*\{",
-            reason="Fork bomb pattern not allowed",
+            pattern=r"\b\w+=\S+\s*;",
+            reason="Inline variable assignment with chaining not allowed (command construction vector)",
+        ),
+        ShellDenyPattern(
+            pattern=r"\w+=\(",
+            reason="Bash array assignment not allowed (command construction vector)",
+        ),
+        # -- Fork bomb / shell function definition --
+        ShellDenyPattern(
+            pattern=r"\(\)\s*\{",
+            reason="Shell function definition not allowed (fork bomb vector)",
         ),
     ]
 
