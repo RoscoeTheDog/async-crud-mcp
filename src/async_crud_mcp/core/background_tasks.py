@@ -78,14 +78,16 @@ class _TaskPidTracker:
         self._pid_file = pid_file
         self._entries: dict[str, dict[str, Any]] = {}
 
-    def record(self, task_id: str, pid: int, command: str, image: str = "") -> None:
-        """Record a new active task PID."""
-        self._entries[task_id] = {
+    def record(self, task_id: str, pid: int, command: str, created_at: float | None = None) -> None:
+        """Record a new active task PID with its creation time."""
+        entry: dict[str, Any] = {
             "pid": pid,
             "command": command[:200],
             "started_at": time.time(),
-            "image": image,
         }
+        if created_at is not None:
+            entry["created_at"] = created_at
+        self._entries[task_id] = entry
         self._flush()
 
     def remove(self, task_id: str) -> None:
@@ -190,7 +192,7 @@ class BackgroundTaskRegistry:
             pid = entry.get("pid")
             command = entry.get("command", "<unknown>")
             started_at = entry.get("started_at", 0)
-            expected_image = entry.get("image", "")
+            expected_created_at = entry.get("created_at")
             if pid is None:
                 continue
 
@@ -198,20 +200,19 @@ class BackgroundTaskRegistry:
                 logger.debug(f"Orphan PID={pid} already exited")
                 continue
 
-            # Guard against PID reuse: verify the process image matches
-            # what we originally spawned (e.g. "bash", "bash.exe").
-            # If the PID was reused by an unrelated process, skip it.
-            if expected_image:
-                actual_image = _get_process_image(pid)
-                if actual_image is not None:
-                    # Compare base names case-insensitively (bash vs bash.exe)
-                    expected_base = Path(expected_image).stem.lower()
-                    actual_base = Path(actual_image).stem.lower()
-                    if expected_base != actual_base:
+            # Guard against PID reuse: verify the process creation time matches
+            # what we recorded when we spawned it. Even if the OS reuses a PID
+            # for another process with the same image name, its creation time
+            # will differ from ours.
+            if expected_created_at is not None:
+                actual_created_at = _get_process_creation_time(pid)
+                if actual_created_at is not None:
+                    if abs(actual_created_at - expected_created_at) > 2.0:
                         logger.info(
-                            f"Skipping PID={pid}: image mismatch "
-                            f"(expected={expected_image}, actual={actual_image}) "
-                            f"-- likely PID reuse by unrelated process"
+                            f"Skipping PID={pid}: creation time mismatch "
+                            f"(expected={expected_created_at:.3f}, "
+                            f"actual={actual_created_at:.3f}) "
+                            f"-- PID reuse detected"
                         )
                         skipped += 1
                         continue
@@ -344,11 +345,9 @@ class BackgroundTaskRegistry:
 
             # Persist PID for orphan detection across restarts
             if self._pid_tracker is not None:
-                # Store the shell image name so orphan cleanup can verify
-                # the PID still belongs to a shell process, not a reused PID
-                image = Path(exec_args[0]).name if exec_args else ""
+                created_at = _get_process_creation_time(process.pid)
                 self._pid_tracker.record(
-                    task.task_id, process.pid, task.command, image=image,
+                    task.task_id, process.pid, task.command, created_at=created_at,
                 )
 
             async def _drain_stdout() -> None:
@@ -455,14 +454,16 @@ def _is_process_alive(pid: int) -> bool:
     """Check if a process with the given PID is still running."""
     if sys.platform == "win32":
         try:
-            result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return str(pid) in result.stdout
-        except (OSError, subprocess.TimeoutExpired):
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+            return False
+        except (OSError, AttributeError):
             return False
     else:
         try:
@@ -472,45 +473,109 @@ def _is_process_alive(pid: int) -> bool:
             return False
 
 
-def _get_process_image(pid: int) -> str | None:
-    """Get the image/executable name for a running process.
+def _get_process_creation_time(pid: int) -> float | None:
+    """Get the creation time (Unix epoch seconds) for a running process.
 
-    Returns the process name (e.g. "bash", "bash.exe") or None if the
-    process doesn't exist or the name can't be determined.
-    Used to verify a PID still belongs to a process we spawned, guarding
-    against PID reuse by unrelated processes.
+    Returns the process creation time as a float, or None if the process
+    doesn't exist or the time can't be determined.
+    Used to definitively verify a PID still belongs to the process we spawned,
+    guarding against PID reuse -- even by processes with the same image name.
     """
     if sys.platform == "win32":
-        try:
-            result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            # CSV format: "Image Name","PID","Session Name","Session#","Mem Usage"
-            for line in result.stdout.strip().splitlines():
-                if str(pid) in line:
-                    parts = line.strip('"').split('","')
-                    if parts:
-                        return parts[0]
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-        return None
+        return _get_creation_time_windows(pid)
+    elif sys.platform == "linux":
+        return _get_creation_time_linux(pid)
     else:
-        # POSIX: read /proc/{pid}/comm (Linux) or /proc/{pid}/cmdline
+        # macOS and other POSIX
+        return _get_creation_time_posix_fallback(pid)
+
+
+def _get_creation_time_windows(pid: int) -> float | None:
+    """Get process creation time on Windows via kernel32 ctypes calls."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return None
         try:
-            comm_path = Path(f"/proc/{pid}/comm")
-            if comm_path.exists():
-                return comm_path.read_text().strip()
-            # Fallback: cmdline (first arg)
-            cmdline_path = Path(f"/proc/{pid}/cmdline")
-            if cmdline_path.exists():
-                cmdline = cmdline_path.read_bytes().split(b"\x00")
-                if cmdline and cmdline[0]:
-                    return Path(cmdline[0].decode("utf-8", errors="replace")).name
-        except (OSError, PermissionError):
-            pass
+            creation_time = wintypes.FILETIME()
+            exit_time = wintypes.FILETIME()
+            kernel_time = wintypes.FILETIME()
+            user_time = wintypes.FILETIME()
+            ok = kernel32.GetProcessTimes(
+                handle,
+                ctypes.byref(creation_time),
+                ctypes.byref(exit_time),
+                ctypes.byref(kernel_time),
+                ctypes.byref(user_time),
+            )
+            if not ok:
+                return None
+            # FILETIME = 100-nanosecond intervals since 1601-01-01 UTC
+            # Convert to Unix epoch seconds (difference = 11644473600 seconds)
+            ft = (creation_time.dwHighDateTime << 32) | creation_time.dwLowDateTime
+            EPOCH_DIFF_SECS = 11644473600
+            return (ft / 10_000_000) - EPOCH_DIFF_SECS
+        finally:
+            kernel32.CloseHandle(handle)
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+def _get_creation_time_linux(pid: int) -> float | None:
+    """Get process creation time on Linux via /proc/{pid}/stat."""
+    try:
+        stat_path = Path(f"/proc/{pid}/stat")
+        if not stat_path.exists():
+            return None
+        stat_content = stat_path.read_text()
+        # Field 22 = starttime (clock ticks since boot).
+        # The comm field (field 2) is in parens and can contain spaces/parens,
+        # so find the last ')' to skip past it reliably.
+        after_comm = stat_content[stat_content.rfind(")") + 2 :]
+        fields = after_comm.split()
+        # After comm, fields are indexed from 0: state(0)=field3 ... starttime(19)=field22
+        starttime_ticks = int(fields[19])
+
+        clock_ticks_per_sec = os.sysconf("SC_CLK_TCK")
+
+        # Get boot time from /proc/stat
+        boot_time = None
+        proc_stat = Path("/proc/stat").read_text()
+        for line in proc_stat.splitlines():
+            if line.startswith("btime "):
+                boot_time = int(line.split()[1])
+                break
+        if boot_time is None:
+            return None
+
+        return boot_time + (starttime_ticks / clock_ticks_per_sec)
+    except (OSError, PermissionError, IndexError, ValueError):
+        return None
+
+
+def _get_creation_time_posix_fallback(pid: int) -> float | None:
+    """Get process creation time on macOS/other POSIX via ps subprocess."""
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "lstart="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        lstart = result.stdout.strip()
+        if not lstart:
+            return None
+        from datetime import datetime
+        # ps lstart format: "Mon Jan  1 12:00:00 2024"
+        dt = datetime.strptime(lstart, "%a %b %d %H:%M:%S %Y")
+        return dt.timestamp()
+    except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
 
 
