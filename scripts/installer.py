@@ -452,6 +452,57 @@ def verify_package_import(venv_dir):
         return False
 
 
+def verify_not_editable(venv_dir):
+    """Verify the package is NOT installed as editable (ADR-015 C1 guard).
+
+    Editable installs add the developer's source directory to sys.path.
+    LocalSystem cannot access user home directories, so the Windows service
+    fails to import the package. This guard catches accidental editable
+    installs before they cause runtime failures.
+
+    Args:
+        venv_dir: Path to the virtual environment directory
+
+    Returns:
+        True if the package is a normal (non-editable) install, False if editable
+    """
+    print("[VERIFY] Checking package is not editable (ADR-015 C1)...")
+
+    system = platform.system()
+    if system == "Windows":
+        python_path = venv_dir / "Scripts" / "python.exe"
+    else:
+        python_path = venv_dir / "bin" / "python"
+
+    check_script = (
+        "import importlib.metadata, json, sys; "
+        "d = importlib.metadata.distribution('async-crud-mcp').read_text('direct_url.json'); "
+        "sys.exit(1) if d and json.loads(d).get('dir_info', {}).get('editable') else sys.exit(0)"
+    )
+
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c", check_script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            print("[OK] Package is a normal (non-editable) install")
+            return True
+        else:
+            print("[ERROR] Package is installed as EDITABLE. This will break the "
+                  "Windows service.", file=sys.stderr)
+            print("        The package must be installed without -e flag.", file=sys.stderr)
+            return False
+    except subprocess.TimeoutExpired:
+        print("[WARN] Editable check timed out, skipping", file=sys.stderr)
+        return True  # Don't block install on timeout
+    except Exception as e:
+        print(f"[WARN] Editable check error: {e}", file=sys.stderr)
+        return True  # Don't block install on unexpected errors
+
+
 def init_config(config_dir, config_file, port=None):
     """Initialize configuration files.
 
@@ -644,6 +695,11 @@ def do_install(force=False, port=None):
     # Step 3.6: Post-install import verification (ADR-015 C5)
     if not verify_package_import(paths["venv_dir"]):
         print("[ERROR] Package installed but cannot be imported in the venv", file=sys.stderr)
+        return EXIT_FAILED
+
+    # Step 3.7: Verify non-editable install (ADR-015 C1 guard)
+    if not verify_not_editable(paths["venv_dir"]):
+        print("[ERROR] Editable install detected. Aborting.", file=sys.stderr)
         return EXIT_FAILED
 
     # Step 4: Initialize config

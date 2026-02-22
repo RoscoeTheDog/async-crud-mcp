@@ -156,6 +156,60 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
             pattern=r"\bnode\b\s+(-\w*e\b|.*\s-e\s)",
             reason="Inline code execution via node -e not allowed; use CRUD tools for file I/O",
         ),
+        # -- Command construction / obfuscation prevention --
+        ShellDenyPattern(
+            pattern=r"\beval\b",
+            reason="eval-based command construction not allowed",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bsource\b",
+            reason="source command not allowed; use CRUD tools",
+        ),
+        # -- Pipe to shell (decoded payload execution) --
+        ShellDenyPattern(
+            pattern=r"\|\s*(ba)?sh\b",
+            reason="Piping to shell interpreter not allowed",
+        ),
+        ShellDenyPattern(
+            pattern=r"\|\s*(da|z|fi)sh\b",
+            reason="Piping to shell interpreter not allowed",
+        ),
+        # -- Alternate shells / interpreters --
+        ShellDenyPattern(
+            pattern=r"\b(powershell|pwsh)(\.exe)?\b",
+            reason="PowerShell execution not allowed",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bcmd(\.exe)?\s*/[cCkK]\b",
+            reason="cmd.exe execution not allowed",
+        ),
+        # -- File descriptor redirection (write bypass) --
+        ShellDenyPattern(
+            pattern=r"\bexec\b\s+\d*[<>]",
+            reason="exec file descriptor redirection not allowed",
+        ),
+        # -- Dangerous utilities --
+        ShellDenyPattern(
+            pattern=r"(^|[;&|]\s*)install\b",
+            reason="install command not allowed; use CRUD tools",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bcurl\b",
+            reason="curl not allowed; use CRUD tools for file operations",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bwget\b",
+            reason="wget not allowed; use CRUD tools for file operations",
+        ),
+        ShellDenyPattern(
+            pattern=r"\b(nc|ncat|netcat)\b",
+            reason="netcat not allowed",
+        ),
+        # -- Fork bomb --
+        ShellDenyPattern(
+            pattern=r":\(\)\s*\{",
+            reason="Fork bomb pattern not allowed",
+        ),
     ]
 
 
