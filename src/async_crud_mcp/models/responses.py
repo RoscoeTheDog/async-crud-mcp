@@ -214,6 +214,18 @@ class PatchConflict(BaseModel):
     reason: str = Field(..., description="Reason patch could not be applied")
 
 
+class RedactionEntry(BaseModel):
+    """Metadata for a single redacted span in the diff."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int = Field(..., description="Sequential redaction ID (matches placeholder)")
+    rule_name: str = Field(..., description="Content scan rule that matched")
+    line: int = Field(..., description="1-based line number in the original content")
+    col_start: int = Field(..., description="0-based start column in the line")
+    original_length: int = Field(..., description="Character length of original content")
+
+
 class ContentionResponse(BaseModel):
     """Contention response for update/delete/rename operations."""
 
@@ -231,6 +243,10 @@ class ContentionResponse(BaseModel):
     redacted: bool = Field(default=False, description="True when diff was redacted due to content scan match")
     redacted_pattern: str | None = Field(default=None, description="Content scan rule that triggered redaction")
     redacted_hint: str | None = Field(default=None, description="Guidance for agent on how to proceed after redaction")
+    redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in the diff (when redacted=True)"
+    )
     patches_applicable: bool | None = Field(default=None, description="Whether patches can still be applied (update only)")
     conflicts: list[PatchConflict] | None = Field(default=None, description="Conflicting patches (update only)")
     non_conflicting_patches: list[int] | None = Field(default=None, description="Indices of non-conflicting patches")

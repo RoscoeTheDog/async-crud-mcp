@@ -107,6 +107,73 @@ def check_mnemonic_sequence(
     return True
 
 
+def find_mnemonic_spans(
+    line: str,
+    *,
+    min_consecutive: int = 6,
+) -> List[tuple]:
+    """Find BIP-39 mnemonic sequence spans in a line.
+
+    Returns (start, end) character offsets for each consecutive mnemonic
+    sequence that meets the threshold. Uses the same detection logic as
+    check_mnemonic_sequence but returns span positions instead of a bool.
+
+    Args:
+        line: Single line of text to check.
+        min_consecutive: Minimum consecutive BIP-39 words to trigger.
+
+    Returns:
+        List of (start, end) tuples for each mnemonic span found.
+    """
+    bip39_words = _load_bip39_wordset()
+    if not bip39_words:
+        return []
+
+    words = line.lower().split()
+    if len(words) < min_consecutive:
+        return []
+
+    # Check function-word threshold
+    line_words_set = set(words)
+    has_function_words = bool(line_words_set & _ENGLISH_FUNCTION_WORDS)
+    threshold = 12 if has_function_words else min_consecutive
+
+    # Find word positions in the original line (case-insensitive matching)
+    word_positions = []  # [(start, end, is_bip39), ...]
+    search_start = 0
+    for word in words:
+        idx = line.lower().find(word, search_start)
+        if idx == -1:
+            break
+        word_positions.append((idx, idx + len(word), word in bip39_words))
+        search_start = idx + len(word)
+
+    # Find runs of consecutive BIP-39 words
+    spans = []
+    run_start = None
+    run_count = 0
+    for i, (start, end, is_bip39) in enumerate(word_positions):
+        if is_bip39:
+            if run_start is None:
+                run_start = i
+            run_count += 1
+        else:
+            if run_count >= threshold and run_start is not None:
+                span_start = word_positions[run_start][0]
+                span_end = word_positions[i - 1][1]
+                spans.append((span_start, span_end))
+            run_start = None
+            run_count = 0
+
+    # Handle run that extends to end of line
+    if run_count >= threshold and run_start is not None:
+        span_start = word_positions[run_start][0]
+        span_end = word_positions[-1][1]
+        spans.append((span_start, span_end))
+
+    return spans
+
+
 @dataclass
 class ContentScanResult:
     """Result of a content scan operation."""
@@ -114,6 +181,27 @@ class ContentScanResult:
     blocked: bool
     matched_pattern: Optional[str] = None
     matched_line: Optional[int] = None
+
+
+@dataclass
+class RedactionSpan:
+    """A single redacted region in the content."""
+
+    id: int                    # Sequential ID (1-based)
+    rule_name: str             # e.g. "aws-access-key-id"
+    line: int                  # 1-based line number
+    col_start: int             # 0-based column offset in line
+    col_end: int               # 0-based column end (exclusive)
+    original_length: int       # Character count of redacted span
+
+
+@dataclass
+class RedactedContent:
+    """Result of content redaction."""
+
+    content: str               # Content with placeholders
+    redactions: List[RedactionSpan]  # Metadata for each placeholder
+    has_redactions: bool       # Convenience flag
 
 
 class ContentScanner:
@@ -204,3 +292,101 @@ class ContentScanner:
                 )
 
         return ContentScanResult(blocked=False)
+
+    def redact(self, content: str, path: str) -> RedactedContent:
+        """Redact sensitive spans in content with semantic placeholders.
+
+        Scans line-by-line using the same allow-rule-first logic as scan().
+        For non-allowed lines, finds ALL regex deny matches via finditer()
+        and replaces each with ``<<REDACTED:rule_name:N>>``. BIP-39 mnemonic
+        sequences are redacted as a single contiguous span.
+
+        Matches are processed in reverse column order per line to avoid
+        offset drift during replacement. Overlapping spans from different
+        rules are resolved by keeping the higher-priority match.
+
+        Args:
+            content: Decoded file content to redact.
+            path: File path (for future use, e.g. per-extension rules).
+
+        Returns:
+            RedactedContent with placeholders and metadata, or original
+            content unchanged when nothing is sensitive.
+        """
+        if not self._enabled:
+            return RedactedContent(content=content, redactions=[], has_redactions=False)
+
+        has_deny_patterns = bool(self._deny_patterns)
+        lines = content.splitlines(True)  # Keep line endings
+        redaction_id = 0
+        all_redactions: List[RedactionSpan] = []
+
+        for line_idx, line in enumerate(lines):
+            line_num = line_idx + 1
+            # Strip trailing newline for matching (but preserve it in output)
+            line_content = line.rstrip("\n").rstrip("\r")
+
+            # Check allow patterns first
+            allowed = False
+            for pattern, _name in self._allow_patterns:
+                if pattern.search(line_content):
+                    allowed = True
+                    break
+
+            if allowed:
+                continue
+
+            # Collect all match spans on this line: (col_start, col_end, rule_name)
+            spans: List[tuple] = []
+
+            if has_deny_patterns:
+                for pattern, name in self._deny_patterns:
+                    for m in pattern.finditer(line_content):
+                        spans.append((m.start(), m.end(), name))
+
+            # BIP-39 mnemonic sequences
+            for mstart, mend in find_mnemonic_spans(line_content):
+                spans.append((mstart, mend, "crypto-mnemonic-sequence"))
+
+            if not spans:
+                continue
+
+            # Sort by start position, then by length descending (longer match wins)
+            spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
+
+            # Remove overlapping spans (keep first-encountered at each position)
+            merged: List[tuple] = []
+            for span in spans:
+                if merged and span[0] < merged[-1][1]:
+                    # Overlaps with previous span -- skip
+                    continue
+                merged.append(span)
+
+            # Assign IDs in forward order (left-to-right), build metadata
+            line_redactions: List[tuple] = []  # (col_start, col_end, rule_name, id)
+            for col_start, col_end, rule_name in merged:
+                redaction_id += 1
+                original_length = col_end - col_start
+                all_redactions.append(RedactionSpan(
+                    id=redaction_id,
+                    rule_name=rule_name,
+                    line=line_num,
+                    col_start=col_start,
+                    col_end=col_end,
+                    original_length=original_length,
+                ))
+                line_redactions.append((col_start, col_end, rule_name, redaction_id))
+
+            # Replace in reverse order to preserve offsets
+            suffix = line[len(line_content):]
+            for col_start, col_end, rule_name, rid in reversed(line_redactions):
+                placeholder = f"<<REDACTED:{rule_name}:{rid}>>"
+                line_content = line_content[:col_start] + placeholder + line_content[col_end:]
+
+            lines[line_idx] = line_content + suffix
+
+        return RedactedContent(
+            content="".join(lines),
+            redactions=all_redactions,
+            has_redactions=len(all_redactions) > 0,
+        )

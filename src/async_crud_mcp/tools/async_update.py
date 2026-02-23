@@ -22,6 +22,7 @@ from async_crud_mcp.models import (
     ErrorCode,
     ErrorResponse,
     PatchConflict,
+    RedactionEntry,
     UpdateSuccessResponse,
 )
 
@@ -121,12 +122,37 @@ async def async_update(
                         path=request.path,
                     )
 
+                # Content-scan: redact sensitive spans in current content
+                # before computing the diff, so placeholders appear in the diff
+                # instead of raw secrets.
+                redacted_result = None
+                redaction_entries = None
+                diff_content = current_content  # default: use original
+
+                if content_scanner is not None:
+                    redacted_result = content_scanner.redact(
+                        current_content, str(validated_path)
+                    )
+                    if redacted_result.has_redactions:
+                        diff_content = redacted_result.content
+                        redaction_entries = [
+                            RedactionEntry(
+                                id=r.id,
+                                rule_name=r.rule_name,
+                                line=r.line,
+                                col_start=r.col_start,
+                                original_length=r.original_length,
+                            )
+                            for r in redacted_result.redactions
+                        ]
+
                 # Compute diff for contention response
                 if request.content is not None:
-                    # Content mode: diff between what agent wanted to write and current content
+                    # Content mode: diff between what agent wanted to write
+                    # and current content (possibly redacted)
                     diff = compute_diff(
                         request.content,
-                        current_content,
+                        diff_content,
                         diff_format=request.diff_format,
                         context_lines=3,
                     )
@@ -134,20 +160,18 @@ async def async_update(
                     conflicts = None
                     non_conflicting_patches = None
                 else:
-                    # Patch mode: compute what applying patches would produce
-                    # and diff against current content
-                    # Type guard: patches is not None here (validated by model)
+                    # Patch mode: check applicability against ORIGINAL content
+                    # (patches reference original text), but diff uses redacted content.
                     assert request.patches is not None
 
                     applied_content = current_content
                     patch_conflicts: list[PatchConflict] = []
                     non_conflicting_indices: list[int] = []
 
-                    # Check patch applicability
+                    # Check patch applicability against original content
                     for idx, patch in enumerate(request.patches):
                         if patch.old_string in applied_content:
                             non_conflicting_indices.append(idx)
-                            # Apply patch to show expected result
                             applied_content = applied_content.replace(
                                 patch.old_string,
                                 patch.new_string,
@@ -165,48 +189,56 @@ async def async_update(
                     conflicts = patch_conflicts if patch_conflicts else None
                     non_conflicting_patches = non_conflicting_indices if non_conflicting_indices else None
 
+                    # For the diff, apply applicable patches to the redacted
+                    # content so secrets don't leak through the "from" side.
+                    diff_applied = diff_content
+                    if diff_content != current_content:
+                        # Content was redacted -- re-apply patches to redacted text
+                        for idx in (non_conflicting_indices or []):
+                            patch = request.patches[idx]
+                            if patch.old_string in diff_applied:
+                                diff_applied = diff_applied.replace(
+                                    patch.old_string, patch.new_string, 1
+                                )
+
+                    else:
+                        diff_applied = applied_content
+
                     # Diff shows expected (with patches applied) vs current
+                    # (possibly redacted)
                     diff = compute_diff(
-                        applied_content,
-                        current_content,
+                        diff_applied,
+                        diff_content,
                         diff_format=request.diff_format,
                         context_lines=3,
                     )
 
-                # Content-scan the contention diff before returning it.
-                # If current file content contains sensitive data, redact the diff
-                # to prevent leakage through contention responses.
-                if content_scanner is not None:
-                    scan_result = content_scanner.scan(current_content, str(validated_path))
-                    if scan_result.blocked:
-                        return ContentionResponse(
-                            path=str(validated_path),
-                            expected_hash=request.expected_hash,
-                            current_hash=current_hash,
-                            message=(
-                                f"File has been modified since hash "
-                                f"{request.expected_hash[:16]}... "
-                                f"and contains sensitive content"
-                            ),
-                            diff=None,
-                            redacted=True,
-                            redacted_pattern=scan_result.matched_pattern,
-                            redacted_hint=(
-                                "Re-read the file to get filtered content, "
-                                "then retry the update with the current hash."
-                            ),
-                            patches_applicable=patches_applicable,
-                            conflicts=conflicts,
-                            non_conflicting_patches=non_conflicting_patches,
-                            timestamp=datetime.now(timezone.utc).isoformat(),
-                        )
+                is_redacted = redacted_result is not None and redacted_result.has_redactions
 
                 return ContentionResponse(
                     path=str(validated_path),
                     expected_hash=request.expected_hash,
                     current_hash=current_hash,
-                    message=f"File has been modified since hash {request.expected_hash[:16]}...",
+                    message=(
+                        f"File has been modified since hash "
+                        f"{request.expected_hash[:16]}... "
+                        f"and contains sensitive content"
+                    ) if is_redacted else (
+                        f"File has been modified since hash "
+                        f"{request.expected_hash[:16]}..."
+                    ),
                     diff=diff,
+                    redacted=is_redacted,
+                    redacted_pattern=(
+                        redacted_result.redactions[0].rule_name
+                        if is_redacted else None
+                    ),
+                    redacted_hint=(
+                        "Diff contains <<REDACTED:rule:N>> placeholders. "
+                        "Use the redactions array for span details. "
+                        "Re-read the file if you need the original values."
+                    ) if is_redacted else None,
+                    redactions=redaction_entries,
                     patches_applicable=patches_applicable,
                     conflicts=conflicts,
                     non_conflicting_patches=non_conflicting_patches,
