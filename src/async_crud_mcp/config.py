@@ -182,10 +182,14 @@ def _default_content_scan_rules() -> list[ContentRule]:
         # wordlist with English function-word cross-checking for false
         # positive reduction. See core/content_scanner.py.
 
-        # -- Crypto: 256-bit hex private keys (0x prefix to reduce false positives) --
+        # -- Crypto: 256-bit hex private keys (context-guarded) --
+        # Requires assignment context (private_key=, secret=, etc.) to avoid
+        # false positives on public addresses from StarkNet, Aptos, and Sui
+        # which also use 0x + 64 hex chars. Future: integrate on-chain
+        # address validation via Ankr multi-chain API for disambiguation.
         ContentRule(
             name="crypto-hex-private-key",
-            pattern=r"\b0x[0-9a-fA-F]{64}\b",
+            pattern=r"(?:private[_-]?key|secret)\s*[=:]\s*(?:0x)?[0-9a-fA-F]{64}\b",
             action="deny",
             priority=80,
         ),
