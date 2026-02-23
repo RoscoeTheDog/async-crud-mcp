@@ -381,6 +381,10 @@ class ProjectConfig(BaseModel):
     default_read_policy: Literal["allow", "deny"] = "allow"
     content_scan_rules: list[ContentRule] = Field(default_factory=_default_content_scan_rules)
     content_scan_enabled: bool = True
+    max_file_size_bytes: int = Field(
+        default=268_435_456,
+        description="Maximum file size in bytes for write operations. 0 = no limit.",
+    )
     shell_enabled: bool | None = Field(
         default=None, description="Override shell.enabled for this project"
     )
@@ -402,7 +406,7 @@ class CrudConfig(BaseModel):
     max_timeout: float = 300.0
     default_encoding: str = "utf-8"
     diff_context_lines: int = 3
-    max_file_size_bytes: int = 10_485_760  # 10MB
+    max_file_size_bytes: int = 268_435_456  # 256MB
     access_rules: list[PathRule] = Field(default_factory=list)
     access_policy_file: str | None = None
     default_destructive_policy: Literal["allow", "deny"] = "allow"

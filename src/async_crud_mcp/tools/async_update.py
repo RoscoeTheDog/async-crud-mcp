@@ -33,6 +33,7 @@ async def async_update(
     lock_manager: LockManager,
     hash_registry: HashRegistry,
     content_scanner: Optional[ContentScanner] = None,
+    max_file_size_bytes: int = 0,
 ) -> Union[UpdateSuccessResponse, ContentionResponse, ErrorResponse]:
     """
     Update existing file atomically with hash-based contention detection.
@@ -293,6 +294,14 @@ async def async_update(
                         message=f"Failed to encode patched content with encoding '{request.encoding}': {e}",
                         path=request.path,
                     )
+
+            # 6b. Check file size limit
+            if max_file_size_bytes > 0 and len(encoded_bytes) > max_file_size_bytes:
+                return ErrorResponse(
+                    error_code=ErrorCode.FILE_TOO_LARGE,
+                    message=f"Content size {len(encoded_bytes)} bytes exceeds max_file_size_bytes ({max_file_size_bytes})",
+                    path=request.path,
+                )
 
             # 7. Write updated content atomically
             try:

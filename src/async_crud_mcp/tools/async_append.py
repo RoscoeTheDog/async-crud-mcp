@@ -26,6 +26,7 @@ async def async_append(
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    max_file_size_bytes: int = 0,
 ) -> Union[AppendSuccessResponse, ErrorResponse]:
     """
     Append content to file with optional file creation and separator support.
@@ -115,6 +116,14 @@ async def async_append(
                 return ErrorResponse(
                     error_code=ErrorCode.ENCODING_ERROR,
                     message=f"Failed to encode content with encoding '{request.encoding}': {e}",
+                    path=request.path,
+                )
+
+            # 6b. Check file size limit
+            if max_file_size_bytes > 0 and file_size_before + len(encoded_bytes) > max_file_size_bytes:
+                return ErrorResponse(
+                    error_code=ErrorCode.FILE_TOO_LARGE,
+                    message=f"File would be {file_size_before + len(encoded_bytes)} bytes after append, exceeding max_file_size_bytes ({max_file_size_bytes})",
                     path=request.path,
                 )
 

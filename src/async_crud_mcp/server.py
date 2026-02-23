@@ -284,6 +284,7 @@ content_scanner = ContentScanner(
     enabled=settings.crud.content_scan_enabled,
 )
 server_start_time = time.monotonic()  # Monotonic timestamp for async_status
+_effective_max_file_size: int = settings.crud.max_file_size_bytes
 
 # Shell extension dependencies
 shell_provider = ShellProvider()
@@ -408,7 +409,7 @@ async def async_write_tool(
         create_dirs=create_dirs,
         timeout=timeout,
     )
-    response = await async_write(request, path_validator, lock_manager, hash_registry)
+    response = await async_write(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump()
 
 
@@ -459,7 +460,7 @@ async def async_update_tool(
         timeout=timeout,
         diff_format=diff_format,  # type: ignore[arg-type]  # Validated above
     )
-    response = await async_update(request, path_validator, lock_manager, hash_registry, content_scanner)
+    response = await async_update(request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump()
 
 
@@ -537,7 +538,7 @@ async def async_append_tool(
         create_dirs=create_dirs,
         separator=separator,
     )
-    response = await async_append(request, path_validator, lock_manager, hash_registry)
+    response = await async_append(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump()
 
 
@@ -633,7 +634,7 @@ async def async_batch_write_tool(files: list[dict]):
     write_items = [BatchWriteItem(**op) for op in files]
 
     request = AsyncBatchWriteRequest(files=write_items)
-    response = await async_batch_write(request, path_validator, lock_manager, hash_registry)
+    response = await async_batch_write(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump()
 
 
@@ -665,7 +666,7 @@ async def async_batch_update_tool(files: list[dict]):
         update_items.append(BatchUpdateItem(**op))
 
     request = AsyncBatchUpdateRequest(files=update_items)
-    response = await async_batch_update(request, path_validator, lock_manager, hash_registry, content_scanner)
+    response = await async_batch_update(request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump()
 
 
@@ -868,7 +869,7 @@ def _apply_project_config(
         project_config: Local config, or None to use global defaults with
             project_root as base_dir.
     """
-    global path_validator, content_scanner
+    global path_validator, content_scanner, _effective_max_file_size
 
     if project_config is not None:
         base_dirs = project_config.base_directories or [str(project_root)]
@@ -882,6 +883,7 @@ def _apply_project_config(
             rules=project_config.content_scan_rules,
             enabled=project_config.content_scan_enabled,
         )
+        _effective_max_file_size = project_config.max_file_size_bytes
         # Rebuild shell deny patterns from project config
         if project_config.shell_deny_patterns_mode == "replace":
             shell_validator.reload(project_config.shell_deny_patterns)
@@ -899,6 +901,7 @@ def _apply_project_config(
             rules=settings.crud.content_scan_rules,
             enabled=settings.crud.content_scan_enabled,
         )
+        _effective_max_file_size = settings.crud.max_file_size_bytes
         # Reset shell validator to global defaults
         shell_validator.reload(settings.shell.deny_patterns)
 

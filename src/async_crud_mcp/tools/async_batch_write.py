@@ -17,6 +17,7 @@ async def async_batch_write(
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    max_file_size_bytes: int = 0,
 ) -> BatchWriteResponse:
     """
     Write multiple new files in a single batch operation.
@@ -50,7 +51,7 @@ async def async_batch_write(
             )
 
             # Call single-file async_write
-            result = await async_write(write_request, path_validator, lock_manager, hash_registry)
+            result = await async_write(write_request, path_validator, lock_manager, hash_registry, max_file_size_bytes)
 
             # Collect result and update counters
             results.append(result)

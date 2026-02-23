@@ -22,6 +22,7 @@ async def async_write(
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    max_file_size_bytes: int = 0,
 ) -> Union[WriteSuccessResponse, ErrorResponse]:
     """
     Write new file atomically with exclusive locking.
@@ -52,7 +53,25 @@ async def async_write(
                 path=request.path,
             )
 
-        # 2. Check file does NOT exist (before acquiring lock)
+        # 2. Encode content to bytes (before lock so size is known upfront)
+        try:
+            encoded_bytes = request.content.encode(request.encoding)
+        except (UnicodeEncodeError, LookupError) as e:
+            return ErrorResponse(
+                error_code=ErrorCode.ENCODING_ERROR,
+                message=f"Failed to encode content with encoding '{request.encoding}': {e}",
+                path=request.path,
+            )
+
+        # 3. Check file size limit
+        if max_file_size_bytes > 0 and len(encoded_bytes) > max_file_size_bytes:
+            return ErrorResponse(
+                error_code=ErrorCode.FILE_TOO_LARGE,
+                message=f"Content size {len(encoded_bytes)} bytes exceeds max_file_size_bytes ({max_file_size_bytes})",
+                path=request.path,
+            )
+
+        # 4. Check file does NOT exist (before acquiring lock)
         if os.path.exists(validated_path):
             return ErrorResponse(
                 error_code=ErrorCode.FILE_EXISTS,
@@ -60,7 +79,7 @@ async def async_write(
                 path=request.path,
             )
 
-        # 3. Acquire exclusive write lock
+        # 5. Acquire exclusive write lock
         try:
             request_id = await lock_manager.acquire_write(
                 str(validated_path),
@@ -82,23 +101,13 @@ async def async_write(
                     path=request.path,
                 )
 
-            # 4a. Create parent directories if requested
+            # 6a. Create parent directories if requested
             if request.create_dirs:
                 parent_dir = os.path.dirname(str(validated_path))
                 if parent_dir:
                     os.makedirs(parent_dir, exist_ok=True)
 
-            # 4b. Encode content to bytes
-            try:
-                encoded_bytes = request.content.encode(request.encoding)
-            except (UnicodeEncodeError, LookupError) as e:
-                return ErrorResponse(
-                    error_code=ErrorCode.ENCODING_ERROR,
-                    message=f"Failed to encode content with encoding '{request.encoding}': {e}",
-                    path=request.path,
-                )
-
-            # 4c. Call atomic_write
+            # 6b. Call atomic_write
             try:
                 atomic_write(str(validated_path), encoded_bytes)
             except OSError as e:
@@ -108,13 +117,13 @@ async def async_write(
                     path=request.path,
                 )
 
-            # 4d. Compute hash
+            # 6c. Compute hash
             file_hash = compute_hash(encoded_bytes)
 
-            # 4e. Update HashRegistry
+            # 6d. Update HashRegistry
             hash_registry.update(str(validated_path), file_hash)
 
-            # 4f. Build WriteSuccessResponse
+            # 6e. Build WriteSuccessResponse
             bytes_written = len(encoded_bytes)
 
             return WriteSuccessResponse(
@@ -125,7 +134,7 @@ async def async_write(
             )
 
         finally:
-            # 5. Release write lock
+            # 7. Release write lock
             await lock_manager.release_write(str(validated_path), request_id)
 
     except Exception as e:

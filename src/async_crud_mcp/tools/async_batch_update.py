@@ -20,6 +20,7 @@ async def async_batch_update(
     lock_manager: LockManager,
     hash_registry: HashRegistry,
     content_scanner: Optional[ContentScanner] = None,
+    max_file_size_bytes: int = 0,
 ) -> BatchUpdateResponse:
     """
     Update multiple existing files in a single batch operation.
@@ -57,7 +58,7 @@ async def async_batch_update(
 
             # Call single-file async_update
             result = await async_update(
-                update_request, path_validator, lock_manager, hash_registry, content_scanner
+                update_request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes
             )
 
             # Collect result and update counters
