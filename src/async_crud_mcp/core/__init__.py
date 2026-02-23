@@ -9,6 +9,7 @@ from .file_watcher import FileWatcher
 from .lock_manager import LockManager, LockTimeout, LockType
 from .path_validator import AccessDeniedError, PathValidationError, PathValidator
 from .persistence import StatePersistence
+from .recycle_bin import RecycleBin, RecycleBinError, RecycleEntry, RestoreResult
 from . import process_guard
 from .shell_provider import ShellNotFoundError, ShellProvider
 from .shell_validator import ShellValidator
@@ -43,4 +44,8 @@ __all__ = [
     "StatePersistence",
     "FileWatcher",
     "process_guard",
+    "RecycleBin",
+    "RecycleBinError",
+    "RecycleEntry",
+    "RestoreResult",
 ]

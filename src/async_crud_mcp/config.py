@@ -200,6 +200,14 @@ PROJECT_CONFIG_DIR = ".async-crud-mcp"
 PROJECT_CONFIG_FILE = "config.json"
 
 
+class SafeDeleteConfig(BaseModel):
+    """Recycle bin / safe-delete configuration."""
+
+    enabled: bool = Field(default=True, description="Move files to recycle bin instead of permanent delete")
+    retention_days: int = Field(default=90, ge=1, description="Days to keep recycled files before cleanup")
+    max_recycle_size_mb: int = Field(default=500, ge=0, description="Max total recycle bin size in MB. 0 = no limit")
+
+
 class ShellDenyPattern(BaseModel):
     """A single deny pattern for shell command validation."""
 
@@ -396,6 +404,12 @@ class ProjectConfig(BaseModel):
         default="extend",
         description="Whether project patterns extend or replace global patterns",
     )
+    safe_delete_enabled: bool | None = Field(
+        default=None, description="Override safe_delete.enabled for this project"
+    )
+    safe_delete_retention_days: int | None = Field(
+        default=None, description="Override safe_delete.retention_days for this project"
+    )
 
 
 class CrudConfig(BaseModel):
@@ -480,6 +494,7 @@ class Settings(BaseSettings):
     shell: ShellConfig = Field(default_factory=ShellConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
+    safe_delete: SafeDeleteConfig = Field(default_factory=SafeDeleteConfig)
 
     model_config = SettingsConfigDict(
         env_prefix="ASYNC_CRUD_MCP_",

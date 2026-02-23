@@ -49,6 +49,7 @@ from async_crud_mcp.core import (
     HashRegistry,
     LockManager,
     PathValidator,
+    RecycleBin,
     ShellProvider,
     ShellValidator,
 )
@@ -56,7 +57,7 @@ from async_crud_mcp.core.audit_logger import AuditConfig as AuditConfigDC
 from async_crud_mcp.daemon.config_watcher import ConfigWatcher, atomic_write_config
 from async_crud_mcp.daemon.health import check_health
 from async_crud_mcp.daemon.logging_setup import setup_logging
-from async_crud_mcp.daemon.paths import get_config_file_path, get_logs_dir, get_shared_dir
+from async_crud_mcp.daemon.paths import get_config_file_path, get_logs_dir, get_recycle_dir, get_shared_dir
 from async_crud_mcp.models import (
     AsyncAppendRequest,
     AsyncBatchReadRequest,
@@ -66,6 +67,7 @@ from async_crud_mcp.models import (
     AsyncListRequest,
     AsyncReadRequest,
     AsyncRenameRequest,
+    AsyncRestoreRequest,
     AsyncStatusRequest,
     AsyncUpdateRequest,
     AsyncWriteRequest,
@@ -87,6 +89,7 @@ from async_crud_mcp.tools import (
     async_list,
     async_read,
     async_rename,
+    async_restore,
     async_search,
     async_status,
     async_update,
@@ -304,6 +307,15 @@ audit_logger = AuditLogger(
     system_log_dir=get_shared_dir() / "logs",
 )
 
+# Recycle bin (safe-delete) dependency
+recycle_bin = RecycleBin(
+    project_recycle_dir=None,  # Set on project activation
+    global_recycle_dir=get_recycle_dir(),
+    enabled=settings.safe_delete.enabled,
+    retention_days=settings.safe_delete.retention_days,
+    max_size_mb=settings.safe_delete.max_recycle_size_mb,
+)
+
 
 @contextlib.asynccontextmanager
 async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
@@ -476,8 +488,79 @@ async def async_delete_tool(path: str, timeout: float = 30.0):
         DeleteSuccessResponse with deletion timestamp, or ErrorResponse on failure
     """
     request = AsyncDeleteRequest(path=path, timeout=timeout)
-    response = await async_delete(request, path_validator, lock_manager, hash_registry)
+    response = await async_delete(request, path_validator, lock_manager, hash_registry, recycle_bin)
     return response.model_dump()
+
+
+@mcp.tool()
+async def async_restore_tool(
+    recycle_name: str,
+    destination: str | None = None,
+    force: bool = False,
+):
+    """Restore a file from the recycle bin.
+
+    Args:
+        recycle_name: Name of the recycled item (from async_delete_tool response's recycle_name field)
+        destination: Custom restore path (default: original location before deletion)
+        force: Overwrite destination if it already exists (default: False)
+
+    Returns:
+        RestoreSuccessResponse with restored path, or ErrorResponse on failure
+    """
+    request = AsyncRestoreRequest(recycle_name=recycle_name, destination=destination, force=force)
+    response = await async_restore(request, path_validator, recycle_bin)
+    return response.model_dump()
+
+
+@mcp.tool()
+async def async_recycle_list_tool(limit: int = 50):
+    """List files currently in the recycle bin.
+
+    Args:
+        limit: Maximum number of entries to return (default: 50)
+
+    Returns:
+        RecycleListResponse with recycled file entries
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    entries = recycle_bin.list_entries(limit=limit)
+    return {
+        "status": "ok",
+        "entries": [
+            {
+                "recycle_name": e.recycle_name,
+                "original_path": e.original_path,
+                "deleted_hash": e.deleted_hash,
+                "timestamp": e.timestamp,
+                "size_bytes": e.size_bytes,
+            }
+            for e in entries
+        ],
+        "total_entries": len(entries),
+        "recycle_dir": str(recycle_bin.recycle_dir),
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+    }
+
+
+@mcp.tool()
+async def async_recycle_clean_tool(retention_days: int | None = None):
+    """Remove old entries from the recycle bin.
+
+    Args:
+        retention_days: Override retention period in days (default: use configured value)
+
+    Returns:
+        RecycleCleanResponse with count of removed entries
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    removed = recycle_bin.cleanup(retention_days=retention_days)
+    return {
+        "status": "ok",
+        "removed_count": removed,
+        "retention_days": retention_days if retention_days is not None else recycle_bin.retention_days,
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+    }
 
 
 @mcp.tool()
@@ -890,6 +973,13 @@ def _apply_project_config(
         else:
             merged = list(settings.shell.deny_patterns) + list(project_config.shell_deny_patterns)
             shell_validator.reload(merged)
+        # Apply project-level recycle bin overrides
+        project_recycle = project_root / PROJECT_CONFIG_DIR / "recycle"
+        recycle_bin.set_project_dir(project_recycle)
+        if project_config.safe_delete_enabled is not None:
+            recycle_bin.enabled = project_config.safe_delete_enabled
+        if project_config.safe_delete_retention_days is not None:
+            recycle_bin.retention_days = project_config.safe_delete_retention_days
     else:
         path_validator = PathValidator(
             base_directories=[str(project_root)],
@@ -904,6 +994,11 @@ def _apply_project_config(
         _effective_max_file_size = settings.crud.max_file_size_bytes
         # Reset shell validator to global defaults
         shell_validator.reload(settings.shell.deny_patterns)
+        # Set project recycle dir even without local config overrides
+        project_recycle = project_root / PROJECT_CONFIG_DIR / "recycle"
+        recycle_bin.set_project_dir(project_recycle)
+        recycle_bin.enabled = settings.safe_delete.enabled
+        recycle_bin.retention_days = settings.safe_delete.retention_days
 
 
 def _get_config_warning() -> dict | None:
@@ -1046,7 +1141,7 @@ async def get_config_tool(section: str | None = None) -> dict:
     Returns:
         Configuration dict with project activation status.
     """
-    valid_sections = ("crud", "daemon", "persistence", "watcher", "shell", "search", "audit")
+    valid_sections = ("crud", "daemon", "persistence", "watcher", "shell", "search", "audit", "safe_delete")
 
     if section is not None and section not in valid_sections:
         return {"error": f"Invalid section '{section}'. Valid: {', '.join(valid_sections)}"}
@@ -1069,6 +1164,7 @@ async def get_config_tool(section: str | None = None) -> dict:
         "shell": settings.shell.model_dump(),
         "search": settings.search.model_dump(),
         "audit": settings.audit.model_dump(),
+        "safe_delete": settings.safe_delete.model_dump(),
     }
 
     # If a project is active with local config, overlay project config into crud section

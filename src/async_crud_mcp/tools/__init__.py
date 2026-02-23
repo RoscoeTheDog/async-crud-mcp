@@ -9,6 +9,7 @@ from .async_exec import async_exec
 from .async_list import async_list
 from .async_read import async_read
 from .async_rename import async_rename
+from .async_restore import async_restore
 from .async_search import async_search
 from .async_status import async_status
 from .async_update import async_update
@@ -25,6 +26,7 @@ __all__ = [
     "async_list",
     "async_read",
     "async_rename",
+    "async_restore",
     "async_search",
     "async_status",
     "async_update",

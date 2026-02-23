@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, compute_hash
+from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, RecycleBin, compute_hash
 from async_crud_mcp.models import AsyncDeleteRequest, ErrorCode
 from async_crud_mcp.tools import async_delete
 
@@ -177,3 +177,67 @@ class TestAsyncDeleteErrors:
             assert "lock" in response.message.lower()
         finally:
             await lock_manager.release_write(str(file_path), lock_id)
+
+
+class TestAsyncDeleteWithRecycleBin:
+    """Test delete operations with recycle bin enabled."""
+
+    @pytest.fixture
+    def recycle_bin(self, temp_base_dir):
+        """Create RecycleBin with temp recycle directory."""
+        return RecycleBin(
+            project_recycle_dir=temp_base_dir / ".recycle",
+            global_recycle_dir=temp_base_dir / ".global_recycle",
+            enabled=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_returns_recycle_info(self, temp_base_dir, path_validator, lock_manager, hash_registry, recycle_bin):
+        """Response includes recycled=True and recycle_name."""
+        file_path = temp_base_dir / "recycle_test.txt"
+        file_path.write_text("recycled content", encoding="utf-8")
+
+        request = AsyncDeleteRequest(path=str(file_path))
+        response = await async_delete(request, path_validator, lock_manager, hash_registry, recycle_bin)
+
+        assert response.status == "ok"
+        assert response.recycled is True
+        assert response.recycle_name is not None
+        assert not file_path.exists()
+
+        # Verify file exists in recycle dir
+        assert (recycle_bin.recycle_dir / response.recycle_name).exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_with_recycle_disabled(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Falls back to permanent delete when recycle bin is disabled."""
+        disabled_bin = RecycleBin(
+            project_recycle_dir=None,
+            global_recycle_dir=temp_base_dir / ".recycle",
+            enabled=False,
+        )
+
+        file_path = temp_base_dir / "permanent_delete.txt"
+        file_path.write_text("gone forever", encoding="utf-8")
+
+        request = AsyncDeleteRequest(path=str(file_path))
+        response = await async_delete(request, path_validator, lock_manager, hash_registry, disabled_bin)
+
+        assert response.status == "ok"
+        assert response.recycled is False
+        assert response.recycle_name is None
+        assert not file_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_without_recycle_bin(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Permanent delete when no recycle_bin is passed (backward compatible)."""
+        file_path = temp_base_dir / "no_recycle.txt"
+        file_path.write_text("no recycle bin", encoding="utf-8")
+
+        request = AsyncDeleteRequest(path=str(file_path))
+        response = await async_delete(request, path_validator, lock_manager, hash_registry)
+
+        assert response.status == "ok"
+        assert response.recycled is False
+        assert response.recycle_name is None
+        assert not file_path.exists()

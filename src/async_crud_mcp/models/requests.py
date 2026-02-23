@@ -191,6 +191,14 @@ class WaitRequest(BaseModel):
     task_id: str | None = Field(default=None, description="Background task ID to wait for")
 
 
+class AsyncRestoreRequest(BaseModel):
+    """Request model for async_restore tool."""
+
+    recycle_name: str = Field(..., description="Name of recycled item to restore")
+    destination: str | None = Field(default=None, description="Custom restore path (default: original location)")
+    force: bool = Field(default=False, description="Overwrite destination if it exists")
+
+
 class SearchRequest(BaseModel):
     """Request model for async_search tool."""
 

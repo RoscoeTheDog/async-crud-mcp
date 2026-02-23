@@ -32,6 +32,7 @@ __all__ = [
     'get_user_dir',
     'get_venv_dir',
     'get_config_file_path',
+    'get_recycle_dir',
     'get_user_config_file_path',
     'get_user_logs_dir',
 ]
@@ -308,6 +309,15 @@ def get_config_file_path() -> Path:
         Path to config.json file (not created automatically).
     """
     return get_config_dir() / 'config.json'
+
+
+def get_recycle_dir() -> Path:
+    """Get global recycle bin directory (fallback when no project active).
+
+    Returns:
+        Path to recycle directory under data dir (not created automatically).
+    """
+    return get_data_dir() / 'recycle'
 
 
 def _get_user_profile_path(username: str) -> Path:

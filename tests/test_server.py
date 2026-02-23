@@ -134,6 +134,9 @@ class TestFastMCPServer:
             "async_exec_tool",
             "async_wait_tool",
             "async_search_tool",
+            "async_restore_tool",
+            "async_recycle_list_tool",
+            "async_recycle_clean_tool",
             "health_tool",
             "crud_activate_project",
             "crud_get_config",
@@ -144,9 +147,9 @@ class TestFastMCPServer:
             assert expected_tool in tool_names, f"Tool {expected_tool} not registered"
 
     def test_tool_count(self):
-        """Test that exactly 18 tools are registered (11 CRUD + 3 shell + 1 health + 3 config)."""
+        """Test that exactly 21 tools are registered (11 CRUD + 3 shell + 1 health + 3 config + 3 recycle)."""
         tool_count = len(mcp._tool_manager._tools)
-        assert tool_count == 18, f"Expected 18 tools, found {tool_count}"
+        assert tool_count == 21, f"Expected 21 tools, found {tool_count}"
 
 
 class TestToolWrappers:

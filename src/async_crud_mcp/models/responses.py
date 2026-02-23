@@ -88,6 +88,8 @@ class DeleteSuccessResponse(BaseModel):
     path: str = Field(..., description="File path that was deleted")
     deleted_hash: str = Field(..., description="Hash of deleted file")
     timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
+    recycled: bool = Field(default=False, description="True if file was moved to recycle bin (recoverable)")
+    recycle_name: str | None = Field(default=None, description="Name in recycle bin (for restore)")
 
 
 class RenameSuccessResponse(BaseModel):
@@ -357,6 +359,58 @@ class BatchUpdateResponse(BaseModel):
     status: Literal["ok"] = "ok"
     results: list[UpdateSuccessResponse | ContentionResponse | ErrorResponse] = Field(..., description="Per-file results")
     summary: BatchSummary = Field(..., description="Batch summary")
+
+
+# =============================================================================
+# Recycle bin response models
+# =============================================================================
+
+
+class RestoreSuccessResponse(BaseModel):
+    """Success response for async_restore tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    restored_path: str = Field(..., description="Path where file was restored")
+    original_path: str = Field(..., description="Original path before deletion")
+    recycle_name: str = Field(..., description="Name in recycle bin")
+    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
+
+
+class RecycleListEntry(BaseModel):
+    """A single entry in the recycle bin listing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    recycle_name: str = Field(..., description="Name in recycle bin")
+    original_path: str = Field(..., description="Original file path")
+    deleted_hash: str = Field(..., description="Hash at deletion time")
+    timestamp: str = Field(..., description="Deletion timestamp (ISO 8601)")
+    size_bytes: int = Field(..., description="File size in bytes")
+
+
+class RecycleListResponse(BaseModel):
+    """Response for recycle bin listing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    entries: list[RecycleListEntry] = Field(..., description="Recycled file entries")
+    total_entries: int = Field(..., description="Total number of active entries")
+    recycle_dir: str = Field(..., description="Active recycle directory path")
+    timestamp: str = Field(..., description="Response timestamp (ISO 8601)")
+
+
+class RecycleCleanResponse(BaseModel):
+    """Response for recycle bin cleanup."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    removed_count: int = Field(..., description="Number of entries removed")
+    retention_days: int = Field(..., description="Retention period used")
+    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 # =============================================================================

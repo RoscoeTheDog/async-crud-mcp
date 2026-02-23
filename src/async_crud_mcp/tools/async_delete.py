@@ -1,8 +1,10 @@
 """Async delete tool for MCP file operations."""
 
+from __future__ import annotations
+
 import os
 from datetime import datetime, timezone
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from async_crud_mcp.core import (
     AccessDeniedError,
@@ -22,12 +24,18 @@ from async_crud_mcp.models import (
     ErrorResponse,
 )
 
+if TYPE_CHECKING:
+    from async_crud_mcp.core.recycle_bin import RecycleBin
+
+from async_crud_mcp.core.recycle_bin import RecycleBinError
+
 
 async def async_delete(
     request: AsyncDeleteRequest,
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    recycle_bin: RecycleBin | None = None,
 ) -> Union[DeleteSuccessResponse, ContentionResponse, ErrorResponse]:
     """
     Delete file with optional hash-based contention detection.
@@ -37,6 +45,7 @@ async def async_delete(
         path_validator: PathValidator instance for path validation
         lock_manager: LockManager instance for coordinating locks
         hash_registry: HashRegistry instance for tracking file hashes
+        recycle_bin: Optional RecycleBin for safe deletion (move instead of unlink)
 
     Returns:
         DeleteSuccessResponse on success, ContentionResponse on hash mismatch,
@@ -119,15 +128,23 @@ async def async_delete(
                         timestamp=datetime.now(timezone.utc).isoformat(),
                     )
 
-            # 5. Delete the file
+            # 5. Delete the file (safe-delete via recycle bin when available)
             try:
                 # Read file hash before deletion for response
                 with open(validated_path, 'rb') as f:
                     deleted_bytes = f.read()
                 deleted_hash = compute_hash(deleted_bytes)
 
-                os.unlink(validated_path)
-            except OSError as e:
+                recycled = False
+                recycle_name = None
+                if recycle_bin is not None and recycle_bin.enabled:
+                    from pathlib import Path as _Path
+                    entry = recycle_bin.recycle(_Path(validated_path), deleted_hash)
+                    recycled = True
+                    recycle_name = entry.recycle_name
+                else:
+                    os.unlink(validated_path)
+            except (OSError, RecycleBinError) as e:
                 return ErrorResponse(
                     error_code=ErrorCode.DELETE_ERROR,
                     message=f"Failed to delete file: {e}",
@@ -142,6 +159,8 @@ async def async_delete(
                 path=str(validated_path),
                 deleted_hash=deleted_hash,
                 timestamp=datetime.now(timezone.utc).isoformat(),
+                recycled=recycled,
+                recycle_name=recycle_name,
             )
 
         finally:
