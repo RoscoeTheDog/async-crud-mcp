@@ -240,7 +240,20 @@ class MultiUserDispatcher:
             return
 
         if username in self.workers:
-            self.workers[username].session_ids.add(session_id)
+            worker = self.workers[username]
+            worker.session_ids.add(session_id)
+            # Refresh token from the new (likely more valid) session
+            try:
+                new_token = win32ts.WTSQueryUserToken(session_id)
+                if worker.user_token:
+                    try:
+                        win32api.CloseHandle(worker.user_token)
+                    except Exception:
+                        pass
+                worker.user_token = new_token
+                logger.info(f"Refreshed token for {username} from session {session_id}")
+            except Exception as e:
+                logger.warning(f"Could not refresh token for {username} from session {session_id}: {e}")
             logger.info(f"Added session {session_id} to existing worker for {username}")
             return
 
@@ -510,6 +523,7 @@ class MultiUserDispatcher:
 
         for username, worker in list(self.workers.items()):
             needs_restart = False
+            newly_failed = False
             restart_reason = ""
 
             # Check if process is still alive
@@ -517,6 +531,7 @@ class MultiUserDispatcher:
                 exit_code = win32process.GetExitCodeProcess(worker.process_handle)
                 if exit_code != 259:  # STILL_ACTIVE = 259
                     needs_restart = True
+                    newly_failed = True
                     restart_reason = f"exited (code {exit_code})"
 
                     # Close the old handle (BUG-13: stale process cleanup)
@@ -547,6 +562,7 @@ class MultiUserDispatcher:
 
                         if not self._is_port_listening(host, port):
                             needs_restart = True
+                            newly_failed = True
                             restart_reason = (
                                 f"alive (PID {worker.process_id}) but "
                                 f"port {port} not listening"
@@ -563,54 +579,90 @@ class MultiUserDispatcher:
                                 worker.next_restart_at = 0
                                 self._clear_circuit_breaker_state(worker)
 
-            # ADR-013: Apply circuit breaker before restarting
-            if needs_restart:
-                worker.consecutive_failures += 1
-
-                # Exponential backoff: base * 2^(failures-1), capped
-                backoff = min(
-                    BACKOFF_BASE_SECONDS * (2 ** (worker.consecutive_failures - 1)),
-                    BACKOFF_MAX_SECONDS,
-                )
-                worker.next_restart_at = now + backoff
-
-                # Log escalation
-                if worker.consecutive_failures >= LOG_ESCALATION_THRESHOLD:
-                    logger.error(
-                        f"[ADR-013] Worker for {username} has failed "
-                        f"{worker.consecutive_failures} consecutive times "
-                        f"({restart_reason}). Next restart in {backoff:.0f}s."
-                    )
+            # Detect workers awaiting deferred restart (process dead, backoff pending)
+            if not needs_restart and not worker.process_handle and worker.next_restart_at > 0:
+                if now >= worker.next_restart_at:
+                    needs_restart = True
+                    restart_reason = f"deferred restart (failure #{worker.consecutive_failures})"
                 else:
-                    logger.warning(
-                        f"Worker for {username} {restart_reason}, "
-                        f"failure #{worker.consecutive_failures}, "
-                        f"backoff {backoff:.0f}s"
-                    )
-
-                self._write_circuit_breaker_state(worker)
-
-                # Check if we've waited long enough
-                if now < worker.next_restart_at:
+                    # Still waiting for backoff
                     logger.debug(
                         f"Deferring restart for {username} "
                         f"({worker.next_restart_at - now:.0f}s remaining)"
                     )
-                    # Check config changes even if restart is deferred
                     self._check_config_reload(worker)
                     continue
 
-                # Re-acquire user token if needed
-                if not worker.user_token and worker.session_ids:
-                    try:
-                        sid = next(iter(worker.session_ids))
-                        worker.user_token = win32ts.WTSQueryUserToken(sid)
-                    except Exception as e:
+            # ADR-013: Apply circuit breaker before restarting
+            if needs_restart:
+                # Only apply backoff logic on new crash detection, not deferred retries
+                if newly_failed:
+                    worker.consecutive_failures += 1
+
+                    # Exponential backoff: base * 2^(failures-1), capped
+                    backoff = min(
+                        BACKOFF_BASE_SECONDS * (2 ** (worker.consecutive_failures - 1)),
+                        BACKOFF_MAX_SECONDS,
+                    )
+                    worker.next_restart_at = now + backoff
+
+                    # Log escalation
+                    if worker.consecutive_failures >= LOG_ESCALATION_THRESHOLD:
                         logger.error(
-                            f"Cannot re-acquire token for {username}: {e}"
+                            f"[ADR-013] Worker for {username} has failed "
+                            f"{worker.consecutive_failures} consecutive times "
+                            f"({restart_reason}). Next restart in {backoff:.0f}s."
                         )
+                    else:
+                        logger.warning(
+                            f"Worker for {username} {restart_reason}, "
+                            f"failure #{worker.consecutive_failures}, "
+                            f"backoff {backoff:.0f}s"
+                        )
+
+                    self._write_circuit_breaker_state(worker)
+
+                    # Check if we've waited long enough
+                    if now < worker.next_restart_at:
+                        logger.debug(
+                            f"Deferring restart for {username} "
+                            f"({worker.next_restart_at - now:.0f}s remaining)"
+                        )
+                        # Check config changes even if restart is deferred
                         self._check_config_reload(worker)
                         continue
+                else:
+                    logger.info(
+                        f"Attempting deferred restart for {username} "
+                        f"(failure #{worker.consecutive_failures})"
+                    )
+
+                # Always refresh token before restart (stale tokens from dead sessions)
+                if worker.session_ids:
+                    refreshed = False
+                    for sid in list(worker.session_ids):
+                        try:
+                            new_token = win32ts.WTSQueryUserToken(sid)
+                            if worker.user_token:
+                                try:
+                                    win32api.CloseHandle(worker.user_token)
+                                except Exception:
+                                    pass
+                            worker.user_token = new_token
+                            refreshed = True
+                            break
+                        except Exception:
+                            # Session may be gone, remove it and try next
+                            worker.session_ids.discard(sid)
+                            continue
+                    if not refreshed:
+                        logger.error(f"Cannot acquire token for {username} from any session")
+                        self._check_config_reload(worker)
+                        continue
+                elif not worker.user_token:
+                    logger.error(f"No sessions and no token for {username}, cannot restart")
+                    self._check_config_reload(worker)
+                    continue
 
                 # Wait for port release before restarting
                 settings = _load_user_settings(worker.config_path)

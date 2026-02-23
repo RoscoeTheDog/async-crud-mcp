@@ -6,6 +6,8 @@ without requiring a real Windows service environment.
 
 import json
 import time
+from dataclasses import dataclass, field
+from typing import Optional
 
 
 # We can't import dispatcher directly on non-Windows, so test the
@@ -205,3 +207,256 @@ class TestConstants:
     def test_log_escalation_threshold(self):
         """LOG_ESCALATION_THRESHOLD should be 10."""
         assert TestLogEscalation.LOG_ESCALATION_THRESHOLD == 10
+
+
+# =========================================================================
+# State machine simulation for _poll_workers logic tests
+# =========================================================================
+
+BACKOFF_BASE_SECONDS = 5
+BACKOFF_MAX_SECONDS = 300
+
+
+@dataclass
+class MockWorker:
+    """Minimal UserWorker mock for state machine tests."""
+
+    username: str = "testuser"
+    session_ids: set = field(default_factory=lambda: {1})
+    user_token: Optional[int] = 999
+    process_handle: Optional[int] = None
+    process_id: Optional[int] = None
+    started_at: Optional[float] = None
+    consecutive_failures: int = 0
+    next_restart_at: float = 0
+
+
+def simulate_poll_cycle(worker: MockWorker, now: float, process_alive: bool = False,
+                        exit_code: int = 0) -> dict:
+    """Simulate one cycle of _poll_workers logic for a single worker.
+
+    Reproduces the exact branching from dispatcher._poll_workers() so we can
+    test the state machine transitions without Win32 dependencies.
+
+    Returns a dict with:
+        - needs_restart: whether restart was attempted
+        - newly_failed: whether this was a new crash detection
+        - deferred: whether restart was deferred (backoff pending)
+        - action: description of what happened
+        - consecutive_failures: final failure count
+        - next_restart_at: final restart time
+        - token_refreshed: whether token refresh would be attempted
+    """
+    needs_restart = False
+    newly_failed = False
+    restart_reason = ""
+    result = {
+        "needs_restart": False,
+        "newly_failed": False,
+        "deferred": False,
+        "action": "no_action",
+        "consecutive_failures": worker.consecutive_failures,
+        "next_restart_at": worker.next_restart_at,
+        "token_refreshed": False,
+    }
+
+    # Check if process is still alive
+    if worker.process_handle:
+        if not process_alive:
+            needs_restart = True
+            newly_failed = True
+            restart_reason = f"exited (code {exit_code})"
+            worker.process_handle = None
+            worker.process_id = None
+        # else: process alive - skip port check for simplicity
+
+    # Detect workers awaiting deferred restart
+    if not needs_restart and not worker.process_handle and worker.next_restart_at > 0:
+        if now >= worker.next_restart_at:
+            needs_restart = True
+            restart_reason = f"deferred restart (failure #{worker.consecutive_failures})"
+        else:
+            result["deferred"] = True
+            result["action"] = "deferred_waiting"
+            result["consecutive_failures"] = worker.consecutive_failures
+            result["next_restart_at"] = worker.next_restart_at
+            return result
+
+    # Circuit breaker
+    if needs_restart:
+        if newly_failed:
+            worker.consecutive_failures += 1
+            backoff = min(
+                BACKOFF_BASE_SECONDS * (2 ** (worker.consecutive_failures - 1)),
+                BACKOFF_MAX_SECONDS,
+            )
+            worker.next_restart_at = now + backoff
+
+            if now < worker.next_restart_at:
+                result["needs_restart"] = True
+                result["newly_failed"] = True
+                result["deferred"] = True
+                result["action"] = "new_failure_deferred"
+                result["consecutive_failures"] = worker.consecutive_failures
+                result["next_restart_at"] = worker.next_restart_at
+                return result
+
+        # Token refresh would happen here
+        result["token_refreshed"] = True
+        result["needs_restart"] = True
+        result["newly_failed"] = newly_failed
+        result["action"] = "restart_attempted"
+        result["consecutive_failures"] = worker.consecutive_failures
+        result["next_restart_at"] = worker.next_restart_at
+        # Simulate successful restart
+        worker.process_handle = 42
+        worker.process_id = 1234
+        worker.started_at = now
+        return result
+
+    result["action"] = "no_action"
+    result["consecutive_failures"] = worker.consecutive_failures
+    result["next_restart_at"] = worker.next_restart_at
+    return result
+
+
+class TestPollWorkersStateMachine:
+    """Validate the _poll_workers state machine transitions.
+
+    Tests the fix for the bug where a dead worker's pending-restart state
+    was lost between poll cycles because process_handle was already None.
+    """
+
+    def test_first_poll_after_crash_defers_restart(self):
+        """First poll detects dead process, sets backoff, and defers restart."""
+        worker = MockWorker(process_handle=100, process_id=8964)
+        now = time.time()
+
+        result = simulate_poll_cycle(worker, now, process_alive=False, exit_code=0)
+
+        assert result["newly_failed"] is True
+        assert result["deferred"] is True
+        assert result["action"] == "new_failure_deferred"
+        assert worker.consecutive_failures == 1
+        assert worker.next_restart_at == now + BACKOFF_BASE_SECONDS
+        assert worker.process_handle is None  # cleaned up
+
+    def test_second_poll_triggers_deferred_restart(self):
+        """Second poll (after backoff expires) triggers the actual restart."""
+        worker = MockWorker()
+        now = time.time()
+
+        # Simulate state after first poll: dead, one failure, backoff set
+        worker.process_handle = None
+        worker.consecutive_failures = 1
+        worker.next_restart_at = now - 1  # backoff expired
+
+        result = simulate_poll_cycle(worker, now)
+
+        assert result["needs_restart"] is True
+        assert result["newly_failed"] is False
+        assert result["action"] == "restart_attempted"
+        assert result["token_refreshed"] is True
+        # Failure count should NOT be incremented on deferred retry
+        assert worker.consecutive_failures == 1
+
+    def test_second_poll_during_backoff_defers_again(self):
+        """If backoff hasn't expired, second poll should still defer."""
+        worker = MockWorker()
+        now = time.time()
+
+        worker.process_handle = None
+        worker.consecutive_failures = 1
+        worker.next_restart_at = now + 3  # 3 seconds remaining
+
+        result = simulate_poll_cycle(worker, now)
+
+        assert result["deferred"] is True
+        assert result["action"] == "deferred_waiting"
+        assert result["needs_restart"] is False
+
+    def test_no_spurious_restart_when_next_restart_at_zero(self):
+        """Worker with no process and next_restart_at=0 should not restart.
+
+        This is the normal state of a cleanly stopped worker (no sessions left).
+        """
+        worker = MockWorker()
+        worker.process_handle = None
+        worker.next_restart_at = 0
+        worker.consecutive_failures = 0
+
+        result = simulate_poll_cycle(worker, time.time())
+
+        assert result["needs_restart"] is False
+        assert result["action"] == "no_action"
+
+    def test_consecutive_failures_not_double_incremented(self):
+        """Failure count should only increment once per actual crash, not on retry."""
+        worker = MockWorker(process_handle=100, process_id=8964)
+        now = time.time()
+
+        # First poll: crash detected
+        r1 = simulate_poll_cycle(worker, now, process_alive=False)
+        assert worker.consecutive_failures == 1
+
+        # Second poll: deferred retry (backoff expired)
+        worker.next_restart_at = now - 1  # expired
+        r2 = simulate_poll_cycle(worker, now)
+        assert worker.consecutive_failures == 1  # NOT 2
+
+        # Simulate second crash: new process dies
+        worker.process_handle = 200
+        r3 = simulate_poll_cycle(worker, now + 100, process_alive=False)
+        assert worker.consecutive_failures == 2  # NOW incremented
+
+    def test_token_refresh_on_deferred_restart(self):
+        """Token refresh should happen before restart attempt."""
+        worker = MockWorker()
+        worker.process_handle = None
+        worker.consecutive_failures = 1
+        worker.next_restart_at = time.time() - 1  # expired
+
+        result = simulate_poll_cycle(worker, time.time())
+
+        assert result["token_refreshed"] is True
+        assert result["action"] == "restart_attempted"
+
+    def test_multiple_failures_escalate_backoff(self):
+        """Each new crash should increase backoff exponentially."""
+        worker = MockWorker(process_handle=100, process_id=1000)
+        now = time.time()
+
+        backoffs = []
+        for i in range(5):
+            # Crash
+            worker.process_handle = 100 + i
+            r = simulate_poll_cycle(worker, now + i * 1000, process_alive=False)
+            backoffs.append(worker.next_restart_at - (now + i * 1000))
+
+            # Successful restart after backoff
+            worker.next_restart_at = now + i * 1000 - 1  # expired
+            simulate_poll_cycle(worker, now + i * 1000)
+
+        # Backoffs should be: 5, 10, 20, 40, 80
+        assert backoffs == [5, 10, 20, 40, 80]
+
+    def test_full_crash_recovery_cycle(self):
+        """End-to-end: crash -> defer -> restart -> running."""
+        worker = MockWorker(process_handle=100, process_id=8964)
+        t0 = time.time()
+
+        # Poll 1: Detect crash
+        r1 = simulate_poll_cycle(worker, t0, process_alive=False)
+        assert r1["action"] == "new_failure_deferred"
+        assert worker.process_handle is None
+
+        # Poll 2: Still in backoff (2 seconds later, need 5)
+        r2 = simulate_poll_cycle(worker, t0 + 2)
+        assert r2["action"] == "deferred_waiting"
+        assert worker.process_handle is None
+
+        # Poll 3: Backoff expired (6 seconds later)
+        r3 = simulate_poll_cycle(worker, t0 + 6)
+        assert r3["action"] == "restart_attempted"
+        assert worker.process_handle is not None  # restarted
+        assert worker.consecutive_failures == 1  # not incremented again
