@@ -100,6 +100,100 @@ class ContentRule(BaseModel):
     priority: int = Field(default=0, description="Higher priority rules evaluated first")
 
 
+def _default_content_scan_rules() -> list[ContentRule]:
+    """Return the built-in content scan deny rules.
+
+    These detect common sensitive credential patterns in file content.
+    Rules are evaluated per-line by ContentScanner (highest priority first).
+    Project configs extend (not replace) these defaults via default_factory.
+    """
+    return [
+        # -- AWS credentials --
+        ContentRule(
+            name="aws-access-key-id",
+            pattern=r"AKIA[0-9A-Z]{16}",
+            action="deny",
+            priority=100,
+        ),
+        ContentRule(
+            name="aws-secret-key-assignment",
+            pattern=r"AWS_SECRET_ACCESS_KEY\s*[=:]\s*\S+",
+            action="deny",
+            priority=100,
+        ),
+        # -- Generic API keys / secrets --
+        ContentRule(
+            name="generic-api-key-assignment",
+            pattern=r"(?:api[_-]?key|secret[_-]?key|api[_-]?secret)\s*[=:]\s*\S{8,}",
+            action="deny",
+            priority=90,
+        ),
+        # -- Private key headers --
+        ContentRule(
+            name="private-key-header",
+            pattern=r"-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+|PGP\s+|ENCRYPTED\s+)?PRIVATE KEY-----",
+            action="deny",
+            priority=100,
+        ),
+        # -- Bearer / Auth tokens --
+        ContentRule(
+            name="bearer-auth-token",
+            pattern=r"(?:Bearer|Authorization[:\s])\s*(?:ey[A-Za-z0-9_-]{20,}|ghp_|gho_|github_pat_)",
+            action="deny",
+            priority=90,
+        ),
+        # -- Password assignments --
+        ContentRule(
+            name="password-assignment",
+            pattern=r"(?:password|passwd|pwd)\s*[=:]\s*\S{4,}",
+            action="deny",
+            priority=80,
+        ),
+        # -- Connection strings with credentials --
+        ContentRule(
+            name="connection-string-credentials",
+            pattern=r"(?:mongodb|postgres|mysql|redis)://[^\s]+:[^\s]+@",
+            action="deny",
+            priority=90,
+        ),
+        # -- JWT tokens --
+        ContentRule(
+            name="jwt-token",
+            pattern=r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+",
+            action="deny",
+            priority=90,
+        ),
+        # -- GitHub tokens --
+        ContentRule(
+            name="github-token",
+            pattern=r"(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}",
+            action="deny",
+            priority=90,
+        ),
+        # -- Slack tokens --
+        ContentRule(
+            name="slack-token",
+            pattern=r"xox[bpars]-[0-9]{10,}-[A-Za-z0-9-]+",
+            action="deny",
+            priority=90,
+        ),
+        # -- Crypto: BIP-39 mnemonic sequences (3+ seed words in a row) --
+        ContentRule(
+            name="crypto-mnemonic-sequence",
+            pattern=r"(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd|abuse|access|accident|account|accuse|achieve|acid|acoustic|acquire|across|act|action|actor|actress|actual|adapt|add|addict|address|adjust|admit|adult|advance|advice|aerobic|affair|afford|afraid|again|age|agent|agree|ahead|aim|air|airport|aisle|alarm|album|alcohol|alert|alien|all|alley|allow|almost|alone|alpha|already|also|alter|always|amateur|amazing|among|amount|amused|analyst|anchor|ancient|anger|angle|angry|animal|ankle|announce|annual|another|answer|antenna|antique|anxiety|any|apart|apology|appear|apple|approve|april|arch|arctic|area|arena|argue|arm|armed|armor|army|around|arrange|arrest|arrive|arrow|art|artefact|artist|artwork|ask|aspect|assault|asset|assist|assume|asthma|athlete|atom|attack|attend|attitude|attract|auction|audit|august|aunt|author|auto|autumn|average|avocado|avoid|awake|aware|awesome|awful|awkward|axis)\s+(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd|abuse|access|accident|account|accuse|achieve|acid|acoustic|acquire|across|act|action|actor|actress|actual|adapt|add|addict|address|adjust|admit|adult|advance|advice|aerobic|affair|afford|afraid|again|age|agent|agree|ahead|aim|air|airport|aisle|alarm|album|alcohol|alert|alien|all|alley|allow|almost|alone|alpha|already|also|alter|always|amateur|amazing|among|amount|amused|analyst|anchor|ancient|anger|angle|angry|animal|ankle|announce|annual|another|answer|antenna|antique|anxiety|any|apart|apology|appear|apple|approve|april|arch|arctic|area|arena|argue|arm|armed|armor|army|around|arrange|arrest|arrive|arrow|art|artefact|artist|artwork|ask|aspect|assault|asset|assist|assume|asthma|athlete|atom|attack|attend|attitude|attract|auction|audit|august|aunt|author|auto|autumn|average|avocado|avoid|awake|aware|awesome|awful|awkward|axis)\s+(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd|abuse|access|accident|account|accuse|achieve|acid|acoustic|acquire|across|act|action|actor|actress|actual|adapt|add|addict|address|adjust|admit|adult|advance|advice|aerobic|affair|afford|afraid|again|age|agent|agree|ahead|aim|air|airport|aisle|alarm|album|alcohol|alert|alien|all|alley|allow|almost|alone|alpha|already|also|alter|always|amateur|amazing|among|amount|amused|analyst|anchor|ancient|anger|angle|angry|animal|ankle|announce|annual|another|answer|antenna|antique|anxiety|any|apart|apology|appear|apple|approve|april|arch|arctic|area|arena|argue|arm|armed|armor|army|around|arrange|arrest|arrive|arrow|art|artefact|artist|artwork|ask|aspect|assault|asset|assist|assume|asthma|athlete|atom|attack|attend|attitude|attract|auction|audit|august|aunt|author|auto|autumn|average|avocado|avoid|awake|aware|awesome|awful|awkward|axis)",
+            action="deny",
+            priority=80,
+        ),
+        # -- Crypto: 256-bit hex private keys (0x prefix required to reduce false positives) --
+        ContentRule(
+            name="crypto-hex-private-key",
+            pattern=r"(?:private[_-]?key|secret)\s*[=:]\s*(?:0x)?[0-9a-fA-F]{64}\b",
+            action="deny",
+            priority=80,
+        ),
+    ]
+
+
 PROJECT_CONFIG_DIR = ".async-crud-mcp"
 PROJECT_CONFIG_FILE = "config.json"
 
@@ -283,7 +377,7 @@ class ProjectConfig(BaseModel):
     access_policy_file: str | None = None
     default_destructive_policy: Literal["allow", "deny"] = "allow"
     default_read_policy: Literal["allow", "deny"] = "allow"
-    content_scan_rules: list[ContentRule] = Field(default_factory=list)
+    content_scan_rules: list[ContentRule] = Field(default_factory=_default_content_scan_rules)
     content_scan_enabled: bool = True
     shell_enabled: bool | None = Field(
         default=None, description="Override shell.enabled for this project"
@@ -311,7 +405,7 @@ class CrudConfig(BaseModel):
     access_policy_file: str | None = None
     default_destructive_policy: Literal["allow", "deny"] = "allow"
     default_read_policy: Literal["allow", "deny"] = "allow"
-    content_scan_rules: list[ContentRule] = Field(default_factory=list)
+    content_scan_rules: list[ContentRule] = Field(default_factory=_default_content_scan_rules)
     content_scan_enabled: bool = True
 
 
@@ -488,6 +582,8 @@ def load_project_config(project_root: Path) -> ProjectConfig | None:
     """Load project-local config from .async-crud-mcp/config.json.
 
     Returns None if the file doesn't exist (use global defaults).
+    Project-specified content_scan_rules extend (not replace) the built-in
+    defaults, so custom rules are layered on top of the standard patterns.
 
     Args:
         project_root: Path to the project root directory.
@@ -504,4 +600,14 @@ def load_project_config(project_root: Path) -> ProjectConfig | None:
         return None
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     cleaned = _strip_comment_fields(raw)
-    return ProjectConfig.model_validate(cleaned)
+    # Extract project-specific content_scan_rules before validation
+    # so we can merge them with defaults (extend, not replace).
+    project_rules_raw = cleaned.pop("content_scan_rules", None)
+    config = ProjectConfig.model_validate(cleaned)
+    if project_rules_raw is not None:
+        project_rules = [ContentRule.model_validate(r) for r in project_rules_raw]
+        # Defaults first, project-specific rules layered on top
+        config = config.model_copy(
+            update={"content_scan_rules": config.content_scan_rules + project_rules}
+        )
+    return config
