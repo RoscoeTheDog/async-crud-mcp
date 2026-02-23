@@ -1,6 +1,8 @@
 """Async batch update tool for MCP file operations."""
 
-from async_crud_mcp.core import HashRegistry, LockManager, PathValidator
+from typing import Optional
+
+from async_crud_mcp.core import ContentScanner, HashRegistry, LockManager, PathValidator
 from async_crud_mcp.models import (
     AsyncBatchUpdateRequest,
     AsyncUpdateRequest,
@@ -17,6 +19,7 @@ async def async_batch_update(
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    content_scanner: Optional[ContentScanner] = None,
 ) -> BatchUpdateResponse:
     """
     Update multiple existing files in a single batch operation.
@@ -53,7 +56,9 @@ async def async_batch_update(
             )
 
             # Call single-file async_update
-            result = await async_update(update_request, path_validator, lock_manager, hash_registry)
+            result = await async_update(
+                update_request, path_validator, lock_manager, hash_registry, content_scanner
+            )
 
             # Collect result and update counters
             results.append(result)

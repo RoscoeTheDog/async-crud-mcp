@@ -2,10 +2,11 @@
 
 import os
 from datetime import datetime, timezone
-from typing import Union
+from typing import Optional, Union
 
 from async_crud_mcp.core import (
     AccessDeniedError,
+    ContentScanner,
     HashRegistry,
     LockManager,
     LockTimeout,
@@ -30,6 +31,7 @@ async def async_update(
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    content_scanner: Optional[ContentScanner] = None,
 ) -> Union[UpdateSuccessResponse, ContentionResponse, ErrorResponse]:
     """
     Update existing file atomically with hash-based contention detection.
@@ -39,6 +41,10 @@ async def async_update(
         path_validator: PathValidator instance for path validation
         lock_manager: LockManager instance for coordinating locks
         hash_registry: HashRegistry instance for tracking file hashes
+        content_scanner: Optional ContentScanner for scanning contention diffs.
+            When provided and a hash mismatch triggers a contention response,
+            the current file content is scanned. If sensitive content is detected,
+            the diff is redacted from the response to prevent data leakage.
 
     Returns:
         UpdateSuccessResponse on success, ContentionResponse on hash mismatch,
@@ -166,6 +172,34 @@ async def async_update(
                         diff_format=request.diff_format,
                         context_lines=3,
                     )
+
+                # Content-scan the contention diff before returning it.
+                # If current file content contains sensitive data, redact the diff
+                # to prevent leakage through contention responses.
+                if content_scanner is not None:
+                    scan_result = content_scanner.scan(current_content, str(validated_path))
+                    if scan_result.blocked:
+                        return ContentionResponse(
+                            path=str(validated_path),
+                            expected_hash=request.expected_hash,
+                            current_hash=current_hash,
+                            message=(
+                                f"File has been modified since hash "
+                                f"{request.expected_hash[:16]}... "
+                                f"and contains sensitive content"
+                            ),
+                            diff=None,
+                            redacted=True,
+                            redacted_pattern=scan_result.matched_pattern,
+                            redacted_hint=(
+                                "Re-read the file to get filtered content, "
+                                "then retry the update with the current hash."
+                            ),
+                            patches_applicable=patches_applicable,
+                            conflicts=conflicts,
+                            non_conflicting_patches=non_conflicting_patches,
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                        )
 
                 return ContentionResponse(
                     path=str(validated_path),

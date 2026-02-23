@@ -225,7 +225,12 @@ class ContentionResponse(BaseModel):
     expected_hash: str = Field(..., description="Hash that was expected")
     current_hash: str = Field(..., description="Current file hash")
     message: str = Field(..., description="Human-readable contention message")
-    diff: Annotated[JsonDiff | UnifiedDiff, Field(discriminator="format")] = Field(..., description="Diff showing changes")
+    diff: Annotated[JsonDiff | UnifiedDiff, Field(discriminator="format")] | None = Field(
+        default=None, description="Diff showing changes (None when redacted due to sensitive content)"
+    )
+    redacted: bool = Field(default=False, description="True when diff was redacted due to content scan match")
+    redacted_pattern: str | None = Field(default=None, description="Content scan rule that triggered redaction")
+    redacted_hint: str | None = Field(default=None, description="Guidance for agent on how to proceed after redaction")
     patches_applicable: bool | None = Field(default=None, description="Whether patches can still be applied (update only)")
     conflicts: list[PatchConflict] | None = Field(default=None, description="Conflicting patches (update only)")
     non_conflicting_patches: list[int] | None = Field(default=None, description="Indices of non-conflicting patches")

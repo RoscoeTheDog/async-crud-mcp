@@ -459,7 +459,7 @@ async def async_update_tool(
         timeout=timeout,
         diff_format=diff_format,  # type: ignore[arg-type]  # Validated above
     )
-    response = await async_update(request, path_validator, lock_manager, hash_registry)
+    response = await async_update(request, path_validator, lock_manager, hash_registry, content_scanner)
     return response.model_dump()
 
 
@@ -665,7 +665,7 @@ async def async_batch_update_tool(files: list[dict]):
         update_items.append(BatchUpdateItem(**op))
 
     request = AsyncBatchUpdateRequest(files=update_items)
-    response = await async_batch_update(request, path_validator, lock_manager, hash_registry)
+    response = await async_batch_update(request, path_validator, lock_manager, hash_registry, content_scanner)
     return response.model_dump()
 
 
