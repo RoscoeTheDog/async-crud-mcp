@@ -1,6 +1,6 @@
 # Session 002: Implement Pre-Deployment Readiness Audit
 
-**Status**: ACTIVE
+**Status**: COMPLETED
 **Created**: 2026-02-23 22:55
 **Updated**: 2026-02-24
 **Objective**: Implement approved plan: Pre-Deployment Readiness Audit
@@ -23,8 +23,10 @@
   - C7/R11: Search wall-clock timeout -- `time.monotonic` deadline in `async_search.py` file loop, breaks early when exceeded
   - C8/R8+R10: Package data -- daemon shell scripts declared as `artifacts` in `pyproject.toml` `[tool.hatch.build.targets.wheel]`
   - C9/R9: Atomic config write -- temp-file-then-rename via `tempfile.mkstemp` + `Path.replace()` in `configure_claude_code.py:save_config`
-- **Phase 3 (Low) -- 1 of 3 ITEMS IMPLEMENTED**
+- **Phase 3 (Low) -- ALL 3 ITEMS COMPLETE**
   - C10/R12: `truncated` flag on `SearchResponse` -- `bool | None = Field(default=None)`, set by C7 timeout logic
+  - C11/R13: Cancel `_config_watcher_task` on shutdown -- `server.py:343-349` cancel + await in `_server_lifespan` finally block before other teardown
+  - C12: Daemon-template backport -- already covered by C8/R8+R10 commit (`7234a03`), no additional work needed
 
 ---
 
@@ -36,10 +38,8 @@ None
 
 ## Next Steps
 
-1. **Phase 3 (Low) -- 2 remaining items:**
-   - C11/R13: Cancel `_config_watcher_task` on shutdown -- add cancellation in `_server_lifespan` finally block (currently only cancelled on re-activation at `server.py:1156-1157`)
-   - C12: Daemon-template backport (if not covered by C8)
-2. Plan reference: `.claude/subagents/plans/53dcf15a-3440-48b5-aadc-5ae2ce1e889a-plan.md`
+All 12 items (C1-C12) across all 3 phases are complete. No remaining work.
+- Plan reference: `.claude/subagents/plans/53dcf15a-3440-48b5-aadc-5ae2ce1e889a-plan.md`
 
 ---
 
@@ -54,6 +54,8 @@ None
 - CLI and Desktop configs use same `mcpServers` schema (no format split needed)
 - C8 package-data fix backported to daemon-service template at `claude-code-tooling` repo
 - C7 and C10 committed together since the truncated flag is the response-side of the timeout logic
+- C11 cancels config watcher before audit_logger.close() and background_registry.shutdown() to ensure clean ordering
+- C12 confirmed covered by C8/R10 -- daemon-service template already backported in same commit
 
 ---
 
@@ -82,6 +84,9 @@ None
 - `pyproject.toml` -- daemon shell script artifacts (C8)
 - `scripts/configure_claude_code.py` -- atomic temp-file-then-rename (C9)
 - `tests/test_server.py` -- tool count 21->22 (C6)
+
+**Files Modified (Phase 3)**:
+- `src/async_crud_mcp/server.py` -- `_server_lifespan` finally block: cancel + await `_config_watcher_task` (L343-349) (C11)
 
 **Files Created**:
 - `src/async_crud_mcp/tools/async_mkdir.py` -- mkdir tool implementation (C6)
