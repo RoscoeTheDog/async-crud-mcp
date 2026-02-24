@@ -15,7 +15,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -63,9 +65,17 @@ def load_config(config_path: Path) -> dict[str, Any]:
 
 
 def save_config(config_path: Path, config: dict[str, Any]) -> None:
-    """Save config with proper formatting."""
+    """Save config atomically via temp-file-then-rename."""
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(json.dumps(config, indent=2) + "\n")
+    data = json.dumps(config, indent=2) + "\n"
+    fd, tmp_path = tempfile.mkstemp(dir=config_path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(data)
+        Path(tmp_path).replace(config_path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
 
 def add_mcp_server(
