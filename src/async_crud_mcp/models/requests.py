@@ -207,6 +207,7 @@ class AsyncRestoreRequest(BaseModel):
     recycle_name: str = Field(..., description="Name of recycled item to restore")
     destination: str | None = Field(default=None, description="Custom restore path (default: original location)")
     force: bool = Field(default=False, description="Overwrite destination if it exists")
+    timeout: float = Field(default=30.0, description="Operation timeout in seconds")
 
 
 class SearchRequest(BaseModel):

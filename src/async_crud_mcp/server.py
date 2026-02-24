@@ -15,6 +15,7 @@ Referenced by bootstrap_daemon.py and dispatcher.py
 import asyncio
 import contextlib
 import json
+import os
 import socket
 import sys
 import time
@@ -309,12 +310,14 @@ audit_logger = AuditLogger(
 )
 
 # Recycle bin (safe-delete) dependency
+_recycle_hmac_key = os.urandom(32)
 recycle_bin = RecycleBin(
     project_recycle_dir=None,  # Set on project activation
     global_recycle_dir=get_recycle_dir(),
     enabled=settings.safe_delete.enabled,
     retention_days=settings.safe_delete.retention_days,
     max_size_mb=settings.safe_delete.max_recycle_size_mb,
+    hmac_key=_recycle_hmac_key,
 )
 
 
@@ -538,7 +541,7 @@ async def async_recycle_list_tool(limit: int = 50):
         RecycleListResponse with recycled file entries
     """
     from datetime import datetime as _dt, timezone as _tz
-    entries = recycle_bin.list_entries(limit=limit)
+    entries = await recycle_bin.list_entries(limit=limit)
     return {
         "status": "ok",
         "entries": [
@@ -568,7 +571,7 @@ async def async_recycle_clean_tool(retention_days: int | None = None):
         RecycleCleanResponse with count of removed entries
     """
     from datetime import datetime as _dt, timezone as _tz
-    removed = recycle_bin.cleanup(retention_days=retention_days)
+    removed = await recycle_bin.cleanup(retention_days=retention_days)
     return {
         "status": "ok",
         "removed_count": removed,

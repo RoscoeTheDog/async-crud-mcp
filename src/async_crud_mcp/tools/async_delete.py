@@ -149,7 +149,7 @@ async def async_delete(
                 recycle_name = None
                 if recycle_bin is not None and recycle_bin.enabled:
                     from pathlib import Path as _Path
-                    entry = recycle_bin.recycle(_Path(validated_path), deleted_hash)
+                    entry = await recycle_bin.recycle(_Path(validated_path), deleted_hash)
                     recycled = True
                     recycle_name = entry.recycle_name
                 else:

@@ -42,10 +42,11 @@ async def async_restore(
                     path=request.destination,
                 )
 
-        result = recycle_bin.restore(
+        result = await recycle_bin.restore(
             recycle_name=request.recycle_name,
             destination=destination,
             force=request.force,
+            timeout=request.timeout,
         )
 
         return RestoreSuccessResponse(
