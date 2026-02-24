@@ -2,7 +2,7 @@
 
 **Status**: ACTIVE
 **Created**: 2026-02-23 17:04
-**Updated**: 2026-02-23
+**Updated**: 2026-02-23T21:00
 **Objective**: Implement approved plan: Production Readiness for async-crud-mcp
 
 ---
@@ -17,6 +17,11 @@
   - **1.1 PathValidator secure defaults**: Empty `base_directories` now defaults to CWD instead of allowing all paths. Warning log emitted. 4 new tests.
   - **1.2 Regex editing with content scanner guard**: Added `regex_patches` field to `AsyncUpdateRequest` with `RegexPatch(pattern, replacement, count)` model. Per-match ContentScanner guard blocks flagged matches with position-only error. Response includes `regex_applied`/`regex_blocked` arrays. 10 new tests.
   - **1.3 External edit detection**: Added `modified_by` field ("agent"/"external"/"unknown") to `ContentionResponse` by comparing HashRegistry state against disk hash. Applied to update, delete, and rename tools. 3 new tests.
+- **Phase 2 (High priority) -- DONE**:
+  - **2.1 Exec stdout/stderr redaction**: Applied `ContentScanner.redact()` to foreground exec output (`async_exec.py`) before returning `ExecSuccessResponse`. Added `content_scanner` parameter (optional, backward-compatible) to `async_exec()` and `_exec_foreground()`.
+  - **2.2 Background task wait redaction**: Applied `ContentScanner.redact()` to background task stdout/stderr in `async_wait.py` for both "already completed" and "just completed" paths. Added `content_scanner` parameter to `async_wait()` and `_wait_for_task()`.
+  - **2.3 Server wiring**: Passed module-level `content_scanner` to both `async_exec()` and `async_wait()` in `server.py`.
+  - 8 new tests (4 exec redaction + 4 wait redaction).
 
 ---
 
@@ -28,13 +33,10 @@ None
 
 ## Next Steps
 
-1. **Phase 2 (High priority)**: Apply ContentScanner.redact() to exec stdout/stderr before returning to LLM
-   - File: `src/async_crud_mcp/tools/async_exec.py:L252-255` (stdout/stderr decode point)
-   - Reuses existing `ContentScanner.redact()` infrastructure
-2. **Phase 3 (Medium)**: Add HMAC-SHA256 integrity check to recycle bin restore; concurrent scenario tests
+1. **Phase 3 (Medium)**: Add HMAC-SHA256 integrity check to recycle bin restore; concurrent scenario tests
    - File: `src/async_crud_mcp/core/recycle_bin.py:L191-249`
-3. **Phase 4 (Low)**: Documentation -- migration guide for glob patterns, shell restrictions reference
-4. Read the plan for full details: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md`
+2. **Phase 4 (Low)**: Documentation -- migration guide for glob patterns, shell restrictions reference
+3. Read the plan for full details: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md`
 
 ---
 
@@ -74,7 +76,14 @@ None
 - `tests/test_path_validator.py` (4 new tests)
 - `tests/test_tools/test_async_update.py` (13 new tests)
 
-**Test Results**: 766 passed, 10 skipped, 2 pre-existing failures (config default mismatch from prior sprint)
+**Files Modified in Phase 2**:
+- `src/async_crud_mcp/tools/async_exec.py` (content_scanner param, stdout/stderr redaction)
+- `src/async_crud_mcp/tools/async_wait.py` (content_scanner param, task output redaction)
+- `src/async_crud_mcp/server.py` (wire content_scanner to exec and wait)
+- `tests/test_tools/test_async_exec.py` (4 new redaction tests)
+- `tests/test_tools/test_async_wait.py` (4 new redaction tests)
+
+**Test Results**: 767 passed, 10 skipped, 2 pre-existing failures (config default mismatch from prior sprint)
 
 **Plan Files**:
 - `.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-plan.md` (research file)

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import anyio
 
 from async_crud_mcp.core.background_tasks import BackgroundTaskRegistry
+from async_crud_mcp.core.content_scanner import ContentScanner
 from async_crud_mcp.models.requests import WaitRequest
 from async_crud_mcp.models.responses import ErrorCode, ErrorResponse, WaitResponse
 
@@ -16,12 +17,14 @@ from async_crud_mcp.models.responses import ErrorCode, ErrorResponse, WaitRespon
 async def async_wait(
     request: WaitRequest,
     background_registry: BackgroundTaskRegistry,
+    content_scanner: ContentScanner | None = None,
 ) -> WaitResponse | ErrorResponse:
     """Wait for a duration or background task completion.
 
     Args:
         request: Wait request with seconds and/or task_id.
         background_registry: Registry of background tasks.
+        content_scanner: Optional scanner to redact sensitive data from task output.
 
     Returns:
         WaitResponse or ErrorResponse.
@@ -30,7 +33,8 @@ async def async_wait(
 
     if request.task_id is not None:
         return await _wait_for_task(
-            request.task_id, request.seconds, background_registry, timestamp
+            request.task_id, request.seconds, background_registry, timestamp,
+            content_scanner=content_scanner,
         )
 
     # Simple sleep
@@ -50,6 +54,7 @@ async def _wait_for_task(
     timeout: float,
     registry: BackgroundTaskRegistry,
     timestamp: str,
+    content_scanner: ContentScanner | None = None,
 ) -> WaitResponse | ErrorResponse:
     """Wait for a specific background task to complete."""
     task = registry.get(task_id)
@@ -61,6 +66,11 @@ async def _wait_for_task(
         )
 
     if task.is_complete:
+        stdout_text = task.stdout
+        stderr_text = task.stderr
+        if content_scanner is not None:
+            stdout_text = content_scanner.redact(stdout_text, path="<exec:stdout>").content
+            stderr_text = content_scanner.redact(stderr_text, path="<exec:stderr>").content
         return WaitResponse(
             waited_seconds=0.0,
             reason="Task already completed",
@@ -68,8 +78,8 @@ async def _wait_for_task(
                 "task_id": task.task_id,
                 "command": task.command,
                 "exit_code": task.exit_code,
-                "stdout": task.stdout,
-                "stderr": task.stderr,
+                "stdout": stdout_text,
+                "stderr": stderr_text,
                 "duration_ms": task.duration_ms,
             },
             timestamp=timestamp,
@@ -89,6 +99,12 @@ async def _wait_for_task(
             timestamp=timestamp,
         )
 
+    stdout_text = result_task.stdout
+    stderr_text = result_task.stderr
+    if content_scanner is not None:
+        stdout_text = content_scanner.redact(stdout_text, path="<exec:stdout>").content
+        stderr_text = content_scanner.redact(stderr_text, path="<exec:stderr>").content
+
     return WaitResponse(
         waited_seconds=round(waited, 3),
         reason="Task completed",
@@ -96,8 +112,8 @@ async def _wait_for_task(
             "task_id": result_task.task_id,
             "command": result_task.command,
             "exit_code": result_task.exit_code,
-            "stdout": result_task.stdout,
-            "stderr": result_task.stderr,
+            "stdout": stdout_text,
+            "stderr": stderr_text,
             "duration_ms": result_task.duration_ms,
         },
         timestamp=timestamp,

@@ -843,6 +843,7 @@ async def async_exec_tool(
         shell_validator=shell_validator,
         background_registry=background_registry,
         project_root=_active_project_root,
+        content_scanner=content_scanner,
     )
     return response.model_dump()
 
@@ -867,7 +868,7 @@ async def async_wait_tool(
         WaitResponse with waited duration and optional task result, or ErrorResponse
     """
     request = WaitRequest(seconds=seconds, task_id=task_id)
-    response = await async_wait(request, background_registry)
+    response = await async_wait(request, background_registry, content_scanner=content_scanner)
     return response.model_dump()
 
 

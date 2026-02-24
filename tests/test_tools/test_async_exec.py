@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from async_crud_mcp.config import ShellConfig, ShellDenyPattern, _default_deny_patterns
+from async_crud_mcp.config import ContentRule, ShellConfig, ShellDenyPattern, _default_deny_patterns
 from async_crud_mcp.core.background_tasks import BackgroundTaskRegistry
+from async_crud_mcp.core.content_scanner import ContentScanner
 from async_crud_mcp.core.shell_provider import ShellProvider
 from async_crud_mcp.core.shell_validator import ShellValidator
 from async_crud_mcp.models.requests import ExecRequest
@@ -173,3 +174,83 @@ class TestAsyncExecBackground:
         assert response.status == "background"
         assert response.task_id
         assert response.command == "echo background"
+
+
+@pytest.fixture
+def content_scanner():
+    """Scanner with AWS key detection rule."""
+    rules = [
+        ContentRule(
+            name="aws-access-key-id",
+            pattern=r"AKIA[0-9A-Z]{16}",
+            action="deny",
+            priority=100,
+        ),
+    ]
+    return ContentScanner(rules=rules, enabled=True)
+
+
+@pytest.mark.skipif(not _has_bash(), reason="No bash available")
+class TestAsyncExecRedaction:
+    """Test content scanner redaction of exec output."""
+
+    @pytest.mark.asyncio
+    async def test_stdout_redacted(
+        self, shell_config, shell_provider, shell_validator, background_registry, temp_dir, content_scanner
+    ):
+        """Sensitive data in stdout should be redacted."""
+        fake_key = "AKIAIOSFODNN7EXAMPLE"
+        request = ExecRequest(command=f"echo {fake_key}")
+        response = await async_exec(
+            request, shell_config, shell_provider, shell_validator, background_registry,
+            project_root=temp_dir,
+            content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert fake_key not in response.stdout
+        assert "<<REDACTED:aws-access-key-id:1>>" in response.stdout
+
+    @pytest.mark.asyncio
+    async def test_clean_stdout_unchanged(
+        self, shell_config, shell_provider, shell_validator, background_registry, temp_dir, content_scanner
+    ):
+        """Non-sensitive output should pass through unchanged."""
+        request = ExecRequest(command="echo hello world")
+        response = await async_exec(
+            request, shell_config, shell_provider, shell_validator, background_registry,
+            project_root=temp_dir,
+            content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert "hello world" in response.stdout
+        assert "REDACTED" not in response.stdout
+
+    @pytest.mark.asyncio
+    async def test_no_scanner_passes_through(
+        self, shell_config, shell_provider, shell_validator, background_registry, temp_dir
+    ):
+        """Without content_scanner, sensitive data passes through."""
+        fake_key = "AKIAIOSFODNN7EXAMPLE"
+        request = ExecRequest(command=f"echo {fake_key}")
+        response = await async_exec(
+            request, shell_config, shell_provider, shell_validator, background_registry,
+            project_root=temp_dir,
+        )
+        assert response.status == "ok"
+        assert fake_key in response.stdout
+
+    @pytest.mark.asyncio
+    async def test_stderr_redacted(
+        self, shell_config, shell_provider, shell_validator, background_registry, temp_dir, content_scanner
+    ):
+        """Sensitive data in stderr should be redacted."""
+        fake_key = "AKIAIOSFODNN7EXAMPLE"
+        request = ExecRequest(command=f"echo {fake_key} >&2")
+        response = await async_exec(
+            request, shell_config, shell_provider, shell_validator, background_registry,
+            project_root=temp_dir,
+            content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert fake_key not in response.stderr
+        assert "<<REDACTED:aws-access-key-id:1>>" in response.stderr

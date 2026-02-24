@@ -17,6 +17,7 @@ from pathlib import Path
 
 from async_crud_mcp.core import process_guard
 from async_crud_mcp.core.background_tasks import BackgroundTaskRegistry
+from async_crud_mcp.core.content_scanner import ContentScanner
 from async_crud_mcp.core.shell_provider import ShellProvider
 from async_crud_mcp.core.shell_validator import ShellValidator
 from async_crud_mcp.config import ShellConfig
@@ -37,6 +38,7 @@ async def async_exec(
     shell_validator: ShellValidator,
     background_registry: BackgroundTaskRegistry,
     project_root: Path | None = None,
+    content_scanner: ContentScanner | None = None,
 ) -> ExecSuccessResponse | ExecDeniedResponse | ExecBackgroundResponse | ErrorResponse:
     """Execute a shell command with policy enforcement.
 
@@ -47,6 +49,7 @@ async def async_exec(
         shell_validator: Command deny-pattern validator.
         background_registry: Registry for background tasks.
         project_root: Active project root for cwd fallback.
+        content_scanner: Optional scanner to redact sensitive data from output.
 
     Returns:
         Appropriate response model based on execution result.
@@ -140,6 +143,7 @@ async def async_exec(
         result = await _exec_foreground(
             request.command, exec_args, cwd, env, timeout, timestamp,
             process_limit=shell_config.process_limit,
+            content_scanner=content_scanner,
         )
         if timeout_clamped and isinstance(result, ExecSuccessResponse):
             # Re-create with timeout_applied since model is frozen
@@ -163,6 +167,7 @@ async def _exec_foreground(
     timeout: float,
     timestamp: str,
     process_limit: int = 50,
+    content_scanner: ContentScanner | None = None,
 ) -> ExecSuccessResponse | ErrorResponse:
     """Run command in foreground with timeout and process containment.
 
@@ -249,10 +254,20 @@ async def _exec_foreground(
             details={"command": command, "timeout": timeout, "duration_ms": duration_ms},
         )
 
+    stdout_text = stdout_buf.decode("utf-8", errors="replace")
+    stderr_text = stderr_buf.decode("utf-8", errors="replace")
+
+    # Redact sensitive data from output before returning to agent
+    if content_scanner is not None:
+        stdout_redacted = content_scanner.redact(stdout_text, path="<exec:stdout>")
+        stderr_redacted = content_scanner.redact(stderr_text, path="<exec:stderr>")
+        stdout_text = stdout_redacted.content
+        stderr_text = stderr_redacted.content
+
     return ExecSuccessResponse(
         command=command,
-        stdout=stdout_buf.decode("utf-8", errors="replace"),
-        stderr=stderr_buf.decode("utf-8", errors="replace"),
+        stdout=stdout_text,
+        stderr=stderr_text,
         exit_code=exit_code,
         duration_ms=duration_ms,
         timestamp=timestamp,
