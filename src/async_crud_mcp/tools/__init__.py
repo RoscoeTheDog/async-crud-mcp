@@ -7,6 +7,7 @@ from .async_batch_write import async_batch_write
 from .async_delete import async_delete
 from .async_exec import async_exec
 from .async_list import async_list
+from .async_mkdir import async_mkdir
 from .async_read import async_read
 from .async_rename import async_rename
 from .async_restore import async_restore
@@ -24,6 +25,7 @@ __all__ = [
     "async_delete",
     "async_exec",
     "async_list",
+    "async_mkdir",
     "async_read",
     "async_rename",
     "async_restore",

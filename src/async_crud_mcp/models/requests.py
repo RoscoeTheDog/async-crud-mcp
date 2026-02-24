@@ -103,6 +103,14 @@ class AsyncAppendRequest(BaseModel):
     timeout: float = Field(default=30.0, description="Operation timeout in seconds")
 
 
+class AsyncMkdirRequest(BaseModel):
+    """Request model for async_mkdir tool."""
+
+    path: str = Field(..., description="Directory path to create")
+    parents: bool = Field(default=True, description="Create parent directories if missing")
+    force: bool = Field(default=False, description="Allow creating inside non-empty existing directory")
+
+
 class AsyncListRequest(BaseModel):
     """Request model for async_list tool."""
 

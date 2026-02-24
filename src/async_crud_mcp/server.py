@@ -66,6 +66,7 @@ from async_crud_mcp.models import (
     AsyncBatchWriteRequest,
     AsyncDeleteRequest,
     AsyncListRequest,
+    AsyncMkdirRequest,
     AsyncReadRequest,
     AsyncRenameRequest,
     AsyncRestoreRequest,
@@ -381,7 +382,7 @@ def _check_port_available(host: str, port: int) -> None:
 
 
 # =============================================================================
-# MCP Tool Wrappers (11 CRUD tools + 1 health tool)
+# MCP Tool Wrappers (12 CRUD tools + 1 health tool)
 # =============================================================================
 
 
@@ -644,6 +645,27 @@ async def async_append_tool(
         separator=separator,
     )
     response = await async_append(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
+    return response.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def async_mkdir_tool(
+    path: str,
+    parents: bool = True,
+    force: bool = False,
+):
+    """Create a directory. Fails if the target exists and is non-empty unless force=True.
+
+    Args:
+        path: Directory path to create
+        parents: Create parent directories if missing (default: True)
+        force: Allow creating inside non-empty existing directory (default: False)
+
+    Returns:
+        MkdirSuccessResponse with path and created flag, or ErrorResponse on failure
+    """
+    request = AsyncMkdirRequest(path=path, parents=parents, force=force)
+    response = await async_mkdir(request, path_validator)
     return response.model_dump(exclude_none=True)
 
 

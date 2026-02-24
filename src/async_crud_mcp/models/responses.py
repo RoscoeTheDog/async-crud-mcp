@@ -175,6 +175,16 @@ class ListSuccessResponse(BaseModel):
     entries: list[DirectoryEntry] = Field(..., description="Directory entries")
 
 
+class MkdirSuccessResponse(BaseModel):
+    """Success response for async_mkdir tool."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    path: str = Field(..., description="Directory path that was created")
+    created: bool = Field(..., description="True if directory was newly created, False if it already existed")
+
+
 # Error Response Model
 
 
