@@ -122,6 +122,15 @@ async def async_rename(
 
                 # Check for hash mismatch
                 if current_hash != request.expected_hash:
+                    # Determine modification source
+                    registry_hash = hash_registry.get(str(validated_old))
+                    if registry_hash is None:
+                        modified_by = "unknown"
+                    elif registry_hash == current_hash:
+                        modified_by = "agent"
+                    else:
+                        modified_by = "external"
+
                     # Decode current content for diff
                     try:
                         current_content = current_bytes.decode('utf-8')
@@ -138,9 +147,10 @@ async def async_rename(
                     return ContentionResponse(
                         current_hash=current_hash,
                         expected_hash=request.expected_hash,
+                        modified_by=modified_by,
                         diff=diff,
                         path=str(validated_old),
-                        message=f"File has been modified (expected hash: {request.expected_hash}, current hash: {current_hash})",
+                        message=f"File has been modified ({modified_by}) (expected hash: {request.expected_hash}, current hash: {current_hash})",
                         timestamp=datetime.now(timezone.utc).isoformat(),
                     )
 

@@ -1,6 +1,7 @@
 """Async update tool for MCP file operations with contention detection."""
 
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional, Union
 
@@ -23,6 +24,8 @@ from async_crud_mcp.models import (
     ErrorResponse,
     PatchConflict,
     RedactionEntry,
+    RegexAppliedMatch,
+    RegexBlockedMatch,
     UpdateSuccessResponse,
 )
 
@@ -53,11 +56,11 @@ async def async_update(
         or ErrorResponse on failure
     """
     try:
-        # Defense in depth: Verify content or patches is provided
-        if request.content is None and request.patches is None:
+        # Defense in depth: Verify exactly one mode is provided
+        if request.content is None and request.patches is None and request.regex_patches is None:
             return ErrorResponse(
                 error_code=ErrorCode.CONTENT_OR_PATCHES_REQUIRED,
-                message="Exactly one of content or patches must be provided",
+                message="Exactly one of content, patches, or regex_patches must be provided",
                 path=request.path,
             )
 
@@ -84,6 +87,20 @@ async def async_update(
                 message=f"File does not exist: {request.path}",
                 path=request.path,
             )
+
+        # 2b. Pre-compile regex patterns before acquiring lock (fail fast)
+        compiled_regex_patches: list[tuple[re.Pattern, str, int]] = []
+        if request.regex_patches is not None:
+            for idx, rp in enumerate(request.regex_patches):
+                try:
+                    compiled = re.compile(rp.pattern)
+                except re.error as e:
+                    return ErrorResponse(
+                        error_code=ErrorCode.INVALID_PATTERN,
+                        message=f"regex_patches[{idx}]: invalid regex pattern: {e}",
+                        path=request.path,
+                    )
+                compiled_regex_patches.append((compiled, rp.replacement, rp.count))
 
         # 3. Acquire exclusive write lock
         try:
@@ -113,6 +130,17 @@ async def async_update(
 
             # 5. Check hash match
             if current_hash != request.expected_hash:
+                # Determine modification source
+                registry_hash = hash_registry.get(str(validated_path))
+                if registry_hash is None:
+                    modified_by = "unknown"
+                elif registry_hash == current_hash:
+                    # Registry matches disk: another MCP operation wrote this
+                    modified_by = "agent"
+                else:
+                    # Registry doesn't match disk: external edit
+                    modified_by = "external"
+
                 # Hash mismatch - prepare contention response
                 try:
                     current_content = current_bytes.decode(request.encoding)
@@ -220,12 +248,13 @@ async def async_update(
                     path=str(validated_path),
                     expected_hash=request.expected_hash,
                     current_hash=current_hash,
+                    modified_by=modified_by,
                     message=(
-                        f"File has been modified since hash "
+                        f"File has been modified ({modified_by}) since hash "
                         f"{request.expected_hash[:16]}... "
                         f"and contains sensitive content"
                     ) if is_redacted else (
-                        f"File has been modified since hash "
+                        f"File has been modified ({modified_by}) since hash "
                         f"{request.expected_hash[:16]}..."
                     ),
                     diff=diff,
@@ -248,6 +277,8 @@ async def async_update(
 
             # 6. Hash matches - proceed with update
             previous_hash = current_hash
+            regex_applied: list[RegexAppliedMatch] | None = None
+            regex_blocked: list[RegexBlockedMatch] | None = None
 
             if request.content is not None:
                 # Content mode: full replacement
@@ -258,6 +289,82 @@ async def async_update(
                     return ErrorResponse(
                         error_code=ErrorCode.ENCODING_ERROR,
                         message=f"Failed to encode content with encoding '{request.encoding}': {e}",
+                        path=request.path,
+                    )
+            elif request.regex_patches is not None:
+                # Regex patch mode: apply regex substitutions with content scanner guard
+                try:
+                    current_content = current_bytes.decode(request.encoding)
+                except UnicodeDecodeError as e:
+                    return ErrorResponse(
+                        error_code=ErrorCode.ENCODING_ERROR,
+                        message=f"Failed to decode file with encoding '{request.encoding}': {e}",
+                        path=request.path,
+                    )
+
+                new_content = current_content
+                regex_applied = []
+                regex_blocked = []
+
+                for compiled, replacement, count in compiled_regex_patches:
+                    # Find all matches first for per-match scanning
+                    matches = list(compiled.finditer(new_content))
+                    if not matches:
+                        continue
+
+                    # Limit matches if count > 0
+                    if count > 0:
+                        matches = matches[:count]
+
+                    # Process matches in reverse order to preserve offsets
+                    for m in reversed(matches):
+                        matched_text = m.group(0)
+                        start = m.start()
+                        end = m.end()
+                        line = new_content[:start].count("\n") + 1
+
+                        # Per-match content scan guard
+                        if content_scanner is not None:
+                            scan_result = content_scanner.scan(
+                                matched_text, str(validated_path)
+                            )
+                            if scan_result.blocked:
+                                regex_blocked.append(RegexBlockedMatch(
+                                    start=start,
+                                    end=end,
+                                    line=line,
+                                    error=(
+                                        f"blocked: content at L{line}:C{start}-C{end} "
+                                        f"flagged as {scan_result.matched_pattern}"
+                                    ),
+                                ))
+                                continue
+
+                        # Apply replacement
+                        replaced = m.expand(replacement)
+                        new_content = new_content[:start] + replaced + new_content[end:]
+                        regex_applied.append(RegexAppliedMatch(
+                            start=start,
+                            end=end,
+                            line=line,
+                            matched=matched_text,
+                            replaced_with=replaced,
+                        ))
+
+                # Reverse applied list so it's in forward document order
+                regex_applied.reverse()
+                regex_blocked.reverse()
+
+                if not regex_applied and not regex_blocked:
+                    regex_applied = None
+                    regex_blocked = None
+
+                try:
+                    encoded_bytes = new_content.encode(request.encoding)
+                except (UnicodeEncodeError, LookupError) as e:
+                    return ErrorResponse(
+                        error_code=ErrorCode.ENCODING_ERROR,
+                        message=f"Failed to encode regex-patched content with encoding '{request.encoding}': {e}",
                         path=request.path,
                     )
             else:
@@ -328,6 +435,8 @@ async def async_update(
                 hash=new_hash,
                 bytes_written=bytes_written,
                 timestamp=datetime.now(timezone.utc).isoformat(),
+                regex_applied=regex_applied,
+                regex_blocked=regex_blocked,
             )
 
         finally:

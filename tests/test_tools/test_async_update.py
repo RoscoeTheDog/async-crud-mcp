@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, compute_hash
-from async_crud_mcp.models import AsyncUpdateRequest, ErrorCode, Patch
+from async_crud_mcp.core.content_scanner import ContentScanner
+from async_crud_mcp.models import AsyncUpdateRequest, ErrorCode, Patch, RegexPatch
 from async_crud_mcp.tools import async_update
 
 
@@ -512,7 +513,7 @@ class TestAsyncUpdateErrors:
         original_hash = create_file_with_hash(file_path, "content")
 
         # Pydantic will catch this during model construction
-        with pytest.raises(ValueError, match="Exactly one of content or patches must be provided"):
+        with pytest.raises(ValueError, match="Exactly one of content, patches, or regex_patches must be provided"):
             AsyncUpdateRequest(
                 path=str(file_path),
                 expected_hash=original_hash,
@@ -558,3 +559,288 @@ class TestAsyncUpdateConcurrency:
         assert "ok" in statuses
         # The second one will either timeout or see a hash mismatch (contention)
         assert "error" in statuses or "contention" in statuses
+
+
+class TestAsyncUpdateModifiedBy:
+    """Test modified_by field in ContentionResponse."""
+
+    @pytest.mark.asyncio
+    async def test_modified_by_unknown_when_no_registry_entry(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """modified_by is 'unknown' when hash registry has no entry for the file."""
+        file_path = temp_base_dir / "test.txt"
+        original_hash = create_file_with_hash(file_path, "original")
+
+        # Externally modify - registry has no entry since we never wrote via MCP
+        file_path.write_bytes(b"modified externally")
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            content="agent update",
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "contention"
+        assert result.modified_by == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_modified_by_agent_when_registry_matches(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """modified_by is 'agent' when registry hash matches current file hash."""
+        file_path = temp_base_dir / "test.txt"
+        original_hash = create_file_with_hash(file_path, "original")
+
+        # Simulate another agent's write: update file AND registry
+        new_content = b"written by another agent"
+        file_path.write_bytes(new_content)
+        new_hash = compute_hash(new_content)
+        hash_registry.update(str(file_path), new_hash)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            content="my update",
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "contention"
+        assert result.modified_by == "agent"
+        assert "agent" in result.message
+
+    @pytest.mark.asyncio
+    async def test_modified_by_external_when_registry_stale(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """modified_by is 'external' when registry hash differs from current file hash."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = b"original"
+        original_hash = create_file_with_hash(file_path, "original")
+
+        # Register the original hash in registry (simulating a prior MCP write)
+        hash_registry.update(str(file_path), original_hash)
+
+        # Then externally modify the file (user edit, git checkout, etc.)
+        file_path.write_bytes(b"user edited this file")
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            content="agent update",
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "contention"
+        assert result.modified_by == "external"
+        assert "external" in result.message
+
+
+class TestAsyncUpdateRegexPatchSuccess:
+    """Test regex patch mode."""
+
+    @pytest.mark.asyncio
+    async def test_single_regex_patch_applied(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test basic regex replacement."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "def foo_bar():\n    pass\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"foo_bar", replacement="baz_qux")],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "ok"
+        assert file_path.read_text(encoding="utf-8") == "def baz_qux():\n    pass\n"
+        assert result.regex_applied is not None
+        assert len(result.regex_applied) == 1
+        assert result.regex_applied[0].matched == "foo_bar"
+        assert result.regex_applied[0].replaced_with == "baz_qux"
+
+    @pytest.mark.asyncio
+    async def test_regex_patch_with_backreference(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test regex with capture group backreferences."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "def old_name(x):\n    return x\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"def (\w+)\(", replacement=r"def new_\1(")],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "ok"
+        assert "def new_old_name(" in file_path.read_text(encoding="utf-8")
+
+    @pytest.mark.asyncio
+    async def test_regex_patch_count_limits_replacements(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test that count parameter limits number of replacements."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "aaa bbb aaa bbb aaa\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"aaa", replacement="ccc", count=2)],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "ok"
+        content = file_path.read_text(encoding="utf-8")
+        assert content.count("ccc") == 2
+        assert content.count("aaa") == 1  # Third occurrence preserved
+
+    @pytest.mark.asyncio
+    async def test_regex_patch_no_match_returns_success_no_changes(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test regex with no matches still succeeds (no-op)."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "hello world\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"nonexistent", replacement="replaced")],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "ok"
+        assert file_path.read_text(encoding="utf-8") == original_content
+        # No matches means no regex metadata
+        assert result.regex_applied is None
+        assert result.regex_blocked is None
+
+    @pytest.mark.asyncio
+    async def test_multiple_regex_patches(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test applying multiple regex patches sequentially."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "color=red\nflavour=sweet\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[
+                RegexPatch(pattern=r"color", replacement="colour"),
+                RegexPatch(pattern=r"red", replacement="blue"),
+            ],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "ok"
+        content = file_path.read_text(encoding="utf-8")
+        assert "colour=blue" in content
+
+
+class TestAsyncUpdateRegexPatchErrors:
+    """Test regex patch error handling."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_regex_pattern_rejected_before_lock(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Test that invalid regex patterns fail before acquiring lock."""
+        file_path = temp_base_dir / "test.txt"
+        original_hash = create_file_with_hash(file_path, "content")
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"[invalid", replacement="x")],
+        )
+        result = await async_update(request, path_validator, lock_manager, hash_registry)
+
+        assert result.status == "error"
+        assert result.error_code == ErrorCode.INVALID_PATTERN
+        assert "invalid regex pattern" in result.message
+
+    def test_regex_patches_mutually_exclusive_with_content(self):
+        """Test that regex_patches cannot be used with content."""
+        with pytest.raises(ValueError, match="Exactly one of content, patches, or regex_patches"):
+            AsyncUpdateRequest(
+                path="test.txt",
+                expected_hash="sha256:abc",
+                content="new content",
+                regex_patches=[RegexPatch(pattern="a", replacement="b")],
+            )
+
+    def test_regex_patches_mutually_exclusive_with_patches(self):
+        """Test that regex_patches cannot be used with patches."""
+        with pytest.raises(ValueError, match="Exactly one of content, patches, or regex_patches"):
+            AsyncUpdateRequest(
+                path="test.txt",
+                expected_hash="sha256:abc",
+                patches=[Patch(old_string="a", new_string="b")],
+                regex_patches=[RegexPatch(pattern="a", replacement="b")],
+            )
+
+
+class TestAsyncUpdateRegexPatchContentScanner:
+    """Test regex patch content scanner guard."""
+
+    @pytest.fixture
+    def content_scanner_with_deny(self):
+        """Create a content scanner that blocks AWS key patterns."""
+        from async_crud_mcp.config import ContentRule
+        rules = [
+            ContentRule(
+                name="aws-access-key",
+                pattern=r"AKIA[0-9A-Z]{16}",
+                action="deny",
+                priority=100,
+            ),
+        ]
+        return ContentScanner(rules=rules, enabled=True)
+
+    @pytest.mark.asyncio
+    async def test_scanner_blocks_flagged_match(
+        self, temp_base_dir, path_validator, lock_manager, hash_registry, content_scanner_with_deny
+    ):
+        """Test that regex matches containing sensitive content are blocked."""
+        file_path = temp_base_dir / "config.txt"
+        # Content with an AWS-like key that the scanner should flag
+        original_content = "key=AKIAIOSFODNN7EXAMPLE\nname=test\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"key=\S+", replacement="key=REDACTED")],
+        )
+        result = await async_update(
+            request, path_validator, lock_manager, hash_registry,
+            content_scanner=content_scanner_with_deny,
+        )
+
+        assert result.status == "ok"
+        content = file_path.read_text(encoding="utf-8")
+        # The match should have been blocked, so original content preserved at that position
+        assert "AKIAIOSFODNN7EXAMPLE" in content
+        assert result.regex_blocked is not None
+        assert len(result.regex_blocked) == 1
+        assert "aws-access-key" in result.regex_blocked[0].error
+
+    @pytest.mark.asyncio
+    async def test_scanner_allows_clean_match(
+        self, temp_base_dir, path_validator, lock_manager, hash_registry, content_scanner_with_deny
+    ):
+        """Test that non-sensitive regex matches are applied normally."""
+        file_path = temp_base_dir / "test.txt"
+        original_content = "name=alice\nage=30\n"
+        original_hash = create_file_with_hash(file_path, original_content)
+
+        request = AsyncUpdateRequest(
+            path=str(file_path),
+            expected_hash=original_hash,
+            regex_patches=[RegexPatch(pattern=r"name=(\w+)", replacement=r"name=bob")],
+        )
+        result = await async_update(
+            request, path_validator, lock_manager, hash_registry,
+            content_scanner=content_scanner_with_deny,
+        )
+
+        assert result.status == "ok"
+        content = file_path.read_text(encoding="utf-8")
+        assert "name=bob" in content
+        assert result.regex_applied is not None
+        assert len(result.regex_applied) == 1
+        assert result.regex_blocked is None or len(result.regex_blocked) == 0

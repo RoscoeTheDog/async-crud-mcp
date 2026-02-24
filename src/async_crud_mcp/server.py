@@ -76,6 +76,7 @@ from async_crud_mcp.models import (
     BatchWriteItem,
     ExecRequest,
     Patch,
+    RegexPatch,
     SearchRequest,
     WaitRequest,
 )
@@ -431,6 +432,7 @@ async def async_update_tool(
     expected_hash: str,
     content: str | None = None,
     patches: list[dict] | None = None,
+    regex_patches: list[dict] | None = None,
     encoding: str = "utf-8",
     timeout: float = 30.0,
     diff_format: str = "json",  # Will be validated by Pydantic
@@ -440,9 +442,13 @@ async def async_update_tool(
     Args:
         path: File path to update
         expected_hash: Expected file hash for conflict detection
-        content: New file content (mutually exclusive with patches)
-        patches: List of patch objects, each with 'old_string' and 'new_string' (mutually exclusive with content).
+        content: New file content (mutually exclusive with patches/regex_patches)
+        patches: List of patch objects, each with 'old_string' and 'new_string' (mutually exclusive with content/regex_patches).
             Example: [{"old_string": "foo", "new_string": "bar"}]
+        regex_patches: List of regex patch objects, each with 'pattern' and 'replacement' (mutually exclusive with content/patches).
+            Optional 'count' limits replacements (0 = all). Supports backreferences (\\1, \\2).
+            Matches are scanned for sensitive content before applying.
+            Example: [{"pattern": "def (\\w+)\\(", "replacement": "def new_\\1("}]
         encoding: File encoding (default: utf-8)
         timeout: Operation timeout in seconds (default: 30.0)
         diff_format: Diff format for contention responses (default: json)
@@ -453,11 +459,18 @@ async def async_update_tool(
     # Guard: MCP transport may serialize list params as JSON strings
     if patches is not None and isinstance(patches, str):
         patches = json.loads(patches)
+    if regex_patches is not None and isinstance(regex_patches, str):
+        regex_patches = json.loads(regex_patches)
 
     # Convert patches dict to Patch objects if provided
     patches_obj = None
     if patches is not None:
         patches_obj = [Patch(**p) for p in patches]
+
+    # Convert regex_patches dict to RegexPatch objects if provided
+    regex_patches_obj = None
+    if regex_patches is not None:
+        regex_patches_obj = [RegexPatch(**rp) for rp in regex_patches]
 
     # Validate diff_format
     if diff_format not in ("json", "unified"):
@@ -468,6 +481,7 @@ async def async_update_tool(
         expected_hash=expected_hash,
         content=content,
         patches=patches_obj,
+        regex_patches=regex_patches_obj,
         encoding=encoding,
         timeout=timeout,
         diff_format=diff_format,  # type: ignore[arg-type]  # Validated above

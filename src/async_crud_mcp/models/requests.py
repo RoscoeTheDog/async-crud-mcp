@@ -15,6 +15,14 @@ class Patch(BaseModel):
     new_string: str = Field(..., description="The replacement string")
 
 
+class RegexPatch(BaseModel):
+    """A regex-based patch operation for file content updates."""
+
+    pattern: str = Field(..., description="Regex pattern to match")
+    replacement: str = Field(..., description="Replacement string (supports backreferences like \\1)")
+    count: int = Field(default=0, description="Max replacements (0 = all occurrences)")
+
+
 class AsyncReadRequest(BaseModel):
     """Request model for async_read tool."""
 
@@ -39,22 +47,24 @@ class AsyncUpdateRequest(BaseModel):
 
     path: str = Field(..., description="File path to update")
     expected_hash: str = Field(..., description="Expected file hash for conflict detection")
-    content: str | None = Field(default=None, description="New file content (mutually exclusive with patches)")
-    patches: list[Patch] | None = Field(default=None, description="List of patches to apply (mutually exclusive with content)")
+    content: str | None = Field(default=None, description="New file content (mutually exclusive with patches/regex_patches)")
+    patches: list[Patch] | None = Field(default=None, description="List of exact-match patches (mutually exclusive with content/regex_patches)")
+    regex_patches: list[RegexPatch] | None = Field(default=None, description="List of regex patches (mutually exclusive with content/patches)")
     encoding: str = Field(default="utf-8", description="File encoding")
     timeout: float = Field(default=30.0, description="Operation timeout in seconds")
     diff_format: Literal["json", "unified"] = Field(default="json", description="Diff format for contention responses")
 
     @model_validator(mode="after")
     def validate_content_or_patches(self) -> "AsyncUpdateRequest":
-        """Validate that exactly one of content or patches is provided."""
-        has_content = self.content is not None
-        has_patches = self.patches is not None
+        """Validate that exactly one of content, patches, or regex_patches is provided."""
+        modes = sum([
+            self.content is not None,
+            self.patches is not None,
+            self.regex_patches is not None,
+        ])
 
-        if has_content and has_patches:
-            raise ValueError("Exactly one of content or patches must be provided")
-        if not has_content and not has_patches:
-            raise ValueError("Exactly one of content or patches must be provided")
+        if modes != 1:
+            raise ValueError("Exactly one of content, patches, or regex_patches must be provided")
 
         return self
 

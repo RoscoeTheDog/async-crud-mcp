@@ -6,9 +6,12 @@ locations (following symlinks) before validation.
 """
 
 import fnmatch
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class PathValidationError(Exception):
@@ -33,7 +36,7 @@ class PathValidator:
 
     Args:
         base_directories: List of allowed base directory paths. If empty,
-            all paths are allowed (no restriction).
+            defaults to the current working directory for safety.
 
     Example:
         validator = PathValidator(['/var/data', '/tmp/uploads'])
@@ -56,6 +59,7 @@ class PathValidator:
         Args:
             base_directories: List of directory paths to whitelist.
                 Each is resolved to absolute and symlinks are followed.
+                If empty or None, defaults to current working directory.
             access_rules: List of PathRule objects for per-operation access control.
                 Rules are evaluated in priority order (highest first, first-match-wins).
             default_destructive_policy: Fallback policy when no access rule matches
@@ -65,7 +69,15 @@ class PathValidator:
                 for read/list operations.
                 Either "allow" or "deny". Defaults to "allow" for backward compatibility.
         """
-        self._base_directories = base_directories or []
+        if not base_directories:
+            cwd = os.getcwd()
+            logger.warning(
+                "No base_directories configured; defaulting to current "
+                "working directory: %s",
+                cwd,
+            )
+            base_directories = [cwd]
+        self._base_directories = base_directories
         self._default_destructive_policy = default_destructive_policy
         self._default_read_policy = default_read_policy
 
@@ -150,7 +162,8 @@ class PathValidator:
                 f"Path contains parent directory references after normalization: {path}"
             )
 
-        # If no base directories configured, allow all paths
+        # If no base directories resolved (should not happen after __init__
+        # defaults to CWD, but kept as safety fallback), allow all paths
         if not self._resolved_bases:
             return Path(resolved)
 

@@ -66,6 +66,29 @@ class WriteSuccessResponse(BaseModel):
     timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
+class RegexAppliedMatch(BaseModel):
+    """A single regex match that was successfully applied."""
+
+    model_config = ConfigDict(frozen=True)
+
+    start: int = Field(..., description="Start offset in original content")
+    end: int = Field(..., description="End offset in original content")
+    line: int = Field(..., description="1-based line number")
+    matched: str = Field(..., description="Text that was matched")
+    replaced_with: str = Field(..., description="Replacement text")
+
+
+class RegexBlockedMatch(BaseModel):
+    """A single regex match that was blocked by content scanner."""
+
+    model_config = ConfigDict(frozen=True)
+
+    start: int = Field(..., description="Start offset in original content")
+    end: int = Field(..., description="End offset in original content")
+    line: int = Field(..., description="1-based line number")
+    error: str = Field(..., description="Reason the match was blocked")
+
+
 class UpdateSuccessResponse(BaseModel):
     """Success response for async_update tool."""
 
@@ -77,6 +100,8 @@ class UpdateSuccessResponse(BaseModel):
     hash: str = Field(..., description="Hash after update (format: sha256:...)")
     bytes_written: int = Field(..., description="Number of bytes written")
     timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
+    regex_applied: list[RegexAppliedMatch] | None = Field(default=None, description="Regex matches that were applied")
+    regex_blocked: list[RegexBlockedMatch] | None = Field(default=None, description="Regex matches blocked by content scanner")
 
 
 class DeleteSuccessResponse(BaseModel):
@@ -238,6 +263,15 @@ class ContentionResponse(BaseModel):
     path: str = Field(..., description="File path with contention")
     expected_hash: str = Field(..., description="Hash that was expected")
     current_hash: str = Field(..., description="Current file hash")
+    modified_by: str = Field(
+        default="unknown",
+        description=(
+            "Source of the modification that caused contention: "
+            "'agent' if another MCP operation wrote the current content, "
+            "'external' if modified outside MCP (user edit, git, etc.), "
+            "'unknown' if no tracking data available"
+        ),
+    )
     message: str = Field(..., description="Human-readable contention message")
     diff: Annotated[JsonDiff | UnifiedDiff, Field(discriminator="format")] | None = Field(
         default=None, description="Diff showing changes (None when redacted due to sensitive content)"

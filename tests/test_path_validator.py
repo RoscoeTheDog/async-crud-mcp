@@ -116,27 +116,52 @@ class TestMultipleBaseDirectories:
 class TestEmptyBaseDirectories:
     """Test behavior when no base directories are configured."""
 
-    def test_empty_base_directories_allows_all_paths(self, tmp_path):
-        """Empty base directories list allows all paths."""
-        file_path = tmp_path / "anywhere" / "file.txt"
-        file_path.parent.mkdir(parents=True)
+    def test_empty_base_directories_defaults_to_cwd(self, tmp_path, monkeypatch):
+        """Empty base directories defaults to current working directory."""
+        monkeypatch.chdir(tmp_path)
+        file_path = tmp_path / "file.txt"
         file_path.touch()
 
         validator = PathValidator([])
         result = validator.validate(str(file_path))
 
         assert result.is_absolute()
+        assert str(tmp_path) in validator.base_directories
 
-    def test_none_base_directories_allows_all_paths(self, tmp_path):
-        """None base directories allows all paths."""
-        file_path = tmp_path / "anywhere" / "file.txt"
-        file_path.parent.mkdir(parents=True)
+    def test_empty_base_directories_rejects_outside_cwd(self, tmp_path, monkeypatch):
+        """Empty base directories rejects paths outside CWD."""
+        cwd_dir = tmp_path / "cwd"
+        cwd_dir.mkdir()
+        monkeypatch.chdir(cwd_dir)
+
+        outside_file = tmp_path / "outside" / "file.txt"
+        outside_file.parent.mkdir(parents=True)
+        outside_file.touch()
+
+        validator = PathValidator([])
+        with pytest.raises(PathValidationError):
+            validator.validate(str(outside_file))
+
+    def test_none_base_directories_defaults_to_cwd(self, tmp_path, monkeypatch):
+        """None base directories defaults to current working directory."""
+        monkeypatch.chdir(tmp_path)
+        file_path = tmp_path / "file.txt"
         file_path.touch()
 
         validator = PathValidator(None)
         result = validator.validate(str(file_path))
 
         assert result.is_absolute()
+        assert str(tmp_path) in validator.base_directories
+
+    def test_empty_base_directories_emits_warning(self, tmp_path, monkeypatch, caplog):
+        """Empty base directories logs a warning about defaulting to CWD."""
+        monkeypatch.chdir(tmp_path)
+        import logging
+        with caplog.at_level(logging.WARNING, logger="async_crud_mcp.core.path_validator"):
+            PathValidator([])
+        assert "No base_directories configured" in caplog.text
+        assert str(tmp_path) in caplog.text
 
 
 class TestRelativePathResolution:

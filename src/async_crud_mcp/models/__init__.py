@@ -18,6 +18,7 @@ from .requests import (
     BatchWriteItem,
     ExecRequest,
     Patch,
+    RegexPatch,
     SearchRequest,
     WaitRequest,
 )
@@ -50,6 +51,8 @@ from .responses import (
     PatchConflict,
     PendingRequest,
     ReadSuccessResponse,
+    RegexAppliedMatch,
+    RegexBlockedMatch,
     RenameSuccessResponse,
     SearchMatch,
     SearchResponse,
@@ -79,6 +82,7 @@ __all__ = [
     "BatchWriteItem",
     "ExecRequest",
     "Patch",
+    "RegexPatch",
     "SearchRequest",
     "WaitRequest",
     # Response models
@@ -110,6 +114,8 @@ __all__ = [
     "PatchConflict",
     "PendingRequest",
     "ReadSuccessResponse",
+    "RegexAppliedMatch",
+    "RegexBlockedMatch",
     "RenameSuccessResponse",
     "SearchMatch",
     "SearchResponse",
