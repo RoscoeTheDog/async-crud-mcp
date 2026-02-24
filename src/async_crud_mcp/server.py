@@ -310,7 +310,16 @@ audit_logger = AuditLogger(
 )
 
 # Recycle bin (safe-delete) dependency
-_recycle_hmac_key = os.urandom(32)
+# Persist HMAC key so recycle manifests survive server restarts.
+_hmac_key_path = get_shared_dir() / "recycle_hmac.key"
+try:
+    _recycle_hmac_key = _hmac_key_path.read_bytes()
+    if len(_recycle_hmac_key) != 32:
+        raise ValueError("Invalid key length")
+except (FileNotFoundError, ValueError):
+    _recycle_hmac_key = os.urandom(32)
+    _hmac_key_path.parent.mkdir(parents=True, exist_ok=True)
+    _hmac_key_path.write_bytes(_recycle_hmac_key)
 recycle_bin = RecycleBin(
     project_recycle_dir=None,  # Set on project activation
     global_recycle_dir=get_recycle_dir(),
