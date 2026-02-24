@@ -305,6 +305,36 @@ class BackgroundTaskRegistry:
 
         return task
 
+    async def wait_for_any(self, task_ids: list[str], timeout: float) -> list[BackgroundTask]:
+        """Wait for any of the given tasks to complete.
+
+        Returns immediately with all already-completed tasks.
+        If none are complete, blocks until the first one completes or timeout.
+        Returns empty list if timeout expires with none completed.
+        """
+        tasks = [t for tid in task_ids if (t := self._tasks.get(tid)) is not None]
+        if not tasks:
+            return []
+
+        completed = [t for t in tasks if t.is_complete]
+        if completed:
+            return completed
+
+        # Race: wait for first completion event among running tasks
+        futs = [asyncio.ensure_future(t._completion_event.wait()) for t in tasks]
+        try:
+            done, pending = await asyncio.wait(
+                futs, timeout=timeout, return_when=asyncio.FIRST_COMPLETED,
+            )
+            for fut in pending:
+                fut.cancel()
+        except asyncio.TimeoutError:
+            for fut in futs:
+                fut.cancel()
+            return []
+
+        return [t for t in tasks if t.is_complete]
+
     async def spawn_background(
         self,
         task: BackgroundTask,

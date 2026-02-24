@@ -53,7 +53,7 @@ def test_default_values():
     assert settings.crud.max_timeout == 300.0
     assert settings.crud.default_encoding == "utf-8"
     assert settings.crud.diff_context_lines == 3
-    assert settings.crud.max_file_size_bytes == 10_485_760
+    assert settings.crud.max_file_size_bytes == 268_435_456
 
     # Persistence defaults
     assert settings.persistence.enabled is False
@@ -587,7 +587,8 @@ class TestProjectConfigModel:
         assert pc.access_policy_file is None
         assert pc.default_destructive_policy == "allow"
         assert pc.default_read_policy == "allow"
-        assert pc.content_scan_rules == []
+        assert len(pc.content_scan_rules) == 11
+        assert pc.content_scan_rules[0].name == "aws-access-key-id"
         assert pc.content_scan_enabled is True
 
     def test_validates_from_dict(self):

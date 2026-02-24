@@ -198,7 +198,7 @@ class WaitRequest(BaseModel):
     """Request model for async_wait tool."""
 
     seconds: float = Field(default=0.0, ge=0, description="Seconds to sleep (when no task_id)")
-    task_id: str | None = Field(default=None, description="Background task ID to wait for")
+    task_id: str | list[str] | None = Field(default=None, description="Background task ID or list of IDs to wait for")
 
 
 class AsyncRestoreRequest(BaseModel):

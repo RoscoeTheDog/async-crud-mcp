@@ -468,6 +468,17 @@ class TaskResultPayload(BaseModel):
     duration_ms: int
 
 
+class TaskWaitResult(BaseModel):
+    """Result for one task in a wait response."""
+
+    model_config = ConfigDict(frozen=True)
+
+    task_id: str
+    task_result: TaskResultPayload
+    stdout_redactions: list[RedactionEntry] | None = None
+    stderr_redactions: list[RedactionEntry] | None = None
+
+
 class WaitResponse(BaseModel):
     """Response for async_wait tool."""
 
@@ -476,16 +487,8 @@ class WaitResponse(BaseModel):
     status: Literal["ok"] = "ok"
     waited_seconds: float
     reason: str
-    task_result: TaskResultPayload | None = None
-    task_status: Literal["running", "completed"] | None = None
-    stdout_redactions: list[RedactionEntry] | None = Field(
-        default=None,
-        description="Metadata for redacted spans in task stdout (when sensitive content was replaced with placeholders)"
-    )
-    stderr_redactions: list[RedactionEntry] | None = Field(
-        default=None,
-        description="Metadata for redacted spans in task stderr (when sensitive content was replaced with placeholders)"
-    )
+    task_status: Literal["running", "completed", "all_running"] | None = None
+    completed_tasks: list[TaskWaitResult] | None = None
 
 
 class SearchMatch(BaseModel):

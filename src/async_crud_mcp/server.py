@@ -849,21 +849,18 @@ async def async_exec_tool(
 @mcp.tool()
 async def async_wait_tool(
     seconds: float = 0.0,
-    task_id: str | None = None,
+    task_id: str | list[str] | None = None,
 ):
     """Wait for a duration or background task completion.
 
-    If task_id is provided, waits for that background task to finish
-    (up to 'seconds' timeout, default 30s). Otherwise, simply sleeps.
-    When seconds=0 and no task_id, returns immediately (no-op).
+    If task_id is provided (single ID or list), waits for task(s) to complete
+    (up to 'seconds' timeout, default 30s). Returns all already-completed tasks
+    immediately; if none are done, blocks until the first completes or timeout.
+    Without task_id, simply sleeps for 'seconds'.
 
     Args:
-        seconds: Seconds to sleep, or timeout when waiting for a task (default: 0).
-            Must be >= 0.
-        task_id: Background task ID to wait for (from async_exec_tool with background=True)
-
-    Returns:
-        WaitResponse with waited duration and optional task result, or ErrorResponse
+        seconds: Seconds to sleep, or timeout when waiting for task(s) (default: 0).
+        task_id: Background task ID or list of IDs from async_exec_tool(background=True).
     """
     request = WaitRequest(seconds=seconds, task_id=task_id)
     response = await async_wait(request, background_registry, content_scanner=content_scanner)
