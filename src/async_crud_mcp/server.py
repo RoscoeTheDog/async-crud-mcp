@@ -340,6 +340,13 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # Cancel the config watcher before tearing down other services
+        if _config_watcher_task is not None:
+            _config_watcher_task.cancel()
+            try:
+                await _config_watcher_task
+            except asyncio.CancelledError:
+                pass
         audit_logger.close()
         await background_registry.shutdown()
         logger.info("Background task registry shut down")
