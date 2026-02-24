@@ -75,10 +75,7 @@ class TestAsyncReadSuccess:
         assert response.status == "ok"
         assert response.content == "line 1\nline 2\nline 3\nline 4\nline 5\n"
         assert response.total_lines == 5
-        assert response.offset == 0
-        assert response.limit is None
         assert response.lines_returned == 5
-        assert response.encoding == "utf-8"
         assert response.hash.startswith("sha256:")
 
     @pytest.mark.asyncio
@@ -90,8 +87,6 @@ class TestAsyncReadSuccess:
         assert response.status == "ok"
         assert response.content == "line 3\nline 4\nline 5\n"
         assert response.total_lines == 5
-        assert response.offset == 2
-        assert response.limit is None
         assert response.lines_returned == 3
 
     @pytest.mark.asyncio
@@ -103,8 +98,6 @@ class TestAsyncReadSuccess:
         assert response.status == "ok"
         assert response.content == "line 1\nline 2\n"
         assert response.total_lines == 5
-        assert response.offset == 0
-        assert response.limit == 2
         assert response.lines_returned == 2
 
     @pytest.mark.asyncio
@@ -116,8 +109,6 @@ class TestAsyncReadSuccess:
         assert response.status == "ok"
         assert response.content == "line 2\nline 3\n"
         assert response.total_lines == 5
-        assert response.offset == 1
-        assert response.limit == 2
         assert response.lines_returned == 2
 
     @pytest.mark.asyncio
@@ -311,7 +302,6 @@ class TestAsyncReadRedaction:
         )
         assert response.status == "ok"
         assert response.lines_returned == 2
-        assert response.offset == 1
         # The sensitive line (line 3, 0-indexed 2) is at offset 2, so with
         # offset=1,limit=2 we get lines at index 1 and 2 (host=localhost and aws_key=...)
         assert "AKIAIOSFODNN7EXAMPLE" not in response.content

@@ -2,7 +2,6 @@
 
 import os
 import re
-from datetime import datetime, timezone
 from typing import Optional, Union
 
 from async_crud_mcp.core import (
@@ -258,21 +257,10 @@ async def async_update(
                         f"{request.expected_hash[:16]}..."
                     ),
                     diff=diff,
-                    redacted=is_redacted,
-                    redacted_pattern=(
-                        redacted_result.redactions[0].rule_name
-                        if is_redacted else None
-                    ),
-                    redacted_hint=(
-                        "Diff contains <<REDACTED:rule:N>> placeholders. "
-                        "Use the redactions array for span details. "
-                        "Re-read the file if you need the original values."
-                    ) if is_redacted else None,
                     redactions=redaction_entries,
                     patches_applicable=patches_applicable,
                     conflicts=conflicts,
                     non_conflicting_patches=non_conflicting_patches,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
                 )
 
             # 6. Hash matches - proceed with update
@@ -434,7 +422,6 @@ async def async_update(
                 previous_hash=previous_hash,
                 hash=new_hash,
                 bytes_written=bytes_written,
-                timestamp=datetime.now(timezone.utc).isoformat(),
                 regex_applied=regex_applied,
                 regex_blocked=regex_blocked,
             )

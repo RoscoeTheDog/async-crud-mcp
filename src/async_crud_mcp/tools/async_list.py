@@ -158,10 +158,6 @@ async def async_list(
         return ListSuccessResponse(
             path=str(validated_path),
             entries=entries,
-            total_entries=len(entries),
-            pattern=request.pattern,
-            recursive=request.recursive,
-            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     except Exception as e:

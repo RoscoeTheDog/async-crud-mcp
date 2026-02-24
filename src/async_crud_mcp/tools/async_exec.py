@@ -12,7 +12,6 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 from async_crud_mcp.core import process_guard
@@ -28,6 +27,7 @@ from async_crud_mcp.models.responses import (
     ExecBackgroundResponse,
     ExecDeniedResponse,
     ExecSuccessResponse,
+    RedactionEntry,
 )
 
 
@@ -54,8 +54,6 @@ async def async_exec(
     Returns:
         Appropriate response model based on execution result.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
-
     # 1. Check shell enabled
     if not shell_config.enabled:
         return ErrorResponse(
@@ -91,7 +89,6 @@ async def async_exec(
             command=request.command,
             matched_pattern=matched_pattern,
             reason=reason,
-            timestamp=timestamp,
         )
 
     # 4. Clamp timeout
@@ -137,11 +134,11 @@ async def async_exec(
     # 8. Execute
     if request.background:
         return await _exec_background(
-            request.command, exec_args, cwd, env, background_registry, timestamp
+            request.command, exec_args, cwd, env, background_registry
         )
     else:
         result = await _exec_foreground(
-            request.command, exec_args, cwd, env, timeout, timestamp,
+            request.command, exec_args, cwd, env, timeout,
             process_limit=shell_config.process_limit,
             content_scanner=content_scanner,
         )
@@ -153,8 +150,9 @@ async def async_exec(
                 stderr=result.stderr,
                 exit_code=result.exit_code,
                 duration_ms=result.duration_ms,
-                timestamp=result.timestamp,
                 timeout_applied=timeout,
+                stdout_redactions=result.stdout_redactions,
+                stderr_redactions=result.stderr_redactions,
             )
         return result
 
@@ -165,7 +163,6 @@ async def _exec_foreground(
     cwd: str | None,
     env: dict[str, str] | None,
     timeout: float,
-    timestamp: str,
     process_limit: int = 50,
     content_scanner: ContentScanner | None = None,
 ) -> ExecSuccessResponse | ErrorResponse:
@@ -258,11 +255,29 @@ async def _exec_foreground(
     stderr_text = stderr_buf.decode("utf-8", errors="replace")
 
     # Redact sensitive data from output before returning to agent
+    stdout_redaction_entries: list[RedactionEntry] | None = None
+    stderr_redaction_entries: list[RedactionEntry] | None = None
     if content_scanner is not None:
         stdout_redacted = content_scanner.redact(stdout_text, path="<exec:stdout>")
         stderr_redacted = content_scanner.redact(stderr_text, path="<exec:stderr>")
         stdout_text = stdout_redacted.content
         stderr_text = stderr_redacted.content
+        if stdout_redacted.has_redactions:
+            stdout_redaction_entries = [
+                RedactionEntry(
+                    id=r.id, rule_name=r.rule_name, line=r.line,
+                    col_start=r.col_start, original_length=r.original_length,
+                )
+                for r in stdout_redacted.redactions
+            ]
+        if stderr_redacted.has_redactions:
+            stderr_redaction_entries = [
+                RedactionEntry(
+                    id=r.id, rule_name=r.rule_name, line=r.line,
+                    col_start=r.col_start, original_length=r.original_length,
+                )
+                for r in stderr_redacted.redactions
+            ]
 
     return ExecSuccessResponse(
         command=command,
@@ -270,7 +285,8 @@ async def _exec_foreground(
         stderr=stderr_text,
         exit_code=exit_code,
         duration_ms=duration_ms,
-        timestamp=timestamp,
+        stdout_redactions=stdout_redaction_entries,
+        stderr_redactions=stderr_redaction_entries,
     )
 
 
@@ -311,7 +327,6 @@ async def _exec_background(
     cwd: str | None,
     env: dict[str, str] | None,
     registry: BackgroundTaskRegistry,
-    timestamp: str,
 ) -> ExecBackgroundResponse:
     """Launch command in background and return immediately.
 
@@ -324,5 +339,4 @@ async def _exec_background(
     return ExecBackgroundResponse(
         task_id=task.task_id,
         command=command,
-        timestamp=timestamp,
     )

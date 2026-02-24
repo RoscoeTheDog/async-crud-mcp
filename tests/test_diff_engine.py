@@ -26,10 +26,6 @@ class TestIdenticalContent:
 
         assert isinstance(result, JsonDiff)
         assert len(result.changes) == 0
-        assert result.summary.lines_added == 0
-        assert result.summary.lines_removed == 0
-        assert result.summary.lines_modified == 0
-        assert result.summary.regions_changed == 0
 
     def test_unified_format_identical(self):
         """Unified format returns no diff for identical content."""
@@ -39,10 +35,7 @@ class TestIdenticalContent:
         result = compute_unified_diff(old, new)
 
         assert isinstance(result, UnifiedDiff)
-        assert result.summary.lines_added == 0
-        assert result.summary.lines_removed == 0
-        assert result.summary.lines_modified == 0
-        assert result.summary.regions_changed == 0
+        assert result.content == ""
 
 
 class TestEmptyContent:
@@ -58,9 +51,6 @@ class TestEmptyContent:
         assert len(result.changes) == 1
         assert result.changes[0].type == "added"
         assert result.changes[0].new_content == "line1\nline2\nline3"
-        assert result.summary.lines_added == 3
-        assert result.summary.lines_removed == 0
-        assert result.summary.lines_modified == 0
 
     def test_empty_new_content_json(self):
         """Empty new content (deletion scenario) - all lines removed."""
@@ -72,9 +62,6 @@ class TestEmptyContent:
         assert len(result.changes) == 1
         assert result.changes[0].type == "removed"
         assert result.changes[0].old_content == "line1\nline2\nline3"
-        assert result.summary.lines_added == 0
-        assert result.summary.lines_removed == 3
-        assert result.summary.lines_modified == 0
 
     def test_both_empty_json(self):
         """Both empty - no changes."""
@@ -84,9 +71,6 @@ class TestEmptyContent:
         result = compute_json_diff(old, new)
 
         assert len(result.changes) == 0
-        assert result.summary.lines_added == 0
-        assert result.summary.lines_removed == 0
-        assert result.summary.lines_modified == 0
 
 
 class TestSingleLineChanges:
@@ -104,7 +88,6 @@ class TestSingleLineChanges:
         assert result.changes[0].start_line == 2
         assert "line2 old" in result.changes[0].old_content
         assert "line2 new" in result.changes[0].new_content
-        assert result.summary.lines_modified == 1
 
     def test_single_line_addition_json(self):
         """Single line added."""
@@ -116,7 +99,6 @@ class TestSingleLineChanges:
         assert len(result.changes) == 1
         assert result.changes[0].type == "added"
         assert result.changes[0].new_content == "line2"
-        assert result.summary.lines_added == 1
 
     def test_single_line_removal_json(self):
         """Single line removed."""
@@ -128,7 +110,6 @@ class TestSingleLineChanges:
         assert len(result.changes) == 1
         assert result.changes[0].type == "removed"
         assert result.changes[0].old_content == "line2"
-        assert result.summary.lines_removed == 1
 
 
 class TestMultiLineChanges:
@@ -144,7 +125,6 @@ class TestMultiLineChanges:
         assert len(result.changes) == 1
         assert result.changes[0].type == "added"
         assert result.changes[0].new_content == "line2\nline3"
-        assert result.summary.lines_added == 2
 
     def test_multiline_removal_json(self):
         """Multiple lines removed from the middle."""
@@ -156,7 +136,6 @@ class TestMultiLineChanges:
         assert len(result.changes) == 1
         assert result.changes[0].type == "removed"
         assert result.changes[0].old_content == "line2\nline3"
-        assert result.summary.lines_removed == 2
 
     def test_multiline_modification_json(self):
         """Multiple lines modified."""
@@ -169,7 +148,6 @@ class TestMultiLineChanges:
         assert result.changes[0].type == "modified"
         assert "old2\nold3" in result.changes[0].old_content
         assert "new2\nnew3" in result.changes[0].new_content
-        assert result.summary.lines_modified == 2
 
 
 class TestMixedChanges:
@@ -184,7 +162,6 @@ class TestMixedChanges:
 
         # Should have at least 2 change regions (modify + insert)
         assert len(result.changes) >= 1
-        assert result.summary.regions_changed == len(result.changes)
 
     def test_multiple_regions_json(self):
         """Multiple separate change regions."""
@@ -195,7 +172,6 @@ class TestMixedChanges:
 
         # Two separate regions: b->X and f->Y
         assert len(result.changes) == 2
-        assert result.summary.regions_changed == 2
 
 
 class TestContextLines:
@@ -256,7 +232,6 @@ class TestUnifiedDiffFormat:
         result = compute_unified_diff(old, new)
 
         assert "+line2" in result.content or "+ line2" in result.content
-        assert result.summary.lines_added == 1
 
     def test_unified_diff_removal(self):
         """Unified diff shows removals with - prefix."""
@@ -266,7 +241,6 @@ class TestUnifiedDiffFormat:
         result = compute_unified_diff(old, new)
 
         assert "-line2" in result.content or "- line2" in result.content
-        assert result.summary.lines_removed == 1
 
     def test_unified_diff_hunk_count(self):
         """Unified diff region count matches @@ hunk headers."""
@@ -277,31 +251,30 @@ class TestUnifiedDiffFormat:
 
         # Two changes = two hunks (each hunk has @@ at start and end)
         hunk_count = result.content.count("@@") // 2
-        assert result.summary.regions_changed == hunk_count
+        assert hunk_count == 2
 
 
 class TestSummaryAccuracy:
     """Test cases for summary line counts and region counts."""
 
-    def test_summary_line_counts_json(self):
-        """Verify line counts match expected values."""
+    def test_change_counts_json(self):
+        """Verify changes are detected correctly."""
         old = "a\nb\nc\nd"
         new = "a\nX\nc\nY\nZ"
 
         result = compute_json_diff(old, new)
 
-        # b -> X (1 modified), d -> Y+Z (1 removed, 2 added = modified + added)
-        # Actually: b -> X is replace (1 modified), d -> Y\nZ is replace (modified)
-        assert result.summary.lines_added + result.summary.lines_removed + result.summary.lines_modified > 0
+        # b -> X and d -> Y\nZ are two change regions
+        assert len(result.changes) >= 1
 
-    def test_summary_region_count_json(self):
-        """Region count matches number of changes."""
+    def test_region_count_json(self):
+        """Separate change regions are captured."""
         old = "a\nb\nc\nd\ne"
         new = "a\nX\nc\nY\ne"
 
         result = compute_json_diff(old, new)
 
-        assert result.summary.regions_changed == len(result.changes)
+        assert len(result.changes) == 2
 
 
 class TestTrailingNewlines:
@@ -315,7 +288,7 @@ class TestTrailingNewlines:
         result = compute_json_diff(old, new)
 
         # Should detect the addition of empty line or newline
-        assert result.summary.lines_added >= 0  # May or may not count trailing newline
+        assert isinstance(result, JsonDiff)
 
     def test_trailing_newline_removed(self):
         """Removing trailing newline."""
@@ -325,7 +298,7 @@ class TestTrailingNewlines:
         result = compute_json_diff(old, new)
 
         # Should detect the removal
-        assert result.summary.lines_removed >= 0
+        assert isinstance(result, JsonDiff)
 
 
 class TestComputeDiffDispatcher:
@@ -466,4 +439,5 @@ class TestEdgeCases:
         result = compute_json_diff(old, new)
 
         # Should detect removal of one blank line
-        assert result.summary.lines_removed == 1
+        assert len(result.changes) >= 1
+        assert any(c.type == "removed" for c in result.changes)

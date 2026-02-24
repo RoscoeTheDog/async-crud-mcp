@@ -1,7 +1,6 @@
 """Async read tool for MCP file operations."""
 
 import os
-from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
@@ -117,12 +116,8 @@ async def async_read(
                 content=content,
                 hash=file_hash,
                 total_lines=total_lines,
-                offset=offset,
-                limit=limit,
                 lines_returned=lines_returned,
-                encoding=request.encoding,
                 path=str(validated_path),
-                timestamp=datetime.now(timezone.utc).isoformat(),
                 redactions=redaction_entries,
             )
 

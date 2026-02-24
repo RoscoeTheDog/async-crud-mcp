@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Union
 
 from async_crud_mcp.core import (
@@ -135,7 +134,6 @@ async def async_delete(
                         diff=diff,
                         path=str(validated_path),
                         message=f"File has been modified ({modified_by}) (expected hash: {request.expected_hash}, current hash: {current_hash})",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
                     )
 
             # 5. Delete the file (safe-delete via recycle bin when available)
@@ -168,7 +166,6 @@ async def async_delete(
             return DeleteSuccessResponse(
                 path=str(validated_path),
                 deleted_hash=deleted_hash,
-                timestamp=datetime.now(timezone.utc).isoformat(),
                 recycled=recycled,
                 recycle_name=recycle_name,
             )

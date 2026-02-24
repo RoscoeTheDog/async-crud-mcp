@@ -53,7 +53,6 @@ async def async_restore(
             restored_path=result.restored_path,
             original_path=result.original_path,
             recycle_name=result.recycle_name,
-            timestamp=result.timestamp,
         )
 
     except RecycleBinError as e:

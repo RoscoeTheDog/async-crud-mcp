@@ -4,14 +4,13 @@ Supports both simple sleep and waiting for background task completion.
 """
 
 import time
-from datetime import datetime, timezone
 
 import anyio
 
 from async_crud_mcp.core.background_tasks import BackgroundTaskRegistry
 from async_crud_mcp.core.content_scanner import ContentScanner
 from async_crud_mcp.models.requests import WaitRequest
-from async_crud_mcp.models.responses import ErrorCode, ErrorResponse, WaitResponse
+from async_crud_mcp.models.responses import ErrorCode, ErrorResponse, RedactionEntry, TaskResultPayload, WaitResponse
 
 
 async def async_wait(
@@ -29,11 +28,9 @@ async def async_wait(
     Returns:
         WaitResponse or ErrorResponse.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
-
     if request.task_id is not None:
         return await _wait_for_task(
-            request.task_id, request.seconds, background_registry, timestamp,
+            request.task_id, request.seconds, background_registry,
             content_scanner=content_scanner,
         )
 
@@ -45,7 +42,6 @@ async def async_wait(
     return WaitResponse(
         waited_seconds=round(waited, 3),
         reason=f"Slept for {request.seconds}s",
-        timestamp=timestamp,
     )
 
 
@@ -53,7 +49,6 @@ async def _wait_for_task(
     task_id: str,
     timeout: float,
     registry: BackgroundTaskRegistry,
-    timestamp: str,
     content_scanner: ContentScanner | None = None,
 ) -> WaitResponse | ErrorResponse:
     """Wait for a specific background task to complete."""
@@ -68,21 +63,41 @@ async def _wait_for_task(
     if task.is_complete:
         stdout_text = task.stdout
         stderr_text = task.stderr
+        stdout_redaction_entries: list[RedactionEntry] | None = None
+        stderr_redaction_entries: list[RedactionEntry] | None = None
         if content_scanner is not None:
-            stdout_text = content_scanner.redact(stdout_text, path="<exec:stdout>").content
-            stderr_text = content_scanner.redact(stderr_text, path="<exec:stderr>").content
+            stdout_redacted = content_scanner.redact(stdout_text, path="<exec:stdout>")
+            stderr_redacted = content_scanner.redact(stderr_text, path="<exec:stderr>")
+            stdout_text = stdout_redacted.content
+            stderr_text = stderr_redacted.content
+            if stdout_redacted.has_redactions:
+                stdout_redaction_entries = [
+                    RedactionEntry(
+                        id=r.id, rule_name=r.rule_name, line=r.line,
+                        col_start=r.col_start, original_length=r.original_length,
+                    )
+                    for r in stdout_redacted.redactions
+                ]
+            if stderr_redacted.has_redactions:
+                stderr_redaction_entries = [
+                    RedactionEntry(
+                        id=r.id, rule_name=r.rule_name, line=r.line,
+                        col_start=r.col_start, original_length=r.original_length,
+                    )
+                    for r in stderr_redacted.redactions
+                ]
         return WaitResponse(
             waited_seconds=0.0,
             reason="Task already completed",
-            task_result={
-                "task_id": task.task_id,
-                "command": task.command,
-                "exit_code": task.exit_code,
-                "stdout": stdout_text,
-                "stderr": stderr_text,
-                "duration_ms": task.duration_ms,
-            },
-            timestamp=timestamp,
+            task_result=TaskResultPayload(
+                exit_code=task.exit_code,
+                stdout=stdout_text,
+                stderr=stderr_text,
+                duration_ms=task.duration_ms,
+            ),
+            task_status="completed",
+            stdout_redactions=stdout_redaction_entries,
+            stderr_redactions=stderr_redaction_entries,
         )
 
     # Use timeout from request.seconds, default to 30s if 0
@@ -95,26 +110,45 @@ async def _wait_for_task(
         return WaitResponse(
             waited_seconds=round(waited, 3),
             reason=f"Task {task_id} still running after {round(waited, 1)}s wait",
-            task_result={"task_id": task_id, "status": "running"},
-            timestamp=timestamp,
+            task_status="running",
         )
 
     stdout_text = result_task.stdout
     stderr_text = result_task.stderr
+    stdout_redaction_entries2: list[RedactionEntry] | None = None
+    stderr_redaction_entries2: list[RedactionEntry] | None = None
     if content_scanner is not None:
-        stdout_text = content_scanner.redact(stdout_text, path="<exec:stdout>").content
-        stderr_text = content_scanner.redact(stderr_text, path="<exec:stderr>").content
+        stdout_redacted = content_scanner.redact(stdout_text, path="<exec:stdout>")
+        stderr_redacted = content_scanner.redact(stderr_text, path="<exec:stderr>")
+        stdout_text = stdout_redacted.content
+        stderr_text = stderr_redacted.content
+        if stdout_redacted.has_redactions:
+            stdout_redaction_entries2 = [
+                RedactionEntry(
+                    id=r.id, rule_name=r.rule_name, line=r.line,
+                    col_start=r.col_start, original_length=r.original_length,
+                )
+                for r in stdout_redacted.redactions
+            ]
+        if stderr_redacted.has_redactions:
+            stderr_redaction_entries2 = [
+                RedactionEntry(
+                    id=r.id, rule_name=r.rule_name, line=r.line,
+                    col_start=r.col_start, original_length=r.original_length,
+                )
+                for r in stderr_redacted.redactions
+            ]
 
     return WaitResponse(
         waited_seconds=round(waited, 3),
         reason="Task completed",
-        task_result={
-            "task_id": result_task.task_id,
-            "command": result_task.command,
-            "exit_code": result_task.exit_code,
-            "stdout": stdout_text,
-            "stderr": stderr_text,
-            "duration_ms": result_task.duration_ms,
-        },
-        timestamp=timestamp,
+        task_result=TaskResultPayload(
+            exit_code=result_task.exit_code,
+            stdout=stdout_text,
+            stderr=stderr_text,
+            duration_ms=result_task.duration_ms,
+        ),
+        task_status="completed",
+        stdout_redactions=stdout_redaction_entries2,
+        stderr_redactions=stderr_redaction_entries2,
     )

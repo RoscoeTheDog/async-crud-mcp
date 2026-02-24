@@ -58,7 +58,7 @@ class TestAsyncWaitTask:
         assert response.status == "ok"
         assert response.waited_seconds == 0.0
         assert response.task_result is not None
-        assert response.task_result["exit_code"] == 0
+        assert response.task_result.exit_code == 0
 
     @pytest.mark.asyncio
     async def test_wait_running_task_timeout(self, background_registry):
@@ -102,8 +102,10 @@ class TestAsyncWaitRedaction:
         response = await async_wait(request, background_registry, content_scanner=content_scanner)
         assert response.status == "ok"
         assert response.task_result is not None
-        assert fake_key not in response.task_result["stdout"]
-        assert "<<REDACTED:aws-access-key-id:1>>" in response.task_result["stdout"]
+        assert fake_key not in response.task_result.stdout
+        assert "<<REDACTED:aws-access-key-id:1>>" in response.task_result.stdout
+        assert response.stdout_redactions is not None
+        assert response.stdout_redactions[0].rule_name == "aws-access-key-id"
 
     @pytest.mark.asyncio
     async def test_completed_task_stderr_redacted(self, background_registry, content_scanner):
@@ -118,8 +120,10 @@ class TestAsyncWaitRedaction:
         response = await async_wait(request, background_registry, content_scanner=content_scanner)
         assert response.status == "ok"
         assert response.task_result is not None
-        assert fake_key not in response.task_result["stderr"]
-        assert "<<REDACTED:aws-access-key-id:1>>" in response.task_result["stderr"]
+        assert fake_key not in response.task_result.stderr
+        assert "<<REDACTED:aws-access-key-id:1>>" in response.task_result.stderr
+        assert response.stderr_redactions is not None
+        assert response.stderr_redactions[0].rule_name == "aws-access-key-id"
 
     @pytest.mark.asyncio
     async def test_clean_output_unchanged(self, background_registry, content_scanner):
@@ -132,8 +136,10 @@ class TestAsyncWaitRedaction:
         request = WaitRequest(task_id=task.task_id, seconds=1.0)
         response = await async_wait(request, background_registry, content_scanner=content_scanner)
         assert response.status == "ok"
-        assert response.task_result["stdout"] == "safe output\n"
-        assert "REDACTED" not in response.task_result["stdout"]
+        assert response.task_result.stdout == "safe output\n"
+        assert "REDACTED" not in response.task_result.stdout
+        assert response.stdout_redactions is None
+        assert response.stderr_redactions is None
 
     @pytest.mark.asyncio
     async def test_no_scanner_passes_through(self, background_registry):
@@ -147,4 +153,4 @@ class TestAsyncWaitRedaction:
         request = WaitRequest(task_id=task.task_id, seconds=1.0)
         response = await async_wait(request, background_registry)
         assert response.status == "ok"
-        assert fake_key in response.task_result["stdout"]
+        assert fake_key in response.task_result.stdout

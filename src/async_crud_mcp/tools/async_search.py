@@ -6,7 +6,6 @@ and ContentScanner rules.
 
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 from async_crud_mcp.config import SearchConfig
@@ -15,6 +14,7 @@ from async_crud_mcp.models.requests import SearchRequest
 from async_crud_mcp.models.responses import (
     ErrorCode,
     ErrorResponse,
+    RedactionEntry,
     SearchMatch,
     SearchResponse,
 )
@@ -39,8 +39,6 @@ async def async_search(
     Returns:
         SearchResponse or ErrorResponse.
     """
-    timestamp = datetime.now(timezone.utc).isoformat()
-
     # 1. Check search enabled
     if not search_config.enabled:
         return ErrorResponse(
@@ -110,7 +108,6 @@ async def async_search(
     files_searched = 0
     file_match_counts: dict[str, int] = defaultdict(int)
     total_matches = 0
-    truncated = False
 
     for file_path in sorted(files):
         # Validate access
@@ -135,6 +132,7 @@ async def async_search(
 
         # Content scanner: build set of redacted line numbers (1-based)
         redacted_lines: dict[int, str] = {}  # line_number -> rule_name
+        redacted_result = None
         if content_scanner is not None:
             redacted_result = content_scanner.redact(content, str(file_path))
             if redacted_result.has_redactions:
@@ -158,7 +156,6 @@ async def async_search(
                         continue
 
                 if len(matches) >= max_results:
-                    truncated = True
                     continue
 
                 line_num = line_idx + 1  # 1-based
@@ -179,22 +176,31 @@ async def async_search(
                     ]
 
                 is_redacted = line_num in redacted_lines
+                # Build per-line RedactionEntry from spans overlapping this line
+                line_redaction_entries: list[RedactionEntry] | None = None
+                if is_redacted and redacted_result is not None:
+                    line_redaction_entries = [
+                        RedactionEntry(
+                            id=span.id,
+                            rule_name=span.rule_name,
+                            line=span.line,
+                            col_start=span.col_start,
+                            original_length=span.original_length,
+                        )
+                        for span in redacted_result.redactions
+                        if span.line == line_num
+                    ]
                 matches.append(SearchMatch(
                     file=str(file_path),
                     line_number=line_num,
                     line_content=None if is_redacted else line,
                     context_before=ctx_before,
                     context_after=ctx_after,
-                    redacted=is_redacted,
-                    redaction_rule=redacted_lines.get(line_num),
+                    redactions=line_redaction_entries,
                 ))
 
     return SearchResponse(
-        pattern=request.pattern,
         matches=matches,
         total_matches=total_matches,
         files_searched=files_searched,
-        output_mode=request.output_mode,
-        truncated=truncated,
-        timestamp=timestamp,
     )

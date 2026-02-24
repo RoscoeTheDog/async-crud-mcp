@@ -4,7 +4,6 @@ This module provides two diff output formats:
 1. JSON format: Structured change regions (added/removed/modified) with context
 2. Unified format: Standard git-diff style output
 
-Both formats include a DiffSummary with line counts and region counts.
 Context lines are configurable (default from config.crud.diff_context_lines).
 """
 
@@ -13,7 +12,6 @@ from typing import Literal
 
 from async_crud_mcp.models.responses import (
     DiffChange,
-    DiffSummary,
     JsonDiff,
     UnifiedDiff,
 )
@@ -67,9 +65,6 @@ def compute_json_diff(
     opcodes = matcher.get_opcodes()
 
     changes: list[DiffChange] = []
-    lines_added = 0
-    lines_removed = 0
-    lines_modified = 0
 
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
@@ -111,7 +106,6 @@ def compute_json_diff(
                 context_after=context_after,
             )
             changes.append(change)
-            lines_added += j2 - j1
 
         elif tag == "delete":
             # Lines removed from old content
@@ -125,7 +119,6 @@ def compute_json_diff(
                 context_after=context_after,
             )
             changes.append(change)
-            lines_removed += i2 - i1
 
         elif tag == "replace":
             # Lines modified (replaced)
@@ -139,16 +132,8 @@ def compute_json_diff(
                 context_after=context_after,
             )
             changes.append(change)
-            lines_modified += max(i2 - i1, j2 - j1)
 
-    summary = DiffSummary(
-        lines_added=lines_added,
-        lines_removed=lines_removed,
-        lines_modified=lines_modified,
-        regions_changed=len(changes),
-    )
-
-    return JsonDiff(changes=changes, summary=summary)
+    return JsonDiff(changes=changes)
 
 
 def compute_unified_diff(
@@ -185,34 +170,7 @@ def compute_unified_diff(
 
     diff_content = "\n".join(diff_lines)
 
-    # Parse diff output to compute summary
-    lines_added = 0
-    lines_removed = 0
-    regions_changed = 0
-
-    for line in diff_lines:
-        if line.startswith("@@"):
-            regions_changed += 1
-        elif line.startswith("+") and not line.startswith("+++"):
-            lines_added += 1
-        elif line.startswith("-") and not line.startswith("---"):
-            lines_removed += 1
-
-    # Lines modified = minimum of added and removed (represents replacements)
-    lines_modified = min(lines_added, lines_removed)
-
-    # Adjust pure adds/removes by subtracting modified
-    lines_added -= lines_modified
-    lines_removed -= lines_modified
-
-    summary = DiffSummary(
-        lines_added=lines_added,
-        lines_removed=lines_removed,
-        lines_modified=lines_modified,
-        regions_changed=regions_changed,
-    )
-
-    return UnifiedDiff(content=diff_content, summary=summary)
+    return UnifiedDiff(content=diff_content)
 
 
 def check_patch_applicability(

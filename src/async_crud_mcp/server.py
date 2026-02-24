@@ -395,7 +395,7 @@ async def async_read_tool(
     """
     request = AsyncReadRequest(path=path, offset=offset, limit=limit, encoding=encoding)
     response = await async_read(request, path_validator, lock_manager, content_scanner)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -426,7 +426,7 @@ async def async_write_tool(
         timeout=timeout,
     )
     response = await async_write(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -490,7 +490,7 @@ async def async_update_tool(
         diff_format=diff_format,  # type: ignore[arg-type]  # Validated above
     )
     response = await async_update(request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes=_effective_max_file_size)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -506,7 +506,7 @@ async def async_delete_tool(path: str, timeout: float = 30.0):
     """
     request = AsyncDeleteRequest(path=path, timeout=timeout)
     response = await async_delete(request, path_validator, lock_manager, hash_registry, recycle_bin)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -527,7 +527,7 @@ async def async_restore_tool(
     """
     request = AsyncRestoreRequest(recycle_name=recycle_name, destination=destination, force=force)
     response = await async_restore(request, path_validator, recycle_bin)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -540,7 +540,6 @@ async def async_recycle_list_tool(limit: int = 50):
     Returns:
         RecycleListResponse with recycled file entries
     """
-    from datetime import datetime as _dt, timezone as _tz
     entries = await recycle_bin.list_entries(limit=limit)
     return {
         "status": "ok",
@@ -554,9 +553,7 @@ async def async_recycle_list_tool(limit: int = 50):
             }
             for e in entries
         ],
-        "total_entries": len(entries),
         "recycle_dir": str(recycle_bin.recycle_dir),
-        "timestamp": _dt.now(_tz.utc).isoformat(),
     }
 
 
@@ -570,13 +567,11 @@ async def async_recycle_clean_tool(retention_days: int | None = None):
     Returns:
         RecycleCleanResponse with count of removed entries
     """
-    from datetime import datetime as _dt, timezone as _tz
     removed = await recycle_bin.cleanup(retention_days=retention_days)
     return {
         "status": "ok",
         "removed_count": removed,
         "retention_days": retention_days if retention_days is not None else recycle_bin.retention_days,
-        "timestamp": _dt.now(_tz.utc).isoformat(),
     }
 
 
@@ -598,7 +593,7 @@ async def async_rename_tool(
     """
     request = AsyncRenameRequest(old_path=old_path, new_path=new_path, timeout=timeout)
     response = await async_rename(request, path_validator, lock_manager, hash_registry)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -639,7 +634,7 @@ async def async_append_tool(
         separator=separator,
     )
     response = await async_append(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -667,7 +662,7 @@ async def async_list_tool(
         include_hashes=include_hashes,
     )
     response = await async_list(request, path_validator, hash_registry)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -689,7 +684,7 @@ async def async_status_tool(path: str | None = None):
         settings,
         server_start_time,
     )
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -712,7 +707,7 @@ async def async_batch_read_tool(files: list[dict]):
 
     request = AsyncBatchReadRequest(files=read_items)
     response = await async_batch_read(request, path_validator, lock_manager, content_scanner)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -735,7 +730,7 @@ async def async_batch_write_tool(files: list[dict]):
 
     request = AsyncBatchWriteRequest(files=write_items)
     response = await async_batch_write(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -767,7 +762,7 @@ async def async_batch_update_tool(files: list[dict]):
 
     request = AsyncBatchUpdateRequest(files=update_items)
     response = await async_batch_update(request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes=_effective_max_file_size)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -848,7 +843,7 @@ async def async_exec_tool(
         project_root=_active_project_root,
         content_scanner=content_scanner,
     )
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -872,7 +867,7 @@ async def async_wait_tool(
     """
     request = WaitRequest(seconds=seconds, task_id=task_id)
     response = await async_wait(request, background_registry, content_scanner=content_scanner)
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool()
@@ -926,7 +921,7 @@ async def async_search_tool(
         content_scanner=content_scanner,
         project_root=_active_project_root,
     )
-    return response.model_dump()
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.custom_route("/health", methods=["GET"])

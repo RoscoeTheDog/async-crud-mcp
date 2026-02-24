@@ -209,6 +209,8 @@ class TestAsyncExecRedaction:
         assert response.status == "ok"
         assert fake_key not in response.stdout
         assert "<<REDACTED:aws-access-key-id:1>>" in response.stdout
+        assert response.stdout_redactions is not None
+        assert response.stdout_redactions[0].rule_name == "aws-access-key-id"
 
     @pytest.mark.asyncio
     async def test_clean_stdout_unchanged(
@@ -224,6 +226,8 @@ class TestAsyncExecRedaction:
         assert response.status == "ok"
         assert "hello world" in response.stdout
         assert "REDACTED" not in response.stdout
+        assert response.stdout_redactions is None
+        assert response.stderr_redactions is None
 
     @pytest.mark.asyncio
     async def test_no_scanner_passes_through(
@@ -254,3 +258,5 @@ class TestAsyncExecRedaction:
         assert response.status == "ok"
         assert fake_key not in response.stderr
         assert "<<REDACTED:aws-access-key-id:1>>" in response.stderr
+        assert response.stderr_redactions is not None
+        assert response.stderr_redactions[0].rule_name == "aws-access-key-id"

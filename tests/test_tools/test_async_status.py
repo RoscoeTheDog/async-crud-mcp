@@ -249,7 +249,6 @@ class TestAsyncStatusFile:
         assert response.lock_state == "unlocked"
         assert response.queue_depth == 0
         assert response.active_readers == 0
-        assert isinstance(response.pending_requests, list)
 
     @pytest.mark.asyncio
     async def test_file_status_not_exists(

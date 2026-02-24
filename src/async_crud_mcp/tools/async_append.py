@@ -1,7 +1,6 @@
 """Async append tool for MCP file operations."""
 
 import os
-from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
@@ -163,7 +162,6 @@ async def async_append(
                 hash=new_hash,
                 bytes_appended=bytes_appended,
                 total_size_bytes=total_size,
-                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         finally:

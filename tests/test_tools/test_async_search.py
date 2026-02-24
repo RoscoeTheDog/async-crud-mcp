@@ -112,7 +112,6 @@ class TestAsyncSearchOutputModes:
         response = await async_search(
             request, search_config, path_validator, project_root=temp_base_dir
         )
-        assert response.output_mode == "content"
         assert all(m.line_content for m in response.matches)
 
     @pytest.mark.asyncio
@@ -121,7 +120,6 @@ class TestAsyncSearchOutputModes:
         response = await async_search(
             request, search_config, path_validator, project_root=temp_base_dir
         )
-        assert response.output_mode == "files_with_matches"
         # Should have at most one match per file
         files = [m.file for m in response.matches]
         assert len(files) == len(set(files))
@@ -132,7 +130,6 @@ class TestAsyncSearchOutputModes:
         response = await async_search(
             request, search_config, path_validator, project_root=temp_base_dir
         )
-        assert response.output_mode == "count"
         assert response.total_matches > 0
         assert len(response.matches) == 0  # count mode doesn't return match details
 
@@ -274,7 +271,7 @@ class TestAsyncSearchRedaction:
     async def test_sensitive_line_redacted(
         self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
     ):
-        """Matching line with sensitive content should have line_content=None and redacted=True."""
+        """Matching line with sensitive content should have line_content=None and redactions populated."""
         request = SearchRequest(pattern="AKIA", glob="*.txt")
         response = await async_search(
             request, search_config, path_validator,
@@ -283,11 +280,11 @@ class TestAsyncSearchRedaction:
         assert response.status == "ok"
         assert response.total_matches >= 1
         # The match on the sensitive line should be redacted
-        redacted_matches = [m for m in response.matches if m.redacted]
+        redacted_matches = [m for m in response.matches if m.redactions is not None]
         assert len(redacted_matches) >= 1
         for m in redacted_matches:
             assert m.line_content is None
-            assert m.redaction_rule == "aws-access-key-id"
+            assert m.redactions[0].rule_name == "aws-access-key-id"
 
     @pytest.mark.asyncio
     async def test_clean_line_not_redacted(
@@ -302,7 +299,7 @@ class TestAsyncSearchRedaction:
         assert response.status == "ok"
         assert response.total_matches >= 1
         for m in response.matches:
-            assert m.redacted is False
+            assert m.redactions is None
             assert m.line_content is not None
             assert "localhost" in m.line_content
 
@@ -321,7 +318,7 @@ class TestAsyncSearchRedaction:
         assert response.total_matches >= 1
         match = response.matches[0]
         # The matched line itself is clean
-        assert match.redacted is False
+        assert match.redactions is None
         assert match.line_content is not None
         # context_before should have the sensitive line nulled
         # Line 3 (aws_key=AKIA...) is in context_before

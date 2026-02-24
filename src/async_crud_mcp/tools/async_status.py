@@ -14,7 +14,6 @@ from async_crud_mcp.models import (
     ErrorResponse,
     FileStatusResponse,
     GlobalStatusResponse,
-    PendingRequest,
     ServerInfo,
 )
 
@@ -120,12 +119,6 @@ async def async_status(
             else:
                 lock_state = "unlocked"
 
-            # Build pending_requests list
-            # Note: Current LockManager.get_status only returns queued count, not queue details
-            # For now, we'll return an empty list since we don't have access to queue details
-            # This could be extended in the future by adding a method to expose queue entries
-            pending_requests: list[PendingRequest] = []
-
             return FileStatusResponse(
                 path=str(validated_path),
                 exists=exists,
@@ -133,7 +126,6 @@ async def async_status(
                 lock_state=lock_state,
                 queue_depth=lock_status["queued"],
                 active_readers=lock_status["active_readers"],
-                pending_requests=pending_requests,
             )
 
     except Exception as e:

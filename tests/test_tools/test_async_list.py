@@ -65,9 +65,7 @@ class TestAsyncListBasic:
 
         assert response.status == "ok"
         assert response.path == str(sample_dir_with_files)
-        assert response.pattern == "*"
-        assert response.recursive is False
-        assert response.total_entries == 4  # 3 files + 1 directory
+        assert len(response.entries) == 4  # 3 files + 1 directory
 
         # Check entries
         entry_names = {entry.name for entry in response.entries}
@@ -93,7 +91,6 @@ class TestAsyncListBasic:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.total_entries == 0
         assert len(response.entries) == 0
 
 
@@ -107,8 +104,7 @@ class TestAsyncListGlobPattern:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.pattern == "*.py"
-        assert response.total_entries == 1
+        assert len(response.entries) == 1
 
         entry_names = {entry.name for entry in response.entries}
         assert "file2.py" in entry_names
@@ -122,7 +118,7 @@ class TestAsyncListGlobPattern:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.total_entries == 1
+        assert len(response.entries) == 1
 
         entry_names = {entry.name for entry in response.entries}
         assert "file1.txt" in entry_names
@@ -134,7 +130,7 @@ class TestAsyncListGlobPattern:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.total_entries == 3  # file1.txt, file2.py, file3.md
+        assert len(response.entries) == 3  # file1.txt, file2.py, file3.md
 
         entry_names = {entry.name for entry in response.entries}
         assert "file1.txt" in entry_names
@@ -153,9 +149,8 @@ class TestAsyncListRecursive:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.recursive is True
         # 3 top-level files + 1 subdir + 2 nested files = 6 total
-        assert response.total_entries == 6
+        assert len(response.entries) == 6
 
         entry_names = {entry.name for entry in response.entries}
         assert "file1.txt" in entry_names
@@ -177,9 +172,7 @@ class TestAsyncListRecursive:
         response = await async_list(request, path_validator, hash_registry)
 
         assert response.status == "ok"
-        assert response.recursive is True
-        assert response.pattern == "*.py"
-        assert response.total_entries == 2  # file2.py + nested.py
+        assert len(response.entries) == 2  # file2.py + nested.py
 
         entry_names = {entry.name for entry in response.entries}
         # Should include both top-level and nested .py files

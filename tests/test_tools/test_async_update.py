@@ -73,7 +73,6 @@ class TestAsyncUpdateContentSuccess:
         assert response.previous_hash == original_hash
         assert response.hash != original_hash
         assert response.bytes_written == len(new_content.encode('utf-8'))
-        assert hasattr(response, 'timestamp')
 
     @pytest.mark.asyncio
     async def test_update_returns_previous_and_new_hash(self, temp_base_dir, path_validator, lock_manager, hash_registry):
@@ -257,7 +256,6 @@ class TestAsyncUpdateContention:
         assert response.path == str(file_path)
         assert "modified" in response.message.lower()
         assert hasattr(response, 'diff')
-        assert hasattr(response, 'timestamp')
 
         # File should be unchanged
         assert file_path.read_text(encoding='utf-8') == "Externally modified"
@@ -285,7 +283,6 @@ class TestAsyncUpdateContention:
         assert response.status == "contention"
         assert response.diff.format == "json"
         assert hasattr(response.diff, 'changes')
-        assert hasattr(response.diff, 'summary')
 
     @pytest.mark.asyncio
     async def test_contention_unified_diff_format(self, temp_base_dir, path_validator, lock_manager, hash_registry):

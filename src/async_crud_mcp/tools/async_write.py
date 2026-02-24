@@ -1,7 +1,6 @@
 """Async write tool for MCP file operations."""
 
 import os
-from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
@@ -130,7 +129,6 @@ async def async_write(
                 path=str(validated_path),
                 hash=file_hash,
                 bytes_written=bytes_written,
-                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         finally:

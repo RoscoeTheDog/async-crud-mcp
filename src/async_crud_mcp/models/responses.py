@@ -60,13 +60,9 @@ class ReadSuccessResponse(BaseModel):
     status: Literal["ok"] = "ok"
     path: str = Field(..., description="File path that was read")
     content: str = Field(..., description="File content")
-    encoding: str = Field(..., description="File encoding used")
     hash: str = Field(..., description="File content hash (format: sha256:...)")
     total_lines: int = Field(..., description="Total number of lines in file")
-    offset: int = Field(..., description="Line offset used")
-    limit: int | None = Field(..., description="Line limit used")
     lines_returned: int = Field(..., description="Number of lines returned")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
     redactions: list[RedactionEntry] | None = Field(
         default=None,
         description="Metadata for redacted spans in the content (when sensitive content was replaced with placeholders)"
@@ -82,7 +78,6 @@ class WriteSuccessResponse(BaseModel):
     path: str = Field(..., description="File path that was written")
     hash: str = Field(..., description="File content hash (format: sha256:...)")
     bytes_written: int = Field(..., description="Number of bytes written")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 class RegexAppliedMatch(BaseModel):
@@ -118,7 +113,6 @@ class UpdateSuccessResponse(BaseModel):
     previous_hash: str = Field(..., description="Hash before update")
     hash: str = Field(..., description="Hash after update (format: sha256:...)")
     bytes_written: int = Field(..., description="Number of bytes written")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
     regex_applied: list[RegexAppliedMatch] | None = Field(default=None, description="Regex matches that were applied")
     regex_blocked: list[RegexBlockedMatch] | None = Field(default=None, description="Regex matches blocked by content scanner")
 
@@ -131,7 +125,6 @@ class DeleteSuccessResponse(BaseModel):
     status: Literal["ok"] = "ok"
     path: str = Field(..., description="File path that was deleted")
     deleted_hash: str = Field(..., description="Hash of deleted file")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
     recycled: bool = Field(default=False, description="True if file was moved to recycle bin (recoverable)")
     recycle_name: str | None = Field(default=None, description="Name in recycle bin (for restore)")
 
@@ -145,7 +138,6 @@ class RenameSuccessResponse(BaseModel):
     old_path: str = Field(..., description="Original file path")
     new_path: str = Field(..., description="New file path")
     hash: str = Field(..., description="File content hash (format: sha256:...)")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
     cross_filesystem: bool = Field(default=False, description="Whether rename crossed filesystem boundaries")
 
 
@@ -159,7 +151,6 @@ class AppendSuccessResponse(BaseModel):
     hash: str = Field(..., description="File content hash after append (format: sha256:...)")
     bytes_appended: int = Field(..., description="Number of bytes appended")
     total_size_bytes: int = Field(..., description="Total file size after append")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 class DirectoryEntry(BaseModel):
@@ -182,10 +173,6 @@ class ListSuccessResponse(BaseModel):
     status: Literal["ok"] = "ok"
     path: str = Field(..., description="Directory path that was listed")
     entries: list[DirectoryEntry] = Field(..., description="Directory entries")
-    total_entries: int = Field(..., description="Total number of entries")
-    pattern: str = Field(..., description="Glob pattern used")
-    recursive: bool = Field(..., description="Whether recursive listing was used")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 # Error Response Model
@@ -220,17 +207,6 @@ class DiffChange(BaseModel):
     context_after: str | None = Field(default=None, description="Context lines after change")
 
 
-class DiffSummary(BaseModel):
-    """Summary of diff changes."""
-
-    model_config = ConfigDict(frozen=True)
-
-    lines_added: int = Field(..., description="Number of lines added")
-    lines_removed: int = Field(..., description="Number of lines removed")
-    lines_modified: int = Field(..., description="Number of lines modified")
-    regions_changed: int = Field(..., description="Number of change regions")
-
-
 class JsonDiff(BaseModel):
     """JSON-formatted diff."""
 
@@ -238,7 +214,6 @@ class JsonDiff(BaseModel):
 
     format: Literal["json"] = "json"
     changes: list[DiffChange] = Field(..., description="List of changes")
-    summary: DiffSummary = Field(..., description="Diff summary")
 
 
 class UnifiedDiff(BaseModel):
@@ -248,7 +223,6 @@ class UnifiedDiff(BaseModel):
 
     format: Literal["unified"] = "unified"
     content: str = Field(..., description="Unified diff content")
-    summary: DiffSummary = Field(..., description="Diff summary")
 
 
 class PatchConflict(BaseModel):
@@ -283,17 +257,13 @@ class ContentionResponse(BaseModel):
     diff: Annotated[JsonDiff | UnifiedDiff, Field(discriminator="format")] | None = Field(
         default=None, description="Diff showing changes (None when redacted due to sensitive content)"
     )
-    redacted: bool = Field(default=False, description="True when diff was redacted due to content scan match")
-    redacted_pattern: str | None = Field(default=None, description="Content scan rule that triggered redaction")
-    redacted_hint: str | None = Field(default=None, description="Guidance for agent on how to proceed after redaction")
     redactions: list[RedactionEntry] | None = Field(
         default=None,
-        description="Metadata for redacted spans in the diff (when redacted=True)"
+        description="Metadata for redacted spans in the diff (when sensitive content was replaced with placeholders)"
     )
     patches_applicable: bool | None = Field(default=None, description="Whether patches can still be applied (update only)")
     conflicts: list[PatchConflict] | None = Field(default=None, description="Conflicting patches (update only)")
     non_conflicting_patches: list[int] | None = Field(default=None, description="Indices of non-conflicting patches")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 # Status Response Models
@@ -333,16 +303,6 @@ class GlobalStatusResponse(BaseModel):
     base_directories: list[str] = Field(..., description="Base directories")
 
 
-class PendingRequest(BaseModel):
-    """A pending request in the queue."""
-
-    model_config = ConfigDict(frozen=True)
-
-    type: str = Field(..., description="Request type")
-    queued_at: str = Field(..., description="Queue timestamp (ISO 8601)")
-    timeout_at: str = Field(..., description="Timeout timestamp (ISO 8601)")
-
-
 class FileStatusResponse(BaseModel):
     """File-specific status response (path provided)."""
 
@@ -355,7 +315,6 @@ class FileStatusResponse(BaseModel):
     lock_state: str = Field(..., description="Lock state (unlocked, read_locked, write_locked)")
     queue_depth: int = Field(..., description="Request queue depth for this file")
     active_readers: int = Field(..., description="Number of active readers")
-    pending_requests: list[PendingRequest] = Field(..., description="Pending requests for this file")
 
 
 # Batch Response Models
@@ -416,7 +375,6 @@ class RestoreSuccessResponse(BaseModel):
     restored_path: str = Field(..., description="Path where file was restored")
     original_path: str = Field(..., description="Original path before deletion")
     recycle_name: str = Field(..., description="Name in recycle bin")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 class RecycleListEntry(BaseModel):
@@ -438,9 +396,7 @@ class RecycleListResponse(BaseModel):
 
     status: Literal["ok"] = "ok"
     entries: list[RecycleListEntry] = Field(..., description="Recycled file entries")
-    total_entries: int = Field(..., description="Total number of active entries")
     recycle_dir: str = Field(..., description="Active recycle directory path")
-    timestamp: str = Field(..., description="Response timestamp (ISO 8601)")
 
 
 class RecycleCleanResponse(BaseModel):
@@ -451,7 +407,6 @@ class RecycleCleanResponse(BaseModel):
     status: Literal["ok"] = "ok"
     removed_count: int = Field(..., description="Number of entries removed")
     retention_days: int = Field(..., description="Retention period used")
-    timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
 
 
 # =============================================================================
@@ -470,8 +425,15 @@ class ExecSuccessResponse(BaseModel):
     stderr: str
     exit_code: int
     duration_ms: int
-    timestamp: str
     timeout_applied: float | None = Field(default=None, description="Effective timeout when clamped from requested value")
+    stdout_redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in stdout (when sensitive content was replaced with placeholders)"
+    )
+    stderr_redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in stderr (when sensitive content was replaced with placeholders)"
+    )
 
 
 class ExecDeniedResponse(BaseModel):
@@ -483,7 +445,6 @@ class ExecDeniedResponse(BaseModel):
     command: str
     matched_pattern: str
     reason: str
-    timestamp: str
 
 
 class ExecBackgroundResponse(BaseModel):
@@ -494,7 +455,17 @@ class ExecBackgroundResponse(BaseModel):
     status: Literal["background"] = "background"
     task_id: str
     command: str
-    timestamp: str
+
+
+class TaskResultPayload(BaseModel):
+    """Result payload from a completed background task."""
+
+    model_config = ConfigDict(frozen=True)
+
+    exit_code: int
+    stdout: str
+    stderr: str
+    duration_ms: int
 
 
 class WaitResponse(BaseModel):
@@ -505,8 +476,16 @@ class WaitResponse(BaseModel):
     status: Literal["ok"] = "ok"
     waited_seconds: float
     reason: str
-    task_result: dict | None = None
-    timestamp: str
+    task_result: TaskResultPayload | None = None
+    task_status: Literal["running", "completed"] | None = None
+    stdout_redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in task stdout (when sensitive content was replaced with placeholders)"
+    )
+    stderr_redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in task stderr (when sensitive content was replaced with placeholders)"
+    )
 
 
 class SearchMatch(BaseModel):
@@ -519,8 +498,10 @@ class SearchMatch(BaseModel):
     line_content: str | None
     context_before: list[str | None] = Field(default_factory=list)
     context_after: list[str | None] = Field(default_factory=list)
-    redacted: bool = Field(default=False, description="True when line_content was redacted due to sensitive content")
-    redaction_rule: str | None = Field(default=None, description="Content scan rule that triggered redaction")
+    redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in the line (when sensitive content was replaced with placeholders)"
+    )
 
 
 class SearchResponse(BaseModel):
@@ -529,10 +510,6 @@ class SearchResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["ok"] = "ok"
-    pattern: str
     matches: list[SearchMatch] = Field(default_factory=list)
     total_matches: int
     files_searched: int
-    output_mode: str
-    truncated: bool = False
-    timestamp: str

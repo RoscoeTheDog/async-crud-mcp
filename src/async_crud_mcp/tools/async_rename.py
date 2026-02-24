@@ -1,7 +1,6 @@
 """Async rename tool for MCP file operations."""
 
 import os
-from datetime import datetime, timezone
 from typing import Union
 
 from async_crud_mcp.core import (
@@ -151,7 +150,6 @@ async def async_rename(
                         diff=diff,
                         path=str(validated_old),
                         message=f"File has been modified ({modified_by}) (expected hash: {request.expected_hash}, current hash: {current_hash})",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
                     )
 
             # 6. Create parent directories if requested
@@ -185,7 +183,6 @@ async def async_rename(
                 new_path=str(validated_new),
                 hash=file_hash,
                 cross_filesystem=cross_filesystem,
-                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         finally:
