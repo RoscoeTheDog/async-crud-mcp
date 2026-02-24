@@ -499,8 +499,8 @@ class SearchMatch(BaseModel):
     file: str
     line_number: int
     line_content: str | None
-    context_before: list[str | None] = Field(default_factory=list)
-    context_after: list[str | None] = Field(default_factory=list)
+    context_before: list[str | None] | None = Field(default=None)
+    context_after: list[str | None] | None = Field(default=None)
     redactions: list[RedactionEntry] | None = Field(
         default=None,
         description="Metadata for redacted spans in the line (when sensitive content was replaced with placeholders)"

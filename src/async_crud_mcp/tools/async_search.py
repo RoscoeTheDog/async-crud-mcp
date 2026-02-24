@@ -167,8 +167,8 @@ async def async_search(
                 line_num = line_idx + 1  # 1-based
 
                 # Build context
-                ctx_before: list[str | None] = []
-                ctx_after: list[str | None] = []
+                ctx_before: list[str | None] | None = None
+                ctx_after: list[str | None] | None = None
                 if request.context_lines > 0:
                     start = max(0, line_idx - request.context_lines)
                     ctx_before = [
