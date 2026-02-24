@@ -61,23 +61,23 @@ class FileLock:
         self.queue: deque[LockEntry] = deque()
         self._condition: asyncio.Condition = asyncio.Condition()
 
-    async def acquire_read(self, request_id: str, timeout: Optional[float] = None) -> None:
+    async def acquire_read(self, request_id: str, timeout: float = 60.0) -> None:
         """
         Acquire a read lock on this file.
 
         Args:
             request_id: Unique identifier for this request
-            timeout: Not used for reads (per PRD spec)
+            timeout: Maximum seconds to wait for the lock (default: 60.0)
 
-        Note:
-            Read locks have no timeout and will wait indefinitely.
+        Raises:
+            LockTimeout: If lock cannot be acquired within timeout
         """
         entry = LockEntry(
             request_id=request_id,
             lock_type=LockType.READ,
             event=asyncio.Event(),
             created_at=time.monotonic(),
-            timeout=None
+            timeout=timeout
         )
 
         async with self._condition:
@@ -89,8 +89,17 @@ class FileLock:
             # Otherwise, queue and wait
             self.queue.append(entry)
 
-        # Wait for lock to be granted
-        await entry.event.wait()
+        # Wait for lock to be granted (with timeout to prevent indefinite blocking)
+        try:
+            await asyncio.wait_for(entry.event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            # Remove from queue on timeout
+            async with self._condition:
+                if entry in self.queue:
+                    self.queue.remove(entry)
+            raise LockTimeout(
+                f"Read lock acquisition timed out after {timeout}s for request {request_id}"
+            )
 
     async def acquire_write(self, request_id: str, timeout: float) -> None:
         """
@@ -229,22 +238,26 @@ class LockManager:
             self._locks[path] = FileLock()
         return self._locks[path]
 
-    async def acquire_read(self, path: str) -> str:
+    async def acquire_read(self, path: str, timeout: float = 60.0) -> str:
         """
         Acquire a read lock on a file.
 
         Args:
             path: Normalized absolute file path
+            timeout: Maximum seconds to wait for the lock (default: 60.0)
 
         Returns:
             Request ID for this lock (for release)
+
+        Raises:
+            LockTimeout: If lock cannot be acquired within timeout
         """
         request_id = str(uuid.uuid4())
 
         async with self._global_lock:
             file_lock = self._get_or_create_lock(path)
 
-        await file_lock.acquire_read(request_id)
+        await file_lock.acquire_read(request_id, timeout=timeout)
         return request_id
 
     async def acquire_write(self, path: str, timeout: float = 30.0) -> str:

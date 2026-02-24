@@ -7,6 +7,7 @@ from async_crud_mcp.core import (
     AccessDeniedError,
     ContentScanner,
     LockManager,
+    LockTimeout,
     PathValidationError,
     PathValidator,
     compute_hash,
@@ -57,8 +58,15 @@ async def async_read(
                 path=request.path,
             )
 
-        # 3. Acquire shared read lock
-        request_id = await lock_manager.acquire_read(str(validated_path))
+        # 3. Acquire shared read lock (with timeout to prevent indefinite blocking)
+        try:
+            request_id = await lock_manager.acquire_read(str(validated_path), timeout=request.timeout)
+        except LockTimeout:
+            return ErrorResponse(
+                error_code=ErrorCode.SERVER_ERROR,
+                message=f"Read lock timed out after {request.timeout}s: {request.path}",
+                path=request.path,
+            )
 
         try:
             # 4a. Read file in binary mode, compute hash

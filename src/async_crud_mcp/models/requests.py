@@ -30,6 +30,7 @@ class AsyncReadRequest(BaseModel):
     offset: int = Field(default=0, description="Line offset to start reading from")
     limit: int | None = Field(default=None, description="Maximum number of lines to read")
     encoding: str = Field(default="utf-8", description="File encoding")
+    timeout: float = Field(default=60.0, description="Read lock timeout in seconds")
 
 
 class AsyncWriteRequest(BaseModel):
