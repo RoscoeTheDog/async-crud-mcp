@@ -147,9 +147,9 @@ class TestFastMCPServer:
             assert expected_tool in tool_names, f"Tool {expected_tool} not registered"
 
     def test_tool_count(self):
-        """Test that exactly 21 tools are registered (11 CRUD + 3 shell + 1 health + 3 config + 3 recycle)."""
+        """Test that exactly 22 tools are registered (12 CRUD + 3 shell + 1 health + 3 config + 3 recycle)."""
         tool_count = len(mcp._tool_manager._tools)
-        assert tool_count == 21, f"Expected 21 tools, found {tool_count}"
+        assert tool_count == 22, f"Expected 22 tools, found {tool_count}"
 
 
 class TestToolWrappers:

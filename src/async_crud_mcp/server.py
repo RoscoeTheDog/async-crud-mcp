@@ -343,6 +343,7 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
         audit_logger.close()
         await background_registry.shutdown()
         logger.info("Background task registry shut down")
+        await logger.complete()  # Drain loguru async queue before exit
 
 
 # Initialize FastMCP server instance
