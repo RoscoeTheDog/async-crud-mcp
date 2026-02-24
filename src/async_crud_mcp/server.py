@@ -89,6 +89,7 @@ from async_crud_mcp.tools import (
     async_delete,
     async_exec,
     async_list,
+    async_mkdir,
     async_read,
     async_rename,
     async_restore,
