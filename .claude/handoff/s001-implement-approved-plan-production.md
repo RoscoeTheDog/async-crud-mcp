@@ -1,6 +1,6 @@
 # Session 001: Implement Production Readiness Plan for async-crud-mcp
 
-**Status**: ACTIVE
+**Status**: COMPLETED
 **Created**: 2026-02-23 17:04
 **Updated**: 2026-02-24T00:30
 **Objective**: Implement approved plan: Production Readiness for async-crud-mcp
@@ -30,6 +30,11 @@
 - **Phase 4 (Low) -- DONE** (commit `efccf4e`):
   - **4.1 Migration guide**: `docs/MIGRATION.md` -- maps native Claude Code tools to async-crud-mcp equivalents, documents glob pattern differences (fnmatch vs pathlib.glob), update modes (full/exact/regex), conflict detection, search differences, batch operations, project activation, recycle bin.
   - **4.2 Shell restrictions reference**: `docs/SHELL_RESTRICTIONS.md` -- documents all exec deny patterns by category (file I/O, system commands, interpreter inline-code, command obfuscation, pipe-to-shell, alternate shells, fd redirection), with rationale, recommended alternatives, and content redaction behavior.
+- **Phase 5 (Medium-High) -- DONE** (commit `6466205`):
+  - **5.1 async_search redact-not-skip**: Replaced `content_scanner.scan()` + `continue` (file-level skip) with `content_scanner.redact()` per-line nulling. Sensitive matched lines get `line_content=None`, `redacted=True`, `redaction_rule` populated. Context lines with sensitive content are individually nulled. `files_with_matches` and `count` modes still include the file/count.
+  - **5.2 async_read redact-not-block**: Replaced `content_scanner.scan()` + `ACCESS_DENIED` error with `content_scanner.redact()` in-place placeholder insertion (`<<REDACTED:rule_name:N>>`). Added `redactions: list[RedactionEntry] | None` field to `ReadSuccessResponse`. Offset/limit slicing applies to already-redacted content. `async_batch_read` inherits fix automatically.
+  - **5.3 Model changes**: `SearchMatch.line_content` -> `str | None`, `context_before/after` -> `list[str | None]`, added `redacted: bool`, `redaction_rule: str | None`. Moved `RedactionEntry` before `ReadSuccessResponse` to resolve forward reference. Added `ReadSuccessResponse.redactions` field.
+  - **5.4 Tests**: 5 new search redaction tests (sensitive line redacted, clean line not redacted, context lines nulled, files_with_matches still returns file, count mode still counts). 4 new read redaction tests (placeholder content, redactions array, offset/limit with redaction, clean file no redactions). Total: 670 passed, 2 pre-existing failures (test_config.py defaults).
 
 ---
 
@@ -41,7 +46,7 @@ None
 
 ## Next Steps
 
-1. **Phase 5: Implement redact-not-skip for async_search and async_read** (see below)
+All 5 phases complete. Production readiness plan fully implemented.
 
 ### Phase 5: Consistent Content Scanner Redaction (Medium-High)
 
