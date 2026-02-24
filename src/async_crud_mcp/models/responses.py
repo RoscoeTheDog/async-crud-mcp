@@ -526,3 +526,4 @@ class SearchResponse(BaseModel):
     matches: list[SearchMatch] = Field(default_factory=list)
     total_matches: int
     files_searched: int
+    truncated: bool | None = Field(default=None, description="True if results were truncated by timeout")

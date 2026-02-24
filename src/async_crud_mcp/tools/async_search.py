@@ -114,8 +114,14 @@ async def async_search(
     files_searched = 0
     file_match_counts: dict[str, int] = defaultdict(int)
     total_matches = 0
+    truncated = False
+    deadline = time.monotonic() + search_config.timeout_default
 
     for file_path in sorted(files):
+        # Wall-clock timeout check
+        if time.monotonic() > deadline:
+            truncated = True
+            break
         # Validate access
         try:
             path_validator.validate_operation(str(file_path), "read")
@@ -209,4 +215,5 @@ async def async_search(
         matches=matches,
         total_matches=total_matches,
         files_searched=files_searched,
+        truncated=truncated if truncated else None,
     )
