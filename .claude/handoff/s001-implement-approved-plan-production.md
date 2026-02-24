@@ -1,8 +1,8 @@
 # Session 001: Implement Production Readiness Plan for async-crud-mcp
 
-**Status**: COMPLETE
+**Status**: ACTIVE
 **Created**: 2026-02-23 17:04
-**Updated**: 2026-02-24T00:00
+**Updated**: 2026-02-24T00:30
 **Objective**: Implement approved plan: Production Readiness for async-crud-mcp
 
 ---
@@ -41,7 +41,102 @@ None
 
 ## Next Steps
 
-All 4 phases complete. No remaining work items.
+1. **Phase 5: Implement redact-not-skip for async_search and async_read** (see below)
+
+### Phase 5: Consistent Content Scanner Redaction (Medium-High)
+
+**Problem**: Content scanner behavior is inconsistent across tools that return file content. Some tools redact sensitive spans in-place (returning position metadata with nulled content), while others skip/block the entire file -- making sensitive files invisible to the LLM even though filenames, structure, and positions are not sensitive.
+
+**Threat model**: Credential exfiltration through LLM context. Server is localhost-only, never public-facing. File names, structure, and match positions are NOT sensitive. Only the literal content of credentials must be withheld.
+
+**Current inconsistency**:
+
+| Tool | Current Behavior | Target Behavior |
+|------|-----------------|-----------------|
+| async_update (contention) | Redacts spans, returns `RedactionEntry` metadata | Already correct |
+| async_update (regex) | Blocks per-match, returns `RegexBlockedMatch` with position | Already correct |
+| async_exec / async_wait | Redacts stdout/stderr via `content_scanner.redact()` | Already correct |
+| **async_search** | **Skips entire file** (`continue` on `scan_result.blocked`) | **Needs fix** |
+| **async_read** | **Blocks entire file** (returns `ACCESS_DENIED` error) | **Needs fix** |
+| async_batch_read | Delegates to async_read -- inherits fix automatically | Inherits fix |
+| async_list | Never returns content, only names/sizes/timestamps | No change needed |
+
+#### 5.1 async_search -- redact matched lines instead of skipping file
+
+**File**: `src/async_crud_mcp/tools/async_search.py` (lines 136-140)
+
+**Current** (skip pattern):
+```python
+if content_scanner is not None:
+    scan_result = content_scanner.scan(content, str(file_path))
+    if scan_result.blocked:
+        continue  # entire file invisible
+```
+
+**Target** (redact pattern):
+- Remove the file-level skip. Instead, after finding a regex match on a line, check if that line contains sensitive content via `content_scanner.redact()`.
+- If the matched line has redactions overlapping the match: include the `SearchMatch` but set `line_content` to `null`, add a `redacted: true` flag and `redaction_reason` (rule name).
+- Context lines (`context_before`/`context_after`) that contain sensitive content should also be nulled individually (not the whole array -- just the affected lines become `null`).
+- For `output_mode="files_with_matches"`: file still appears in results (position not sensitive).
+- For `output_mode="count"`: count still incremented (count not sensitive).
+
+**Model changes** (`src/async_crud_mcp/models/responses.py`):
+- `SearchMatch.line_content`: Change type from `str` to `str | None`. When redacted, set to `None`.
+- `SearchMatch.context_before` / `context_after`: Change type from `list[str]` to `list[str | None]`. Sensitive context lines become `None`.
+- Add `SearchMatch.redacted: bool = False` field.
+- Add `SearchMatch.redaction_rule: str | None = None` field (rule name that triggered redaction).
+
+**Implementation approach**:
+1. Keep reading the file content (don't skip).
+2. Use `content_scanner.redact()` on the full file content to get `RedactedContent` with span positions.
+3. Build a set of line numbers that have redactions from `RedactedContent.redactions`.
+4. When building `SearchMatch` for a line that has redactions: set `line_content=None`, `redacted=True`, `redaction_rule=<first matching rule>`.
+5. For context lines, check each against the redacted-lines set, null those that overlap.
+
+#### 5.2 async_read -- redact content instead of blocking file
+
+**File**: `src/async_crud_mcp/tools/async_read.py` (lines 82-93)
+
+**Current** (block pattern):
+```python
+if content_scanner is not None:
+    scan_result = content_scanner.scan(content, str(validated_path))
+    if scan_result.blocked:
+        return ErrorResponse(
+            error_code=ErrorCode.ACCESS_DENIED,
+            message=f"File contains sensitive content matching rule '{scan_result.matched_pattern}' (line {scan_result.matched_line})",
+            path=request.path,
+        )
+```
+
+**Target** (redact pattern):
+- Replace `scan()` with `redact()` (same as async_update contention path already does).
+- Replace sensitive spans in the returned content with `<<REDACTED:rule_name:N>>` placeholders.
+- Add `redactions: list[RedactionEntry] | None` field to `ReadSuccessResponse`.
+- When redactions exist, populate the field with position metadata (id, rule_name, line, col_start, original_length) -- same `RedactionEntry` model already used by `ContentionResponse`.
+
+**Model changes** (`src/async_crud_mcp/models/responses.py`):
+- Add `ReadSuccessResponse.redactions: list[RedactionEntry] | None = None` field.
+
+**Implementation approach**:
+1. Replace the `scan()` + block with `redact()`.
+2. If `redacted_result.has_redactions`: use `redacted_result.content` as the file content (placeholders already inserted), build `RedactionEntry` list from spans.
+3. Offset/limit slicing applies to the already-redacted content (placeholders are part of the text).
+4. `async_batch_read` inherits this automatically since it delegates to `async_read`.
+
+#### 5.3 Tests
+
+**New tests needed**:
+- `tests/test_tools/test_async_search.py`: Search in file with sensitive content -- verify match returned with `line_content=None`, `redacted=True`, `redaction_rule` populated. Verify context lines nulled appropriately. Verify `files_with_matches` mode still returns the file. Verify `count` mode still counts.
+- `tests/test_tools/test_async_read.py`: Read file with sensitive content -- verify content returned with `<<REDACTED:...>>` placeholders. Verify `redactions` array populated with correct positions. Verify offset/limit still works with redacted content.
+
+#### Implementation notes
+
+- The `RedactionEntry` model already exists in `responses.py` (line 244) -- reuse it for `ReadSuccessResponse`.
+- `ContentScanner.redact()` already returns `RedactedContent` with `content` (placeholders inserted) and `redactions` (list of `RedactionSpan` with id, rule_name, line, col_start, col_end, original_length) -- no new scanner work needed.
+- The update tool's contention path (`async_update.py` lines 161-176) is the reference implementation for the redact pattern -- follow the same `RedactedContent` -> `RedactionEntry` mapping.
+- `SearchMatch.line_content` becoming nullable is a breaking schema change for consumers that expect `str`. Consider whether to version or just document.
+- `async_list` does NOT need changes -- it never returns file content.
 
 ---
 
@@ -55,6 +150,8 @@ All 4 phases complete. No remaining work items.
 - **async_write stays atomic**: 256MB limit is generous. No streaming needed.
 - **async_read pagination already exists**: offset/limit parameters with response metadata already implemented.
 - **Missing features (Notebook, LSP, Task) non-blocking**: Other MCP tools handle these.
+- **Redact-not-skip for content scanner**: All tools that return file content should redact sensitive spans with position metadata instead of skipping/blocking entire files. Filenames, structure, and match positions are not sensitive -- only literal credential content must be withheld. Localhost-only threat model (credential exfiltration via LLM context).
+- **async_list excluded from redaction**: Never returns file content, only names/sizes/timestamps. No change needed.
 
 ---
 
@@ -71,6 +168,7 @@ None
 - `d27968e` feat(security): redact sensitive data from exec stdout/stderr (Phase 2)
 - `76d5eeb` feat(security): add HMAC integrity and async-safe locking to recycle bin (Phase 3)
 - `efccf4e` docs: add migration guide and shell restrictions reference (Phase 4)
+- `68b78d9` refactor(list): switch async_list from fnmatch to pathlib.glob
 
 **Files Modified in Phase 1**:
 - `src/async_crud_mcp/core/path_validator.py` (secure CWD default)
