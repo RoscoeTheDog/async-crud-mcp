@@ -4,7 +4,9 @@ Searches files by regex pattern with glob filtering, respecting PathValidator
 and ContentScanner rules.
 """
 
+import os
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -74,12 +76,16 @@ async def async_search(
             message="No search path specified and no project activated.",
         )
 
-    # Validate search path is within project root
-    if project_root and not str(search_path.resolve()).startswith(str(project_root.resolve())):
-        return ErrorResponse(
-            error_code=ErrorCode.PATH_OUTSIDE_BASE,
-            message=f"Search path is outside project root: {search_path}",
-        )
+    # Validate search path is within project root (os.sep prevents /project-foo matching /project)
+    if project_root:
+        resolved_root = str(project_root.resolve())
+        resolved_search = str(search_path.resolve())
+        root_with_sep = resolved_root if resolved_root.endswith(os.sep) else resolved_root + os.sep
+        if resolved_search != resolved_root and not resolved_search.startswith(root_with_sep):
+            return ErrorResponse(
+                error_code=ErrorCode.PATH_OUTSIDE_BASE,
+                message=f"Search path is outside project root: {search_path}",
+            )
 
     if not search_path.is_dir():
         return ErrorResponse(
