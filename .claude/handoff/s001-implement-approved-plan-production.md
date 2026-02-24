@@ -1,8 +1,8 @@
 # Session 001: Implement Production Readiness Plan for async-crud-mcp
 
-**Status**: ACTIVE
+**Status**: COMPLETE
 **Created**: 2026-02-23 17:04
-**Updated**: 2026-02-23T23:30
+**Updated**: 2026-02-24T00:00
 **Objective**: Implement approved plan: Production Readiness for async-crud-mcp
 
 ---
@@ -22,11 +22,14 @@
   - **2.2 Background task wait redaction**: Applied `ContentScanner.redact()` to background task stdout/stderr in `async_wait.py` for both "already completed" and "just completed" paths. Added `content_scanner` parameter to `async_wait()` and `_wait_for_task()`.
   - **2.3 Server wiring**: Passed module-level `content_scanner` to both `async_exec()` and `async_wait()` in `server.py`.
   - 8 new tests (4 exec redaction + 4 wait redaction).
-- **Phase 3 (Medium) -- DONE** (uncommitted, 6 files, +620/-231):
+- **Phase 3 (Medium) -- DONE** (commit `76d5eeb`):
   - **3.1 Async-safe RecycleBin**: Added `asyncio.Lock` to `RecycleBin.__init__()`. Converted all 4 public methods (`recycle`, `restore`, `list_entries`, `cleanup`) to `async` with `asyncio.timeout()` + lock acquisition pattern. Each method accepts a `timeout` parameter (default 30s, list_entries 10s). Timeout raises `RecycleBinError`.
   - **3.2 HMAC-SHA256 manifest integrity**: Added `hmac_key: bytes` param to `RecycleBin.__init__()`, `signature: str` field to `RecycleEntry` dataclass, `_compute_signature()` method. Canonical message: `"{recycle_name}:{original_path}:{deleted_hash}:{size_bytes}"`. `recycle()` signs entries before writing manifest. `restore()` verifies HMAC with `hmac.compare_digest()` -- rejects tampered entries, allows unsigned entries (backward compat) with warning log.
   - **3.3 Caller updates**: `server.py` generates ephemeral `os.urandom(32)` HMAC key, passes to `RecycleBin()`. `async_delete.py`, `async_restore.py`, and server tool wrappers now `await` async RecycleBin methods. Added `timeout` field to `AsyncRestoreRequest` model.
   - **3.4 Tests**: All 20 existing tests converted to async. 6 new HMAC integrity tests (signature creation, valid roundtrip, tamper detection for original_path and deleted_hash, unsigned backward compat, different keys). 5 new async locking tests (concurrent recycle, concurrent restore, recycle timeout, restore timeout, same-basename collision). Total: 31 recycle bin tests + 16 delete/restore tool tests = 47/47 passed.
+- **Phase 4 (Low) -- DONE** (commit `efccf4e`):
+  - **4.1 Migration guide**: `docs/MIGRATION.md` -- maps native Claude Code tools to async-crud-mcp equivalents, documents glob pattern differences (fnmatch vs pathlib.glob), update modes (full/exact/regex), conflict detection, search differences, batch operations, project activation, recycle bin.
+  - **4.2 Shell restrictions reference**: `docs/SHELL_RESTRICTIONS.md` -- documents all exec deny patterns by category (file I/O, system commands, interpreter inline-code, command obfuscation, pipe-to-shell, alternate shells, fd redirection), with rationale, recommended alternatives, and content redaction behavior.
 
 ---
 
@@ -38,9 +41,7 @@ None
 
 ## Next Steps
 
-1. **Commit Phase 3**: 6 files modified, all tests passing -- ready to commit
-2. **Phase 4 (Low)**: Documentation -- migration guide for glob patterns, shell restrictions reference
-3. Read the plan for full details: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md`
+All 4 phases complete. No remaining work items.
 
 ---
 
@@ -67,6 +68,9 @@ None
 
 **Commit History**:
 - `987af05` feat(security): implement Phase 1 critical production readiness features (10 files, +549/-32)
+- `d27968e` feat(security): redact sensitive data from exec stdout/stderr (Phase 2)
+- `76d5eeb` feat(security): add HMAC integrity and async-safe locking to recycle bin (Phase 3)
+- `efccf4e` docs: add migration guide and shell restrictions reference (Phase 4)
 
 **Files Modified in Phase 1**:
 - `src/async_crud_mcp/core/path_validator.py` (secure CWD default)
@@ -87,13 +91,17 @@ None
 - `tests/test_tools/test_async_exec.py` (4 new redaction tests)
 - `tests/test_tools/test_async_wait.py` (4 new redaction tests)
 
-**Files Modified in Phase 3** (uncommitted):
+**Files Modified in Phase 3** (commit `76d5eeb`):
 - `src/async_crud_mcp/core/recycle_bin.py` (asyncio.Lock, HMAC signing/verification, async methods, timeout)
 - `src/async_crud_mcp/server.py` (os.urandom HMAC key, await async recycle bin calls)
 - `src/async_crud_mcp/tools/async_delete.py` (await recycle_bin.recycle())
 - `src/async_crud_mcp/tools/async_restore.py` (await recycle_bin.restore(), pass timeout)
 - `src/async_crud_mcp/models/requests.py` (timeout field on AsyncRestoreRequest)
 - `tests/test_core/test_recycle_bin.py` (converted to async, +11 new HMAC/locking tests)
+
+**Files Added in Phase 4** (commit `efccf4e`):
+- `docs/MIGRATION.md` (tool mapping, glob differences, update modes, search comparison)
+- `docs/SHELL_RESTRICTIONS.md` (deny pattern reference by category)
 
 **Test Results**: 47/47 recycle bin + delete/restore tests passed. 1 pre-existing failure in test_config.py (config default mismatch from prior sprint).
 

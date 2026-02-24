@@ -106,7 +106,7 @@ class AsyncListRequest(BaseModel):
     """Request model for async_list tool."""
 
     path: str = Field(..., description="Directory path to list")
-    pattern: str = Field(default="*", description="Glob pattern to filter entries")
+    pattern: str = Field(default="*", description="Glob pattern to filter entries (supports **/*.py syntax)")
     recursive: bool = Field(default=False, description="Recursively list subdirectories")
     include_hashes: bool = Field(default=False, description="Include file hashes in response")
 

@@ -649,12 +649,12 @@ async def async_list_tool(
     pattern: str = "*",
     include_hashes: bool = False,
 ):
-    """List directory contents.
+    """List directory contents with glob filtering.
 
     Args:
         path: Directory path to list
         recursive: List recursively (default: False)
-        pattern: Glob pattern to filter entries (default: *)
+        pattern: Glob pattern to filter entries (supports **/*.py syntax) (default: *)
         include_hashes: Include file hashes in response (default: False)
 
     Returns:
@@ -895,7 +895,7 @@ async def async_search_tool(
     Args:
         pattern: Regex pattern to search for
         path: Search directory (default: project root). Must be within project root.
-        glob: Glob pattern to filter files (default: *)
+        glob: Glob pattern to filter files (supports **/*.py syntax) (default: *)
         recursive: Search subdirectories (default: True)
         case_insensitive: Case-insensitive matching (default: False)
         max_results: Maximum matches to return (default: 100). Must be >= 1.

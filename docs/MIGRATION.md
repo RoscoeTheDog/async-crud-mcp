@@ -82,44 +82,22 @@ All update operations require `expected_hash` (obtained from a prior read or wri
 
 This avoids re-reading the entire file just to retry an update.
 
-## Glob Pattern Differences
+## Glob Patterns
 
-### Native Glob Tool
+Both `async_list_tool` and `async_search_tool` use Python's `pathlib.glob`/`rglob` internally and support the same glob syntax as the native `Glob` tool:
 
-The native `Glob` tool supports full glob syntax including:
 - `*` - match any characters within a path segment
 - `**` - match zero or more path segments (recursive descent)
 - `?` - match a single character
 - `[abc]` - character classes
-- `{a,b}` - brace expansion
-
-Example: `**/*.py` matches all Python files in all subdirectories.
-
-### async_list_tool
-
-`async_list_tool` uses Python's `fnmatch` module, which matches against **individual file/directory names**, not full paths.
-
-**Key differences:**
-
-| Pattern | Native Glob | async_list_tool |
-|---------|------------|-----------------|
-| `**/*.py` | All `.py` files recursively | Not supported |
-| `*.py` | `.py` files in current dir | `.py` files (use `recursive: true` for subdirs) |
-| `test_*` | Files starting with `test_` | Same behavior |
-| `*.{js,ts}` | JS and TS files | Not supported (no brace expansion) |
-
-**How to achieve the same results:**
 
 | Goal | Native Glob | async_list_tool Equivalent |
 |------|------------|---------------------------|
-| All `.py` files recursively | `Glob("**/*.py")` | `async_list_tool(path, pattern="*.py", recursive=true)` |
+| All `.py` files recursively | `Glob("**/*.py")` | `async_list_tool(path, pattern="**/*.py", recursive=true)` |
 | All files in one dir | `Glob("src/*")` | `async_list_tool(path="src")` |
 | Specific extension, one dir | `Glob("src/*.ts")` | `async_list_tool(path="src", pattern="*.ts")` |
-| Multiple extensions | `Glob("**/*.{js,ts}")` | Two calls: `pattern="*.js"` and `pattern="*.ts"` |
 
-### Workaround for Complex Patterns
-
-For patterns that `fnmatch` cannot express, use `async_search_tool` with a broad file glob and filter results by path regex, or make multiple `async_list_tool` calls with simple patterns.
+**Note:** `{a,b}` brace expansion is not supported by Python's pathlib. Use separate calls for multiple extensions.
 
 ## Search Differences
 

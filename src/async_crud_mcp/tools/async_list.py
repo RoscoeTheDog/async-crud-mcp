@@ -1,8 +1,8 @@
 """Async list tool for directory listing with glob filtering."""
 
-import fnmatch
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Union
 
 from async_crud_mcp.core import AccessDeniedError, HashRegistry, PathValidationError, PathValidator
@@ -65,29 +65,20 @@ async def async_list(
 
         # 3. List directory contents based on recursive flag
         entries: list[DirectoryEntry] = []
+        base_path = Path(validated_path)
 
         if request.recursive:
-            # Recursive listing using os.walk
-            for root, dirs, files in os.walk(validated_path):
-                # Calculate relative path from base directory
-                rel_root = os.path.relpath(root, validated_path)
-                if rel_root == ".":
-                    rel_root = ""
+            # Use pathlib.rglob for recursive matching (supports ** syntax)
+            for match in sorted(base_path.rglob(request.pattern)):
+                rel_path = str(match.relative_to(base_path))
 
-                # Process directories
-                for dir_name in dirs:
-                    if request.pattern != "*" and not fnmatch.fnmatch(dir_name, request.pattern):
-                        continue
+                try:
+                    stat_info = match.stat()
+                    modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
+                except OSError:
+                    modified = None
 
-                    rel_path = os.path.join(rel_root, dir_name) if rel_root else dir_name
-                    full_path = os.path.join(root, dir_name)
-
-                    try:
-                        stat_info = os.stat(full_path)
-                        modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
-                    except OSError:
-                        modified = None
-
+                if match.is_dir():
                     entries.append(
                         DirectoryEntry(
                             name=rel_path,
@@ -97,27 +88,15 @@ async def async_list(
                             hash=None,
                         )
                     )
-
-                # Process files
-                for file_name in files:
-                    if request.pattern != "*" and not fnmatch.fnmatch(file_name, request.pattern):
-                        continue
-
-                    rel_path = os.path.join(rel_root, file_name) if rel_root else file_name
-                    full_path = os.path.join(root, file_name)
-
+                else:
                     try:
-                        stat_info = os.stat(full_path)
                         size_bytes = stat_info.st_size
-                        modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
-                    except OSError:
+                    except (OSError, UnboundLocalError):
                         size_bytes = None
-                        modified = None
 
-                    # Get hash if requested
                     file_hash = None
                     if request.include_hashes:
-                        file_hash = hash_registry.get(full_path)
+                        file_hash = hash_registry.get(str(match))
 
                     entries.append(
                         DirectoryEntry(
@@ -130,50 +109,44 @@ async def async_list(
                     )
 
         else:
-            # Non-recursive listing using os.scandir
+            # Use pathlib.glob for non-recursive matching
             try:
-                with os.scandir(validated_path) as it:
-                    for entry in it:
-                        # Apply glob filter
-                        if request.pattern != "*" and not fnmatch.fnmatch(entry.name, request.pattern):
-                            continue
+                for match in sorted(base_path.glob(request.pattern)):
+                    rel_path = match.name
 
-                        try:
-                            stat_info = entry.stat(follow_symlinks=False)
-                            is_dir = entry.is_dir(follow_symlinks=False)
+                    try:
+                        stat_info = match.stat(follow_symlinks=False)
+                        modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
+                    except OSError:
+                        modified = None
+                        stat_info = None
 
-                            if is_dir:
-                                modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
-                                entries.append(
-                                    DirectoryEntry(
-                                        name=entry.name,
-                                        type="directory",
-                                        size_bytes=None,
-                                        modified=modified,
-                                        hash=None,
-                                    )
-                                )
-                            else:
-                                size_bytes = stat_info.st_size
-                                modified = datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc).isoformat()
+                    if match.is_dir():
+                        entries.append(
+                            DirectoryEntry(
+                                name=rel_path,
+                                type="directory",
+                                size_bytes=None,
+                                modified=modified,
+                                hash=None,
+                            )
+                        )
+                    else:
+                        size_bytes = stat_info.st_size if stat_info else None
 
-                                # Get hash if requested
-                                file_hash = None
-                                if request.include_hashes:
-                                    file_hash = hash_registry.get(entry.path)
+                        file_hash = None
+                        if request.include_hashes:
+                            file_hash = hash_registry.get(str(match))
 
-                                entries.append(
-                                    DirectoryEntry(
-                                        name=entry.name,
-                                        type="file",
-                                        size_bytes=size_bytes,
-                                        modified=modified,
-                                        hash=file_hash,
-                                    )
-                                )
-                        except OSError:
-                            # Skip entries we can't stat
-                            continue
+                        entries.append(
+                            DirectoryEntry(
+                                name=rel_path,
+                                type="file",
+                                size_bytes=size_bytes,
+                                modified=modified,
+                                hash=file_hash,
+                            )
+                        )
             except OSError as e:
                 return ErrorResponse(
                     error_code=ErrorCode.SERVER_ERROR,
