@@ -12,7 +12,7 @@ from async_crud_mcp.core import (
     PathValidator,
     compute_hash,
 )
-from async_crud_mcp.models import AsyncReadRequest, ErrorCode, ErrorResponse, ReadSuccessResponse
+from async_crud_mcp.models import AsyncReadRequest, ErrorCode, ErrorResponse, ReadSuccessResponse, RedactionEntry
 
 
 async def async_read(
@@ -78,19 +78,22 @@ async def async_read(
                     path=request.path,
                 )
 
-            # 4b.5: Content scanning (if enabled)
+            # 4b.5: Content scanning -- redact sensitive spans in-place
+            redaction_entries = None
             if content_scanner is not None:
-                scan_result = content_scanner.scan(content, str(validated_path))
-                if scan_result.blocked:
-                    return ErrorResponse(
-                        error_code=ErrorCode.ACCESS_DENIED,
-                        message=(
-                            f"File contains sensitive content matching rule "
-                            f"'{scan_result.matched_pattern}' "
-                            f"(line {scan_result.matched_line})"
-                        ),
-                        path=request.path,
-                    )
+                redacted_result = content_scanner.redact(content, str(validated_path))
+                if redacted_result.has_redactions:
+                    content = redacted_result.content
+                    redaction_entries = [
+                        RedactionEntry(
+                            id=r.id,
+                            rule_name=r.rule_name,
+                            line=r.line,
+                            col_start=r.col_start,
+                            original_length=r.original_length,
+                        )
+                        for r in redacted_result.redactions
+                    ]
 
             # 4c. Split into lines, compute total_lines
             lines = content.splitlines(keepends=True)
@@ -120,6 +123,7 @@ async def async_read(
                 encoding=request.encoding,
                 path=str(validated_path),
                 timestamp=datetime.now(timezone.utc).isoformat(),
+                redactions=redaction_entries,
             )
 
         finally:

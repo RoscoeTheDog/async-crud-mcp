@@ -34,6 +34,21 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = "VALIDATION_ERROR"
 
 
+# Shared Models
+
+
+class RedactionEntry(BaseModel):
+    """Metadata for a single redacted span in the content."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int = Field(..., description="Sequential redaction ID (matches placeholder)")
+    rule_name: str = Field(..., description="Content scan rule that matched")
+    line: int = Field(..., description="1-based line number in the original content")
+    col_start: int = Field(..., description="0-based start column in the line")
+    original_length: int = Field(..., description="Character length of original content")
+
+
 # Success Response Models
 
 
@@ -52,6 +67,10 @@ class ReadSuccessResponse(BaseModel):
     limit: int | None = Field(..., description="Line limit used")
     lines_returned: int = Field(..., description="Number of lines returned")
     timestamp: str = Field(..., description="Operation timestamp (ISO 8601)")
+    redactions: list[RedactionEntry] | None = Field(
+        default=None,
+        description="Metadata for redacted spans in the content (when sensitive content was replaced with placeholders)"
+    )
 
 
 class WriteSuccessResponse(BaseModel):
@@ -239,18 +258,6 @@ class PatchConflict(BaseModel):
 
     patch_index: int = Field(..., description="Index of conflicting patch")
     reason: str = Field(..., description="Reason patch could not be applied")
-
-
-class RedactionEntry(BaseModel):
-    """Metadata for a single redacted span in the diff."""
-
-    model_config = ConfigDict(frozen=True)
-
-    id: int = Field(..., description="Sequential redaction ID (matches placeholder)")
-    rule_name: str = Field(..., description="Content scan rule that matched")
-    line: int = Field(..., description="1-based line number in the original content")
-    col_start: int = Field(..., description="0-based start column in the line")
-    original_length: int = Field(..., description="Character length of original content")
 
 
 class ContentionResponse(BaseModel):
@@ -509,9 +516,11 @@ class SearchMatch(BaseModel):
 
     file: str
     line_number: int
-    line_content: str
-    context_before: list[str] = Field(default_factory=list)
-    context_after: list[str] = Field(default_factory=list)
+    line_content: str | None
+    context_before: list[str | None] = Field(default_factory=list)
+    context_after: list[str | None] = Field(default_factory=list)
+    redacted: bool = Field(default=False, description="True when line_content was redacted due to sensitive content")
+    redaction_rule: str | None = Field(default=None, description="Content scan rule that triggered redaction")
 
 
 class SearchResponse(BaseModel):

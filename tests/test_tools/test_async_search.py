@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from async_crud_mcp.config import SearchConfig
+from async_crud_mcp.config import ContentRule, SearchConfig
 from async_crud_mcp.core import ContentScanner, PathValidator
 from async_crud_mcp.models.requests import SearchRequest
 from async_crud_mcp.models.responses import ErrorCode
@@ -229,3 +229,136 @@ class TestAsyncSearchAccessControl:
             request, config, path_validator, project_root=temp_base_dir
         )
         assert response.total_matches == 0
+
+
+class TestAsyncSearchRedaction:
+    """Test content scanner redaction in search results."""
+
+    @pytest.fixture
+    def content_scanner(self):
+        """Scanner with AWS key detection rule."""
+        rules = [
+            ContentRule(
+                name="aws-access-key-id",
+                pattern=r"AKIA[0-9A-Z]{16}",
+                action="deny",
+                priority=100,
+            ),
+        ]
+        return ContentScanner(rules=rules, enabled=True)
+
+    @pytest.fixture
+    def sensitive_files(self, temp_base_dir):
+        """Create files with sensitive content for redaction testing."""
+        # File with a sensitive line (fake AWS key)
+        config_file = temp_base_dir / "config.txt"
+        config_file.write_text(
+            "# Database config\n"
+            "host=localhost\n"
+            "aws_key=AKIAIOSFODNN7EXAMPLE\n"
+            "port=5432\n"
+            "name=mydb\n",
+            encoding="utf-8",
+        )
+
+        # File with no sensitive content
+        clean_file = temp_base_dir / "clean.txt"
+        clean_file.write_text(
+            "just normal content\nnothing sensitive here\n",
+            encoding="utf-8",
+        )
+
+        return {"config": config_file, "clean": clean_file}
+
+    @pytest.mark.asyncio
+    async def test_sensitive_line_redacted(
+        self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
+    ):
+        """Matching line with sensitive content should have line_content=None and redacted=True."""
+        request = SearchRequest(pattern="AKIA", glob="*.txt")
+        response = await async_search(
+            request, search_config, path_validator,
+            content_scanner=content_scanner, project_root=temp_base_dir,
+        )
+        assert response.status == "ok"
+        assert response.total_matches >= 1
+        # The match on the sensitive line should be redacted
+        redacted_matches = [m for m in response.matches if m.redacted]
+        assert len(redacted_matches) >= 1
+        for m in redacted_matches:
+            assert m.line_content is None
+            assert m.redaction_rule == "aws-access-key-id"
+
+    @pytest.mark.asyncio
+    async def test_clean_line_not_redacted(
+        self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
+    ):
+        """Matching line without sensitive content should have normal line_content."""
+        request = SearchRequest(pattern="host=localhost", glob="*.txt")
+        response = await async_search(
+            request, search_config, path_validator,
+            content_scanner=content_scanner, project_root=temp_base_dir,
+        )
+        assert response.status == "ok"
+        assert response.total_matches >= 1
+        for m in response.matches:
+            assert m.redacted is False
+            assert m.line_content is not None
+            assert "localhost" in m.line_content
+
+    @pytest.mark.asyncio
+    async def test_context_lines_redacted(
+        self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
+    ):
+        """Context lines containing sensitive content should be nulled individually."""
+        # Search for "port=5432" which is line 4; line 3 has the AWS key (context_before)
+        request = SearchRequest(pattern="port=5432", glob="*.txt", context_lines=2)
+        response = await async_search(
+            request, search_config, path_validator,
+            content_scanner=content_scanner, project_root=temp_base_dir,
+        )
+        assert response.status == "ok"
+        assert response.total_matches >= 1
+        match = response.matches[0]
+        # The matched line itself is clean
+        assert match.redacted is False
+        assert match.line_content is not None
+        # context_before should have the sensitive line nulled
+        # Line 3 (aws_key=AKIA...) is in context_before
+        assert None in match.context_before
+        # Non-sensitive context lines should still have content
+        assert any(line is not None for line in match.context_before)
+
+    @pytest.mark.asyncio
+    async def test_files_with_matches_still_returns_file(
+        self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
+    ):
+        """In files_with_matches mode, file with sensitive content should still appear."""
+        request = SearchRequest(
+            pattern="AKIA", glob="*.txt", output_mode="files_with_matches",
+        )
+        response = await async_search(
+            request, search_config, path_validator,
+            content_scanner=content_scanner, project_root=temp_base_dir,
+        )
+        assert response.status == "ok"
+        assert response.total_matches >= 1
+        # File should appear in results
+        assert len(response.matches) >= 1
+
+    @pytest.mark.asyncio
+    async def test_count_mode_still_counts(
+        self, search_config, path_validator, temp_base_dir, sensitive_files, content_scanner
+    ):
+        """In count mode, matches in sensitive files should still be counted."""
+        request = SearchRequest(
+            pattern="AKIA", glob="*.txt", output_mode="count",
+        )
+        response = await async_search(
+            request, search_config, path_validator,
+            content_scanner=content_scanner, project_root=temp_base_dir,
+        )
+        assert response.status == "ok"
+        assert response.total_matches >= 1
+        # Count mode returns no match details
+        assert len(response.matches) == 0

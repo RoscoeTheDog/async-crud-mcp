@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, compute_hash
+from async_crud_mcp.config import ContentRule
+from async_crud_mcp.core import ContentScanner, HashRegistry, LockManager, PathValidator, compute_hash
 from async_crud_mcp.models import AsyncReadRequest, ErrorCode
 from async_crud_mcp.tools import async_read
 
@@ -238,3 +239,94 @@ class TestAsyncReadConcurrency:
         except asyncio.TimeoutError:
             await lock_manager.release_write(str(sample_file), write_request_id)
             raise
+
+
+class TestAsyncReadRedaction:
+    """Test content scanner redaction in read results."""
+
+    @pytest.fixture
+    def content_scanner(self):
+        """Scanner with AWS key detection rule."""
+        rules = [
+            ContentRule(
+                name="aws-access-key-id",
+                pattern=r"AKIA[0-9A-Z]{16}",
+                action="deny",
+                priority=100,
+            ),
+        ]
+        return ContentScanner(rules=rules, enabled=True)
+
+    @pytest.fixture
+    def sensitive_file(self, temp_base_dir):
+        """Create a file with sensitive content."""
+        file_path = temp_base_dir / "secrets.txt"
+        file_path.write_text(
+            "# Config\n"
+            "host=localhost\n"
+            "aws_key=AKIAIOSFODNN7EXAMPLE\n"
+            "port=5432\n",
+            encoding="utf-8",
+        )
+        return file_path
+
+    @pytest.mark.asyncio
+    async def test_content_redacted_with_placeholders(
+        self, sensitive_file, path_validator, lock_manager, content_scanner
+    ):
+        """Sensitive content should be replaced with <<REDACTED:...>> placeholders."""
+        request = AsyncReadRequest(path=str(sensitive_file))
+        response = await async_read(
+            request, path_validator, lock_manager, content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert "AKIAIOSFODNN7EXAMPLE" not in response.content
+        assert "<<REDACTED:aws-access-key-id:" in response.content
+
+    @pytest.mark.asyncio
+    async def test_redactions_array_populated(
+        self, sensitive_file, path_validator, lock_manager, content_scanner
+    ):
+        """Redactions metadata array should be populated with correct entries."""
+        request = AsyncReadRequest(path=str(sensitive_file))
+        response = await async_read(
+            request, path_validator, lock_manager, content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert response.redactions is not None
+        assert len(response.redactions) >= 1
+        entry = response.redactions[0]
+        assert entry.rule_name == "aws-access-key-id"
+        assert entry.line == 3  # 1-based line number
+        assert entry.original_length == 20  # AKIAIOSFODNN7EXAMPLE is 20 chars
+
+    @pytest.mark.asyncio
+    async def test_offset_limit_works_with_redacted_content(
+        self, sensitive_file, path_validator, lock_manager, content_scanner
+    ):
+        """Offset/limit slicing should work on already-redacted content."""
+        request = AsyncReadRequest(path=str(sensitive_file), offset=1, limit=2)
+        response = await async_read(
+            request, path_validator, lock_manager, content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert response.lines_returned == 2
+        assert response.offset == 1
+        # The sensitive line (line 3, 0-indexed 2) is at offset 2, so with
+        # offset=1,limit=2 we get lines at index 1 and 2 (host=localhost and aws_key=...)
+        assert "AKIAIOSFODNN7EXAMPLE" not in response.content
+
+    @pytest.mark.asyncio
+    async def test_clean_file_no_redactions(
+        self, temp_base_dir, path_validator, lock_manager, content_scanner
+    ):
+        """File without sensitive content should have no redactions."""
+        clean = temp_base_dir / "clean.txt"
+        clean.write_bytes(b"just normal content\n")
+        request = AsyncReadRequest(path=str(clean))
+        response = await async_read(
+            request, path_validator, lock_manager, content_scanner=content_scanner,
+        )
+        assert response.status == "ok"
+        assert response.redactions is None
+        assert response.content == "just normal content\n"

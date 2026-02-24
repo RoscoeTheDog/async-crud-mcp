@@ -133,11 +133,14 @@ async def async_search(
         except (OSError, UnicodeDecodeError):
             continue
 
-        # Content scanner check
+        # Content scanner: build set of redacted line numbers (1-based)
+        redacted_lines: dict[int, str] = {}  # line_number -> rule_name
         if content_scanner is not None:
-            scan_result = content_scanner.scan(content, str(file_path))
-            if scan_result.blocked:
-                continue
+            redacted_result = content_scanner.redact(content, str(file_path))
+            if redacted_result.has_redactions:
+                for span in redacted_result.redactions:
+                    if span.line not in redacted_lines:
+                        redacted_lines[span.line] = span.rule_name
 
         files_searched += 1
         lines = content.splitlines()
@@ -158,21 +161,32 @@ async def async_search(
                     truncated = True
                     continue
 
+                line_num = line_idx + 1  # 1-based
+
                 # Build context
-                ctx_before: list[str] = []
-                ctx_after: list[str] = []
+                ctx_before: list[str | None] = []
+                ctx_after: list[str | None] = []
                 if request.context_lines > 0:
                     start = max(0, line_idx - request.context_lines)
-                    ctx_before = lines[start:line_idx]
+                    ctx_before = [
+                        None if (start + i + 1) in redacted_lines else lines[start + i]
+                        for i in range(line_idx - start)
+                    ]
                     end = min(len(lines), line_idx + 1 + request.context_lines)
-                    ctx_after = lines[line_idx + 1:end]
+                    ctx_after = [
+                        None if (line_idx + 1 + j + 1) in redacted_lines else lines[line_idx + 1 + j]
+                        for j in range(end - line_idx - 1)
+                    ]
 
+                is_redacted = line_num in redacted_lines
                 matches.append(SearchMatch(
                     file=str(file_path),
-                    line_number=line_idx + 1,
-                    line_content=line,
+                    line_number=line_num,
+                    line_content=None if is_redacted else line,
                     context_before=ctx_before,
                     context_after=ctx_after,
+                    redacted=is_redacted,
+                    redaction_rule=redacted_lines.get(line_num),
                 ))
 
     return SearchResponse(
