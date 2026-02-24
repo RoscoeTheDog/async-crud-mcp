@@ -2,6 +2,7 @@
 
 **Status**: ACTIVE
 **Created**: 2026-02-23 17:04
+**Updated**: 2026-02-23
 **Objective**: Implement approved plan: Production Readiness for async-crud-mcp
 
 ---
@@ -12,6 +13,10 @@
 - Plan approved by user after iterative refinement (3 discussion rounds)
 - Reference table created at `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-reference.md`
 - User feedback incorporated: kept activate_project() behavior, dropped Redis lock manager, dropped trigram indexing, replaced AST shell parsing with stdout/stderr content scanner redaction, added per-match content scanner guard to regex editing
+- **Phase 1 (Critical) -- DONE** (commit `987af05`):
+  - **1.1 PathValidator secure defaults**: Empty `base_directories` now defaults to CWD instead of allowing all paths. Warning log emitted. 4 new tests.
+  - **1.2 Regex editing with content scanner guard**: Added `regex_patches` field to `AsyncUpdateRequest` with `RegexPatch(pattern, replacement, count)` model. Per-match ContentScanner guard blocks flagged matches with position-only error. Response includes `regex_applied`/`regex_blocked` arrays. 10 new tests.
+  - **1.3 External edit detection**: Added `modified_by` field ("agent"/"external"/"unknown") to `ContentionResponse` by comparing HashRegistry state against disk hash. Applied to update, delete, and rename tools. 3 new tests.
 
 ---
 
@@ -23,17 +28,13 @@ None
 
 ## Next Steps
 
-1. Read the plan reference table: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-reference.md`
-   - The reference table is a lightweight index pointing to the full research file(s)
-   - It lists each research file with scope and estimated word count
-2. Read the research file(s) listed in the reference table
-   - Research files follow the plan-output-schema format with sections:
-     Context, Findings, Recommendations, Files Identified
-   - Use Findings for current-state understanding and dependency chains
-   - Use Recommendations for approach and trade-off decisions
-   - Use Files Identified for exact file paths and line ranges to modify
-3. For a quick overview, read the presentation summary: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md`
-4. Begin implementation following the plan's Recommendations section
+1. **Phase 2 (High priority)**: Apply ContentScanner.redact() to exec stdout/stderr before returning to LLM
+   - File: `src/async_crud_mcp/tools/async_exec.py:L252-255` (stdout/stderr decode point)
+   - Reuses existing `ContentScanner.redact()` infrastructure
+2. **Phase 3 (Medium)**: Add HMAC-SHA256 integrity check to recycle bin restore; concurrent scenario tests
+   - File: `src/async_crud_mcp/core/recycle_bin.py:L191-249`
+3. **Phase 4 (Low)**: Documentation -- migration guide for glob patterns, shell restrictions reference
+4. Read the plan for full details: `C:/Users/Admin/Documents/GitHub/async-crud-mcp/.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md`
 
 ---
 
@@ -58,14 +59,24 @@ None
 
 ## Context
 
-**Files Modified/Created**:
-- `.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-plan.md` (research file - revised with user feedback)
+**Commit History**:
+- `987af05` feat(security): implement Phase 1 critical production readiness features (10 files, +549/-32)
+
+**Files Modified in Phase 1**:
+- `src/async_crud_mcp/core/path_validator.py` (secure CWD default)
+- `src/async_crud_mcp/models/requests.py` (RegexPatch model, regex_patches field)
+- `src/async_crud_mcp/models/responses.py` (RegexAppliedMatch, RegexBlockedMatch, modified_by field)
+- `src/async_crud_mcp/models/__init__.py` (exports)
+- `src/async_crud_mcp/tools/async_update.py` (regex patch logic, content scanner guard, modified_by detection)
+- `src/async_crud_mcp/tools/async_delete.py` (modified_by detection)
+- `src/async_crud_mcp/tools/async_rename.py` (modified_by detection)
+- `src/async_crud_mcp/server.py` (regex_patches parameter on tool endpoint)
+- `tests/test_path_validator.py` (4 new tests)
+- `tests/test_tools/test_async_update.py` (13 new tests)
+
+**Test Results**: 766 passed, 10 skipped, 2 pre-existing failures (config default mismatch from prior sprint)
+
+**Plan Files**:
+- `.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-plan.md` (research file)
 - `.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-presentation.md` (presentation summary)
 - `.claude/subagents/plans/68e7085b-dec7-46c6-a773-dfadfd49dba5-reference.md` (reference table)
-- `.claude/subagents/plans/75736084-bf04-468b-ae2b-c989b0042f45-plan.md` (initial research - superseded)
-- `.claude/subagents/plans/75736084-bf04-468b-ae2b-c989b0042f45-presentation.md` (initial presentation - superseded)
-
-**Documentation Referenced**:
-- /context:PLAN wrapper documentation at `~/.claude/commands/context/PLAN.md`
-- Plan output schema at `~/.claude/resources/commands/context/SSOT/plan-output-schema.md`
-- Plan presentation schema at `~/.claude/resources/commands/context/SSOT/plan-presentation-schema.md`
