@@ -354,11 +354,16 @@ class ContentScanner:
             # Sort by start position, then by length descending (longer match wins)
             spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
 
-            # Remove overlapping spans (keep first-encountered at each position)
+            # Merge overlapping spans into their union (longest match wins name)
             merged: List[tuple] = []
             for span in spans:
                 if merged and span[0] < merged[-1][1]:
-                    # Overlaps with previous span -- skip
+                    # Overlaps -- extend to cover both spans
+                    prev = merged[-1]
+                    prev_len = prev[1] - prev[0]
+                    span_len = span[1] - span[0]
+                    winner_name = span[2] if span_len > prev_len else prev[2]
+                    merged[-1] = (prev[0], max(prev[1], span[1]), winner_name)
                     continue
                 merged.append(span)
 
