@@ -268,8 +268,45 @@ class RecycleBin:
                             f"Destination already exists: {restore_to}. Use force=True to overwrite."
                         )
 
+                    # Guard: refuse to restore into recycle directory itself
+                    if self.is_protected_path(restore_to):
+                        raise RecycleBinError(
+                            "Cannot restore into the recycle bin or config directory"
+                        )
+
                     # Create parent directories if needed
                     restore_to.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Safe-recycle existing file before overwriting (force=True)
+                    if restore_to.exists() and force:
+                        try:
+                            existing_size = restore_to.stat().st_size
+                            if restore_to.is_file():
+                                with open(restore_to, "rb") as ef:
+                                    existing_hash = "sha256:" + hashlib.sha256(ef.read()).hexdigest()
+                            else:
+                                entry_count = len(list(restore_to.iterdir()))
+                                existing_hash = f"dir:{entry_count}_entries"
+                            existing_recycle_name = self._generate_recycle_name(restore_to)
+                            existing_dest = self.recycle_dir / existing_recycle_name
+                            shutil.move(str(restore_to), str(existing_dest))
+                            existing_entry = RecycleEntry(
+                                recycle_name=existing_recycle_name,
+                                original_path=str(restore_to),
+                                deleted_hash=existing_hash,
+                                timestamp=datetime.now(timezone.utc).isoformat(),
+                                reason="overwritten-by-restore",
+                                size_bytes=existing_size,
+                                status="recycled",
+                            )
+                            if self._hmac_key:
+                                existing_entry.signature = self._compute_signature(existing_entry)
+                            self._append_manifest(existing_entry)
+                            logger.debug("Recycled existing {} before restore", restore_to)
+                        except OSError as e:
+                            raise RecycleBinError(
+                                f"Failed to recycle existing file before restore: {e}"
+                            ) from e
 
                     try:
                         shutil.move(str(recycled_path), str(restore_to))
@@ -409,6 +446,23 @@ class RecycleBin:
                     return removed
         except TimeoutError:
             raise RecycleBinError(f"Recycle bin operation timed out after {timeout}s")
+
+    def is_protected_path(self, path: Path) -> bool:
+        """Check if path is inside or equal to the recycle directory.
+
+        Args:
+            path: Path to check.
+
+        Returns:
+            True if the path is inside or equal to the recycle directory.
+        """
+        try:
+            resolved = path.resolve()
+            recycle_resolved = self.recycle_dir.resolve()
+            resolved.relative_to(recycle_resolved)
+            return True
+        except ValueError:
+            return False
 
     def set_project_dir(self, project_recycle_dir: Path | None) -> None:
         """Update the project-local recycle directory.

@@ -611,7 +611,7 @@ async def async_rename_tool(
         RenameSuccessResponse with new hash, or ErrorResponse on failure
     """
     request = AsyncRenameRequest(old_path=old_path, new_path=new_path, timeout=timeout)
-    response = await async_rename(request, path_validator, lock_manager, hash_registry)
+    response = await async_rename(request, path_validator, lock_manager, hash_registry, recycle_bin)
     return response.model_dump(exclude_none=True)
 
 
@@ -667,13 +667,13 @@ async def async_mkdir_tool(
     Args:
         path: Directory path to create
         parents: Create parent directories if missing (default: True)
-        force: Allow creating inside non-empty existing directory (default: False)
+        force: Recycle existing non-empty directory and recreate it (default: False)
 
     Returns:
         MkdirSuccessResponse with path and created flag, or ErrorResponse on failure
     """
     request = AsyncMkdirRequest(path=path, parents=parents, force=force)
-    response = await async_mkdir(request, path_validator)
+    response = await async_mkdir(request, path_validator, recycle_bin)
     return response.model_dump(exclude_none=True)
 
 

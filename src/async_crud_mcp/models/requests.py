@@ -108,7 +108,7 @@ class AsyncMkdirRequest(BaseModel):
 
     path: str = Field(..., description="Directory path to create")
     parents: bool = Field(default=True, description="Create parent directories if missing")
-    force: bool = Field(default=False, description="Allow creating inside non-empty existing directory")
+    force: bool = Field(default=False, description="Recycle existing non-empty directory and recreate it")
 
 
 class AsyncListRequest(BaseModel):

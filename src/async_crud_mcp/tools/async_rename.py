@@ -1,8 +1,12 @@
 """Async rename tool for MCP file operations."""
 
-import os
-from typing import Union
+from __future__ import annotations
 
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Union
+
+from async_crud_mcp.config import PROJECT_CONFIG_DIR
 from async_crud_mcp.core import (
     AccessDeniedError,
     HashRegistry,
@@ -22,21 +26,31 @@ from async_crud_mcp.models import (
     RenameSuccessResponse,
 )
 
+if TYPE_CHECKING:
+    from async_crud_mcp.core.recycle_bin import RecycleBin
+
+from async_crud_mcp.core.recycle_bin import RecycleBinError
+
 
 async def async_rename(
     request: AsyncRenameRequest,
     path_validator: PathValidator,
     lock_manager: LockManager,
     hash_registry: HashRegistry,
+    recycle_bin: RecycleBin | None = None,
 ) -> Union[RenameSuccessResponse, ContentionResponse, ErrorResponse]:
     """
     Rename file with dual-lock and optional hash-based contention detection.
+
+    When overwrite=True and the destination exists, the destination is safely
+    recycled before the rename proceeds.
 
     Args:
         request: Rename request with old_path, new_path, and options
         path_validator: PathValidator instance for path validation
         lock_manager: LockManager instance for coordinating locks
         hash_registry: HashRegistry instance for tracking file hashes
+        recycle_bin: Optional RecycleBin for safe deletion of overwritten files
 
     Returns:
         RenameSuccessResponse on success, ContentionResponse on hash mismatch,
@@ -157,6 +171,51 @@ async def async_rename(
                 parent_dir = os.path.dirname(str(validated_new))
                 if parent_dir:
                     os.makedirs(parent_dir, exist_ok=True)
+
+            # 6b. Recycle destination before overwrite
+            if request.overwrite and os.path.exists(validated_new):
+                dest_path = Path(validated_new)
+
+                # Self-protection: refuse to overwrite into recycle/config dir
+                if recycle_bin is not None and recycle_bin.is_protected_path(dest_path):
+                    return ErrorResponse(
+                        error_code=ErrorCode.ACCESS_DENIED,
+                        message="Cannot overwrite file inside internal configuration directory",
+                        path=request.new_path,
+                    )
+
+                # Also protect the config dir (.async-crud-mcp/)
+                try:
+                    if PROJECT_CONFIG_DIR in dest_path.resolve().parts:
+                        return ErrorResponse(
+                            error_code=ErrorCode.ACCESS_DENIED,
+                            message="Cannot overwrite file inside internal configuration directory",
+                            path=request.new_path,
+                        )
+                except OSError:
+                    pass
+
+                if recycle_bin is None or not recycle_bin.enabled:
+                    return ErrorResponse(
+                        error_code=ErrorCode.SERVER_ERROR,
+                        message="Cannot overwrite destination without recycle bin",
+                        path=request.new_path,
+                    )
+
+                try:
+                    if dest_path.is_file():
+                        with open(dest_path, "rb") as df:
+                            dest_hash = compute_hash(df.read())
+                    else:
+                        entry_count = len(list(dest_path.iterdir()))
+                        dest_hash = f"dir:{entry_count}_entries"
+                    await recycle_bin.recycle(dest_path, dest_hash, reason="rename-overwrite")
+                except RecycleBinError as e:
+                    return ErrorResponse(
+                        error_code=ErrorCode.RENAME_ERROR,
+                        message=f"Failed to recycle destination before overwrite: {e}",
+                        path=request.new_path,
+                    )
 
             # 7. Perform rename with cross-filesystem fallback
             try:

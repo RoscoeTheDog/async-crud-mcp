@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, compute_hash
+from async_crud_mcp.core import HashRegistry, LockManager, PathValidator, RecycleBin, compute_hash
 from async_crud_mcp.models import AsyncRenameRequest, ErrorCode
 from async_crud_mcp.tools import async_rename
 
@@ -36,6 +36,18 @@ def lock_manager():
 def hash_registry():
     """Create HashRegistry instance."""
     return HashRegistry()
+
+
+@pytest.fixture
+def recycle_bin(temp_base_dir):
+    """Create RecycleBin with temp recycle directory."""
+    recycle_dir = temp_base_dir / ".recycle"
+    return RecycleBin(
+        project_recycle_dir=recycle_dir,
+        global_recycle_dir=temp_base_dir / ".global_recycle",
+        enabled=True,
+        retention_days=90,
+    )
 
 
 class TestAsyncRenameSuccess:
@@ -77,8 +89,8 @@ class TestAsyncRenameSuccess:
         assert new_path.read_text(encoding='utf-8') == content
 
     @pytest.mark.asyncio
-    async def test_rename_with_overwrite(self, temp_base_dir, path_validator, lock_manager, hash_registry):
-        """Test overwrite=True allows replacing existing destination file."""
+    async def test_rename_with_overwrite(self, temp_base_dir, path_validator, lock_manager, hash_registry, recycle_bin):
+        """Test overwrite=True recycles destination then renames."""
         old_path = temp_base_dir / "source.txt"
         new_path = temp_base_dir / "destination.txt"
         old_content = "Source content"
@@ -88,7 +100,7 @@ class TestAsyncRenameSuccess:
         new_path.write_text(new_content, encoding='utf-8')
 
         request = AsyncRenameRequest(old_path=str(old_path), new_path=str(new_path), overwrite=True)
-        response = await async_rename(request, path_validator, lock_manager, hash_registry)
+        response = await async_rename(request, path_validator, lock_manager, hash_registry, recycle_bin)
 
         assert response.status == "ok"
         assert new_path.read_text(encoding='utf-8') == old_content
