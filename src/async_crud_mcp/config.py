@@ -379,6 +379,11 @@ class ShellConfig(BaseModel):
         le=1000,
         description="Max concurrent processes per command (Job Object on Windows, RLIMIT_NPROC on POSIX)",
     )
+    max_output_size_bytes: int = Field(
+        default=52_428_800,
+        ge=1024,
+        description="Max combined stdout+stderr bytes buffered per command (50MB). Output beyond this is discarded and flagged, bounding memory use.",
+    )
 
 
 class SearchConfig(BaseModel):
@@ -394,6 +399,7 @@ class SearchConfig(BaseModel):
     )
     exclude_dirs: list[str] = Field(
         default_factory=lambda: [
+            ".async-crud-mcp",
             ".venv",
             "venv",
             "node_modules",
