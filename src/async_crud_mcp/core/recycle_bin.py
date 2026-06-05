@@ -443,7 +443,10 @@ class RecycleBin:
                             recycled_path = self.recycle_dir / recycle_name
                             if recycled_path.exists():
                                 try:
-                                    os.unlink(str(recycled_path))
+                                    if recycled_path.is_dir():
+                                        shutil.rmtree(str(recycled_path))
+                                    else:
+                                        os.unlink(str(recycled_path))
                                 except OSError:
                                     continue
 
