@@ -121,6 +121,10 @@ async def async_exec(
             env.pop(key, None)
     elif request.env:
         env = dict(request.env)
+        # Strip sensitive vars here too -- env_inherit=False must not let
+        # request.env smuggle in LD_PRELOAD / secret vars unstripped.
+        for key in shell_config.env_strip:
+            env.pop(key, None)
 
     # 7. Build exec args
     try:
@@ -140,6 +144,7 @@ async def async_exec(
         result = await _exec_foreground(
             request.command, exec_args, cwd, env, timeout,
             process_limit=shell_config.process_limit,
+            max_output_size=shell_config.max_output_size_bytes,
             content_scanner=content_scanner,
         )
         if timeout_clamped and isinstance(result, ExecSuccessResponse):
@@ -164,6 +169,7 @@ async def _exec_foreground(
     env: dict[str, str] | None,
     timeout: float,
     process_limit: int = 50,
+    max_output_size: int = 52_428_800,
     content_scanner: ContentScanner | None = None,
 ) -> ExecSuccessResponse | ErrorResponse:
     """Run command in foreground with timeout and process containment.
@@ -175,6 +181,7 @@ async def _exec_foreground(
     stdout_buf = bytearray()
     stderr_buf = bytearray()
     timed_out = False
+    output_truncated = False
     job = None
 
     extra_kwargs: dict = {}
@@ -203,20 +210,30 @@ async def _exec_foreground(
             process_guard.resume_process(proc.pid)
 
         async def _drain_stdout() -> None:
+            nonlocal output_truncated
             assert proc.stdout is not None
             while True:
                 chunk = await proc.stdout.read(8192)
                 if not chunk:
                     break
-                stdout_buf.extend(chunk)
+                if len(stdout_buf) + len(stderr_buf) < max_output_size:
+                    stdout_buf.extend(chunk)
+                else:
+                    # Keep draining (discard) so the process does not block on a
+                    # full pipe, but stop growing memory.
+                    output_truncated = True
 
         async def _drain_stderr() -> None:
+            nonlocal output_truncated
             assert proc.stderr is not None
             while True:
                 chunk = await proc.stderr.read(8192)
                 if not chunk:
                     break
-                stderr_buf.extend(chunk)
+                if len(stdout_buf) + len(stderr_buf) < max_output_size:
+                    stderr_buf.extend(chunk)
+                else:
+                    output_truncated = True
 
         try:
             await asyncio.wait_for(
@@ -253,6 +270,11 @@ async def _exec_foreground(
 
     stdout_text = stdout_buf.decode("utf-8", errors="replace")
     stderr_text = stderr_buf.decode("utf-8", errors="replace")
+
+    if output_truncated:
+        stdout_text += (
+            f"\n<output truncated: combined stdout+stderr exceeded {max_output_size} bytes>"
+        )
 
     # Redact sensitive data from output before returning to agent
     stdout_redaction_entries: list[RedactionEntry] | None = None
