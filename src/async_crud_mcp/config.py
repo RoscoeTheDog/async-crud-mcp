@@ -297,6 +297,43 @@ def _default_deny_patterns() -> list[ShellDenyPattern]:
             pattern=r"(^|[;&|]\s*)install\b",
             reason="install command not allowed; use CRUD tools",
         ),
+        # -- Destructive git operations (bypass the recycle bin) --
+        # Subcommand anchored after optional global flags but BEFORE any quote,
+        # so commit messages containing these words (e.g. -m "clean up") are not
+        # false-positives.
+        ShellDenyPattern(
+            pattern=r"\bgit\s+([^\"';|&]*\s)?clean\b",
+            reason="git clean deletes files outside the recycle bin; use async_delete_tool",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bgit\s+([^\"';|&]*\s)?reset\b[^\"';|]*--hard\b",
+            reason="git reset --hard discards files outside CRUD governance",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bgit\s+([^\"';|&]*\s)?checkout\b[^\"';|]*(--force\b|\s-f\b)",
+            reason="git checkout --force overwrites files outside CRUD governance",
+        ),
+        ShellDenyPattern(
+            pattern=r"\bgit\s+([^\"';|&]*\s)?(rm|mv)\b",
+            reason="Use async_delete_tool / async_rename_tool instead of git rm/mv",
+        ),
+        # -- File truncation / zeroing (rm-equivalent, bypasses recycle bin) --
+        ShellDenyPattern(
+            pattern=r"\btruncate\b",
+            reason="truncate destroys file content; use async_update_tool / async_delete_tool",
+        ),
+        # -- In-place interpreter editing (bypasses async_update_tool) --
+        # Matches a flag ending in 'i' (-i, -i.bak, -pi, -ni) without blocking
+        # unrelated flags like -I (include) or -e code containing the letter i.
+        ShellDenyPattern(
+            pattern=r"\b(perl|ruby)\b.*\s-[a-zA-Z]*i(\.\S*)?(\s|$)",
+            reason="In-place editing via perl/ruby -i not allowed; use async_update_tool",
+        ),
+        # -- Binary/encoded file reconstruction via redirect (write bypass) --
+        ShellDenyPattern(
+            pattern=r"\b(xxd|hexdump|od|base64)\b.*>(?!&)\s*[^&\s]",
+            reason="Binary/encoded file reconstruction not allowed; use async_write_tool",
+        ),
     ]
 
 
