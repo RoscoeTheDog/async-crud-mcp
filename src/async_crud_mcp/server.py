@@ -107,17 +107,35 @@ _ACTIVATION_EXEMPT_TOOLS = frozenset({
     "health_tool",            # Health check is infrastructure, not project-scoped
 })
 
-# Large-content arg keys that get truncated in audit entries
-_TRUNCATE_ARG_KEYS = frozenset({"content"})
-_TRUNCATE_THRESHOLD = 200
+# Arg keys whose string values are ALWAYS replaced with a length placeholder in
+# audit entries -- these carry file content / write payloads that may contain
+# secrets (e.g. a 64-char private key, well under any truncation threshold).
+_REDACT_ARG_KEYS = frozenset({"content", "replacement"})
+# Dict-valued arg keys whose VALUES may carry secrets (keys kept for context).
+_REDACT_DICT_ARG_KEYS = frozenset({"env"})
 
 
 def _extract_args_summary(args: dict) -> dict:
-    """Extract loggable args, truncating large content values."""
+    """Extract loggable args, redacting content and secret-bearing values.
+
+    File content / write payloads and environment values are never written to
+    the audit log verbatim -- they may contain credentials, private keys, or
+    BIP-39 mnemonics. Env keys are preserved (so the audit shows WHICH vars were
+    set) while their values are redacted.
+    """
     summary = dict(args)
-    for key in _TRUNCATE_ARG_KEYS:
-        if key in summary and isinstance(summary[key], str) and len(summary[key]) > _TRUNCATE_THRESHOLD:
-            summary[key] = f"<{len(summary[key])} chars>"
+    for key in _REDACT_ARG_KEYS:
+        val = summary.get(key)
+        if isinstance(val, str):
+            summary[key] = f"<{len(val)} chars>"
+        elif val is not None:
+            summary[key] = "<redacted>"
+    for key in _REDACT_DICT_ARG_KEYS:
+        val = summary.get(key)
+        if isinstance(val, dict):
+            summary[key] = {k: "<redacted>" for k in val}
+        elif val is not None:
+            summary[key] = "<redacted>"
     return summary
 
 
