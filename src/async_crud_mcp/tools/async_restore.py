@@ -47,6 +47,7 @@ async def async_restore(
             destination=destination,
             force=request.force,
             timeout=request.timeout,
+            path_validator=path_validator,
         )
 
         return RestoreSuccessResponse(

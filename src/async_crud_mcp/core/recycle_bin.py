@@ -199,7 +199,7 @@ class RecycleBin:
         except TimeoutError:
             raise RecycleBinError(f"Recycle bin operation timed out after {timeout}s")
 
-    async def restore(self, recycle_name: str, destination: Path | None = None, force: bool = False, timeout: float = 30.0) -> RestoreResult:
+    async def restore(self, recycle_name: str, destination: Path | None = None, force: bool = False, timeout: float = 30.0, path_validator=None) -> RestoreResult:
         """Restore a file from the recycle bin.
 
         Args:
@@ -207,6 +207,11 @@ class RecycleBin:
             destination: Custom restore path. If None, restores to original location.
             force: Overwrite destination if it already exists.
             timeout: Lock acquisition timeout in seconds.
+            path_validator: Optional PathValidator. When provided, the resolved
+                restore target is validated against the allowed base directories
+                before any filesystem change. The manifest original_path is
+                untrusted (unsigned entries are permitted), so this prevents a
+                tampered entry from restoring a file outside the project root.
 
         Returns:
             RestoreResult with the restored file path.
@@ -262,6 +267,18 @@ class RecycleBin:
                         raise RecycleBinError(
                             f"No original path found for {recycle_name} and no destination specified"
                         )
+
+                    # Enforce path policy on the resolved restore target before
+                    # any filesystem mutation. Guards against a tampered/unsigned
+                    # manifest original_path pointing outside the allowed base
+                    # directories (e.g. /etc/shadow, C:\\Windows\\System32).
+                    if path_validator is not None:
+                        try:
+                            path_validator.validate_operation(str(restore_to), "write")
+                        except Exception as e:
+                            raise RecycleBinError(
+                                f"Restore target failed path validation: {restore_to} ({e})"
+                            ) from e
 
                     if restore_to.exists() and not force:
                         raise RecycleBinError(
