@@ -221,8 +221,11 @@ class ContentScanner:
         enabled: Whether scanning is active. When False, all content passes.
     """
 
-    def __init__(self, rules: List, enabled: bool = True):
+    def __init__(self, rules: List, enabled: bool = True, expose_metadata: bool = True):
         self._enabled = enabled
+        # When False, redaction responses expose only THAT redaction occurred
+        # (count), not the secret TYPE (rule_name) or POSITION (line/col/length).
+        self._expose_metadata = expose_metadata
 
         # Sort rules by priority descending (highest first)
         sorted_rules = sorted(rules, key=lambda r: r.priority, reverse=True)
@@ -368,24 +371,29 @@ class ContentScanner:
                 merged.append(span)
 
             # Assign IDs in forward order (left-to-right), build metadata
+            expose = self._expose_metadata
             line_redactions: List[tuple] = []  # (col_start, col_end, rule_name, id)
             for col_start, col_end, rule_name in merged:
                 redaction_id += 1
                 original_length = col_end - col_start
+                # When metadata is not exposed, emit generic spans (no secret
+                # type or position); count remains available via has_redactions.
                 all_redactions.append(RedactionSpan(
                     id=redaction_id,
-                    rule_name=rule_name,
-                    line=line_num,
-                    col_start=col_start,
-                    col_end=col_end,
-                    original_length=original_length,
+                    rule_name=rule_name if expose else "redacted",
+                    line=line_num if expose else 0,
+                    col_start=col_start if expose else 0,
+                    col_end=col_end if expose else 0,
+                    original_length=original_length if expose else 0,
                 ))
                 line_redactions.append((col_start, col_end, rule_name, redaction_id))
 
-            # Replace in reverse order to preserve offsets
+            # Replace in reverse order to preserve offsets (real positions used here)
             suffix = line[len(line_content):]
             for col_start, col_end, rule_name, rid in reversed(line_redactions):
-                placeholder = f"<<REDACTED:{rule_name}:{rid}>>"
+                placeholder = (
+                    f"<<REDACTED:{rule_name}:{rid}>>" if expose else "<<REDACTED>>"
+                )
                 line_content = line_content[:col_start] + placeholder + line_content[col_end:]
 
             lines[line_idx] = line_content + suffix

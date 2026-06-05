@@ -432,6 +432,10 @@ class ProjectConfig(BaseModel):
     default_read_policy: Literal["allow", "deny"] = "allow"
     content_scan_rules: list[ContentRule] = Field(default_factory=_default_content_scan_rules)
     content_scan_enabled: bool = True
+    content_scan_metadata: bool = Field(
+        default=True,
+        description="Expose redaction metadata (secret type + position) in responses. Set False on sensitive/trading projects to reveal only that redaction occurred.",
+    )
     max_file_size_bytes: int = Field(
         default=268_435_456,
         description="Maximum file size in bytes for write operations. 0 = no limit.",
@@ -470,6 +474,7 @@ class CrudConfig(BaseModel):
     default_read_policy: Literal["allow", "deny"] = "allow"
     content_scan_rules: list[ContentRule] = Field(default_factory=_default_content_scan_rules)
     content_scan_enabled: bool = True
+    content_scan_metadata: bool = True
 
 
 class AuditConfig(BaseModel):
