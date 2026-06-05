@@ -802,10 +802,12 @@ class TestProjectActivationMiddleware:
         try:
             srv._active_project_root = None
             ctx = self._make_context("async_read_tool", {"path": "/tmp/test.txt"})
+            import json
             result = await middleware.on_call_tool(ctx, self._passthrough)
-            assert result.content[0].text.startswith("Error: No project activated")
-            assert "crud_activate_project" in result.content[0].text
-            assert "async_read_tool" in result.content[0].text
+            payload = json.loads(result.content[0].text)
+            assert payload["error_code"] == "NO_PROJECT_ACTIVATED"
+            assert "crud_activate_project" in payload["message"]
+            assert payload["tool"] == "async_read_tool"
         finally:
             srv._active_project_root = old_root
 

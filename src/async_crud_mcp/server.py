@@ -246,17 +246,19 @@ class ProjectActivationMiddleware(Middleware):
     ) -> ToolResult:
         tool_name = context.message.name
         if tool_name not in _ACTIVATION_EXEMPT_TOOLS and _active_project_root is None:
+            err = {
+                "status": "error",
+                "error_code": "NO_PROJECT_ACTIVATED",
+                "message": (
+                    f'No project activated. Call crud_activate_project(project_root="/path/to/project") '
+                    f"before using {tool_name}. This scopes CRUD operations to the project directory "
+                    f"and loads any local .async-crud-mcp/config.json settings."
+                ),
+                "tool": tool_name,
+            }
             return ToolResult(
-                content=[TextContent(
-                    type="text",
-                    text=(
-                        f"Error: No project activated. "
-                        f'Call crud_activate_project(project_root="/path/to/project") '
-                        f"before using {tool_name}. "
-                        f"This scopes CRUD operations to the project directory "
-                        f"and loads any local .async-crud-mcp/config.json settings."
-                    ),
-                )],
+                content=[TextContent(type="text", text=json.dumps(err))],
+                structured_content=err,
             )
         return await call_next(context)
 
@@ -307,6 +309,7 @@ hash_registry = HashRegistry()
 content_scanner = ContentScanner(
     rules=settings.crud.content_scan_rules,
     enabled=settings.crud.content_scan_enabled,
+    expose_metadata=settings.crud.content_scan_metadata,
 )
 server_start_time = time.monotonic()  # Monotonic timestamp for async_status
 _effective_max_file_size: int = settings.crud.max_file_size_bytes
@@ -1033,6 +1036,7 @@ def _apply_project_config(
         content_scanner = ContentScanner(
             rules=project_config.content_scan_rules,
             enabled=project_config.content_scan_enabled,
+            expose_metadata=project_config.content_scan_metadata,
         )
         _effective_max_file_size = project_config.max_file_size_bytes
         # Rebuild shell deny patterns from project config
@@ -1058,6 +1062,7 @@ def _apply_project_config(
         content_scanner = ContentScanner(
             rules=settings.crud.content_scan_rules,
             enabled=settings.crud.content_scan_enabled,
+            expose_metadata=settings.crud.content_scan_metadata,
         )
         _effective_max_file_size = settings.crud.max_file_size_bytes
         # Reset shell validator to global defaults
