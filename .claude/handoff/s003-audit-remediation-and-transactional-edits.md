@@ -40,9 +40,9 @@
 - [x] **P1-9 (LOW) exec env re-injection guard.** ✅ DONE (ce2d7e8). Add a validator rejecting `request.env` keys that appear in `shell_config.env_strip` (currently safe via strip-after-merge, but defense-in-depth). Finding: `env-var-injection-in-request-env`.
 
 ### Phase 2 — Design (ADR) before building the feature
-- [ ] **P2-1 Write the ADR** for the transactional-edit engine + adaptive contention control. Decisions already settled (see "Decisions" below). Place under `.claude/implementation/` (precedent: `shell-extension-plan.md`).
-- [ ] **P2-2 Resolve `FileWatcher` dead code.** Fully implemented but never instantiated/started (`file_watcher.py`); external edits aren't proactively tracked. Decide: start it in `_server_lifespan` (gated by `WatcherConfig.enabled`) OR delete it. Note: the transactional CAS must rely on the commit-time hash check, NOT the watcher. Finding: `file-watcher-never-started`.
-- [ ] **P2-3 Docs drift + native-tool friction.** README claims 11 tools; 28 exist (`docs-drift-tool-count`). `async_update` requires an `expected_hash` from a prior read — friction vs native Read/Edit (`read-then-edit-friction`). Capture both in the ADR/README.
+- [x] **P2-1 Write the ADR** ✅ DONE — ADR-001 (transactional edits) + ADR-002 (adaptive contention) in `.claude/implementation/`. for the transactional-edit engine + adaptive contention control. Decisions already settled (see "Decisions" below). Place under `.claude/implementation/` (precedent: `shell-extension-plan.md`).
+- [x] **P2-2 Resolve `FileWatcher` dead code.** ✅ DECIDED in ADR-003 (recommend REMOVE; execute during Phase 3). Fully implemented but never instantiated/started (`file_watcher.py`); external edits aren't proactively tracked. Decide: start it in `_server_lifespan` (gated by `WatcherConfig.enabled`) OR delete it. Note: the transactional CAS must rely on the commit-time hash check, NOT the watcher. Finding: `file-watcher-never-started`.
+- [x] **P2-3 Docs drift + native-tool friction.** ✅ DECIDED in ADR-003 (README inventory fix + read-then-edit/dual-state guidance; execute during Phase 3). README claims 11 tools; 28 exist (`docs-drift-tool-count`). `async_update` requires an `expected_hash` from a prior read — friction vs native Read/Edit (`read-then-edit-friction`). Capture both in the ADR/README.
 
 ### Phase 3 — Tier 1: transactional edits (the part that kills most livelock)
 - [ ] `query_replace(path, pattern, replacement)` -> `{txn_id, matches:[{match_id, anchor, before, after}], base_version}` (diff preview).
@@ -76,7 +76,7 @@
 
 ## Next Steps
 
-1. **Phase 1 COMPLETE — all 9 done, suite-verified (672 passed / 10 skipped).** ✅ P1-1 `7f0a107`, P1-2 `0c0c856`, P1-3 `9ad3e9e`, P1-4 `7624c51`, P1-5 `0b21b24`, P1-6 `7624c51`+`ce2d7e8`, P1-7 `f36058b`, P1-8 `3004490`+`f36058b`, P1-9 `ce2d7e8`. Branch pushed to `origin/audit-hardening-and-transactional-edits`. **Next: Phase 2** — the transactional-edit (query→commit, region-anchored CAS) + adaptive-contention ADR (P2-1), plus the FileWatcher dead-code decision (P2-2) and docs/native-tool-friction notes (P2-3).
+1. **Phase 1 COMPLETE — all 9 done, suite-verified (672 passed / 10 skipped).** ✅ P1-1 `7f0a107`, P1-2 `0c0c856`, P1-3 `9ad3e9e`, P1-4 `7624c51`, P1-5 `0b21b24`, P1-6 `7624c51`+`ce2d7e8`, P1-7 `f36058b`, P1-8 `3004490`+`f36058b`, P1-9 `ce2d7e8`. Branch pushed to `origin/audit-hardening-and-transactional-edits`. **Phase 2 design COMPLETE — all ADRs front-loaded** (hedge against compaction): ADR-001 (transactional edits), ADR-002 (adaptive contention), ADR-003 (FileWatcher + integration) in `.claude/implementation/`. **Next: Phase 3** — implement ADR-001 Tier 1 (transactional edits + region tokens + rebase), resolving P2-2 (remove/wire FileWatcher) and P2-3 (README + friction docs) alongside. **Phase 4** (ADR-002 Tier 2 fair-lease) only if measured contention warrants.
 2. Continue Phase 1 items as small, individually-committed, suite-verified fixes. QA recipe: `uv sync --extra dev` then `run_pytest.py --json -v --process-timeout 200 --timeout=60 -c <repo>/pyproject.toml --rootdir <repo> <repo>/tests` (use `--json -v`; `-q` loses output to the IOCP teardown hang).
 3. Then P2-1 ADR -> Phase 3 -> Phase 4.
 4. Reminder: do not deploy/live-test the daemon until the user confirms a backup.
@@ -89,4 +89,5 @@
 - **Prior handoffs:** `s001` (production readiness, C1-C?), `s002` (pre-deployment audit C1-C12, all complete — this is the work now on `f5eea37`).
 - **Key source files to touch (Phase 1):** `src/async_crud_mcp/config.py` (deny patterns L218-300, exclude_dirs L358-374, ShellConfig L303-345), `src/async_crud_mcp/core/recycle_bin.py` (restore L259-312, recycle L178, cleanup L429), `src/async_crud_mcp/server.py` (`_extract_args_summary` L115-121, activation middleware), `src/async_crud_mcp/tools/async_exec.py` (drain L175-219).
 - **Feature-relevant existing infra:** `HashRegistry` (`core/file_io.py`) = the CAS token source; `LockManager` (`core/lock_manager.py`) = the short commit critical section; `background_tasks.py` = txn GC; `MultiUserDispatcher` (`daemon/dispatcher.py`) = per-user isolation.
-- **Test baseline:** s002 reported 137/137 passing. Re-run after each Phase 1 fix.
+- **Test baseline:** s002 reported 137/137 passing; suite is now **672 passed / 10 skipped** post-Phase-1.
+- **Design ADRs (front-loaded for Phases 2-4):** `.claude/implementation/adr-001-transactional-edit-engine.md`, `adr-002-adaptive-contention-control.md`, `adr-003-filewatcher-and-native-tool-integration.md`.
