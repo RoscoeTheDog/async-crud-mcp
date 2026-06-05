@@ -13,6 +13,15 @@ from .recycle_bin import RecycleBin, RecycleBinError, RecycleEntry, RestoreResul
 from . import process_guard
 from .shell_provider import ShellNotFoundError, ShellProvider
 from .shell_validator import ShellValidator
+from .transaction_manager import (
+    EditTransaction,
+    StagedMatch,
+    TransactionManager,
+    apply_spans,
+    make_anchor,
+    rebase_match,
+    spans_overlap,
+)
 
 __all__ = [
     "AccessDeniedError",
@@ -48,4 +57,11 @@ __all__ = [
     "RecycleBinError",
     "RecycleEntry",
     "RestoreResult",
+    "TransactionManager",
+    "EditTransaction",
+    "StagedMatch",
+    "make_anchor",
+    "rebase_match",
+    "apply_spans",
+    "spans_overlap",
 ]

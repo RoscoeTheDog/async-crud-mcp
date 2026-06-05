@@ -232,3 +232,43 @@ class SearchRequest(BaseModel):
     output_mode: Literal["content", "files_with_matches", "count"] = Field(
         default="content", description="Output mode"
     )
+
+
+# =============================================================================
+# Transactional edit request models (ADR-001)
+# =============================================================================
+
+
+class QueryReplaceRequest(BaseModel):
+    """Request model for async_query_replace tool (stage a transactional edit)."""
+
+    path: str = Field(..., description="File path to edit")
+    pattern: str = Field(..., description="Regex pattern to match")
+    replacement: str = Field(..., description="Replacement string (supports backreferences like \\1)")
+    case_insensitive: bool = Field(default=False, description="Case-insensitive matching")
+    ttl: float = Field(default=600.0, gt=0, description="Transaction time-to-live in seconds")
+    timeout: float = Field(default=30.0, description="Read lock timeout in seconds")
+
+
+class CommitRequest(BaseModel):
+    """Request model for async_commit tool (apply a staged transaction)."""
+
+    txn_id: str = Field(..., description="Transaction id from async_query_replace")
+    match_ids: list[int] | None = Field(
+        default=None, description="Subset of match_ids to apply (None = all staged matches)"
+    )
+    timeout: float = Field(default=30.0, description="Write lock timeout in seconds")
+
+
+class AmendRequest(BaseModel):
+    """Request model for async_amend tool (override a staged replacement)."""
+
+    txn_id: str = Field(..., description="Transaction id from async_query_replace")
+    match_id: int = Field(..., description="Match id to amend")
+    replacement: str = Field(..., description="New replacement text for this match")
+
+
+class AbortRequest(BaseModel):
+    """Request model for async_abort tool (discard a staged transaction)."""
+
+    txn_id: str = Field(..., description="Transaction id to discard")

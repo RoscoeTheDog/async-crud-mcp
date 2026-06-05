@@ -32,6 +32,7 @@ class ErrorCode(StrEnum):
     TASK_NOT_FOUND = "TASK_NOT_FOUND"
     INVALID_PATTERN = "INVALID_PATTERN"
     VALIDATION_ERROR = "VALIDATION_ERROR"
+    TXN_NOT_FOUND = "TXN_NOT_FOUND"
 
 
 # Shared Models
@@ -527,3 +528,84 @@ class SearchResponse(BaseModel):
     total_matches: int
     files_searched: int
     truncated: bool | None = Field(default=None, description="True if results were truncated by timeout")
+
+
+# =============================================================================
+# Transactional edit response models (ADR-001)
+# =============================================================================
+
+
+class StagedMatchEntry(BaseModel):
+    """Preview of one staged match in a transaction."""
+
+    model_config = ConfigDict(frozen=True)
+
+    match_id: int = Field(..., description="Stable id for this match within the transaction")
+    line: int = Field(..., description="1-based line number of the match")
+    col_start: int = Field(..., description="0-based column offset of the match in its line")
+    before: str = Field(..., description="Original matched text (redacted if sensitive)")
+    after: str = Field(..., description="Proposed replacement (redacted if sensitive)")
+
+
+class QueryReplaceResponse(BaseModel):
+    """Response for async_query_replace: a staged transaction with a diff preview."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    txn_id: str = Field(..., description="Transaction id (pass to async_commit/async_amend/async_abort)")
+    path: str = Field(..., description="File path being edited")
+    base_hash: str = Field(..., description="File hash captured at query time (CAS token)")
+    match_count: int = Field(..., description="Number of matches staged")
+    matches: list[StagedMatchEntry] = Field(..., description="Per-match diff preview")
+    redactions: list[RedactionEntry] | None = Field(
+        default=None, description="Redaction metadata for sensitive spans in the preview"
+    )
+
+
+class CommitSuccessResponse(BaseModel):
+    """Response for async_commit when the staged matches were applied."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    path: str = Field(..., description="File path that was updated")
+    previous_hash: str = Field(..., description="Hash before commit")
+    hash: str = Field(..., description="Hash after commit (format: sha256:...)")
+    applied_count: int = Field(..., description="Number of matches applied")
+    rebased: bool = Field(default=False, description="True if matches were relocated onto externally-changed content")
+
+
+class StaleConflictResponse(BaseModel):
+    """Response for async_commit when selected matches no longer validate (CAS failure)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["stale_conflict"] = "stale_conflict"
+    txn_id: str = Field(..., description="The transaction id (still valid; re-query to refresh)")
+    path: str = Field(..., description="File path with the conflict")
+    base_hash: str = Field(..., description="Hash captured at query time")
+    current_hash: str = Field(..., description="Current on-disk hash")
+    stale_match_ids: list[int] = Field(..., description="Selected matches that no longer locate unambiguously")
+    applicable_match_ids: list[int] = Field(..., description="Selected matches that still apply cleanly")
+    message: str = Field(..., description="Human-readable conflict explanation")
+
+
+class AmendResponse(BaseModel):
+    """Response for async_amend."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    txn_id: str = Field(..., description="Transaction id")
+    match_id: int = Field(..., description="Match id that was amended")
+
+
+class AbortResponse(BaseModel):
+    """Response for async_abort."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    txn_id: str = Field(..., description="Transaction id that was discarded")
+    discarded: bool = Field(..., description="True if the transaction existed and was removed")
