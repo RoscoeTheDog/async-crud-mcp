@@ -239,11 +239,19 @@ class BackgroundTaskRegistry:
     async def shutdown(self) -> None:
         """Cancel all background tasks and kill running processes.
 
-        Called during server shutdown to prevent orphaned subprocesses.
+        Called during server shutdown to prevent orphaned subprocesses. The
+        cancelled asyncio tasks are awaited so their subprocess transports/pipes
+        are actually closed before this returns: otherwise the Windows
+        ProactorEventLoop hangs in GetQueuedCompletionStatus during loop teardown
+        on an orphaned subprocess read. Killing the process first EOFs the pipe,
+        which lets the awaited cancellation unwind cleanly (no IOCP hang).
         """
+        pending: list[asyncio.Task] = []
+
         # Stop the reaper
         if self._reaper_task is not None:
             self._reaper_task.cancel()
+            pending.append(self._reaper_task)
             self._reaper_task = None
 
         # Kill all active processes and cancel their asyncio tasks
@@ -264,9 +272,15 @@ class BackgroundTaskRegistry:
                 # Cancel the asyncio task
                 if task._asyncio_task is not None and not task._asyncio_task.done():
                     task._asyncio_task.cancel()
+                    pending.append(task._asyncio_task)
                 # Remove from PID tracker
                 if self._pid_tracker is not None:
                     self._pid_tracker.remove(task.task_id)
+
+        # Await the cancelled tasks so their subprocess transports close in-loop
+        # (prevents the Windows ProactorEventLoop IOCP teardown hang).
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def create_task(self, command: str) -> BackgroundTask:
         """Create and register a new background task."""

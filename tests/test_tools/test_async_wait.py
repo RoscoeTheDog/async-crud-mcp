@@ -13,8 +13,15 @@ from async_crud_mcp.tools.async_wait import async_wait
 
 
 @pytest.fixture
-def background_registry():
-    return BackgroundTaskRegistry()
+async def background_registry():
+    registry = BackgroundTaskRegistry()
+    try:
+        yield registry
+    finally:
+        # Kill any still-running background subprocess and await its transport
+        # close, so the test event loop has no orphaned IOCP read at teardown
+        # (the Windows ProactorEventLoop GetQueuedCompletionStatus hang).
+        await registry.shutdown()
 
 
 class TestAsyncWaitSleep:
