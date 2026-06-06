@@ -2,7 +2,7 @@
 
 This module provides the MCP server implementation with:
 - SSE transport support (default port 8720)
-- All 11 CRUD tools registered as @mcp.tool wrappers
+- All 26 MCP tools registered as @mcp.tool wrappers
 - Health endpoint via dedicated MCP tool
 - Port pre-flight validation before server start
 - Shared dependency initialization (PathValidator, LockManager, HashRegistry)
@@ -1303,13 +1303,14 @@ async def get_config_tool(section: str | None = None) -> dict:
     Use this to inspect current settings before making changes with crud_update_config.
 
     Args:
-        section: Optional section to return ('crud', 'daemon', 'persistence', 'watcher').
-                 If omitted, returns the full effective config plus project info.
+        section: Optional section to return ('crud', 'daemon', 'persistence', 'shell',
+                 'search', 'audit', 'safe_delete'). If omitted, returns the full
+                 effective config plus project info.
 
     Returns:
         Configuration dict with project activation status.
     """
-    valid_sections = ("crud", "daemon", "persistence", "watcher", "shell", "search", "audit", "safe_delete")
+    valid_sections = ("crud", "daemon", "persistence", "shell", "search", "audit", "safe_delete")
 
     if section is not None and section not in valid_sections:
         return {"error": f"Invalid section '{section}'. Valid: {', '.join(valid_sections)}"}
@@ -1328,7 +1329,6 @@ async def get_config_tool(section: str | None = None) -> dict:
         "daemon": settings.daemon.model_dump(),
         "crud": settings.crud.model_dump(),
         "persistence": settings.persistence.model_dump(),
-        "watcher": settings.watcher.model_dump(),
         "shell": settings.shell.model_dump(),
         "search": settings.search.model_dump(),
         "audit": settings.audit.model_dump(),

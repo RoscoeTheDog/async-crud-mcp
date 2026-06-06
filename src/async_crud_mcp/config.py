@@ -496,13 +496,6 @@ class PersistenceConfig(BaseModel):
     ttl_multiplier: float = 2.0
 
 
-class WatcherConfig(BaseModel):
-    """File watcher configuration section."""
-
-    enabled: bool = True
-    debounce_ms: int = 100
-
-
 # Module-level variables
 _json_config_file: Path | None = None  # For settings_customise_sources
 _settings_cache: "Settings | None" = None  # For singleton pattern
@@ -538,7 +531,6 @@ class Settings(BaseSettings):
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     crud: CrudConfig = Field(default_factory=CrudConfig)
     persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)
-    watcher: WatcherConfig = Field(default_factory=WatcherConfig)
     shell: ShellConfig = Field(default_factory=ShellConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)

@@ -17,7 +17,6 @@ from async_crud_mcp.config import (
     Settings,
     ShellConfig,
     ShellDenyPattern,
-    WatcherConfig,
     _default_deny_patterns,
     _strip_comment_fields,
     get_settings,
@@ -61,10 +60,6 @@ def test_default_values():
     assert settings.persistence.write_debounce_seconds == 1.0
     assert settings.persistence.ttl_multiplier == 2.0
 
-    # Watcher defaults
-    assert settings.watcher.enabled is True
-    assert settings.watcher.debounce_ms == 100
-
 
 def test_daemon_section_fields():
     """Test DaemonConfig has all expected fields."""
@@ -101,24 +96,15 @@ def test_persistence_section_fields():
     assert hasattr(persistence, "ttl_multiplier")
 
 
-def test_watcher_section_fields():
-    """Test WatcherConfig has all expected fields."""
-    watcher = WatcherConfig()
-    assert hasattr(watcher, "enabled")
-    assert hasattr(watcher, "debounce_ms")
-
-
 def test_settings_sections_exist():
-    """Test root Settings has daemon, crud, persistence, watcher attributes."""
+    """Test root Settings has daemon, crud, persistence attributes."""
     settings = Settings()
     assert hasattr(settings, "daemon")
     assert hasattr(settings, "crud")
     assert hasattr(settings, "persistence")
-    assert hasattr(settings, "watcher")
     assert isinstance(settings.daemon, DaemonConfig)
     assert isinstance(settings.crud, CrudConfig)
     assert isinstance(settings.persistence, PersistenceConfig)
-    assert isinstance(settings.watcher, WatcherConfig)
 
 
 def test_env_var_override(monkeypatch):
@@ -140,13 +126,11 @@ def test_multiple_env_var_overrides(monkeypatch):
     monkeypatch.setenv("ASYNC_CRUD_MCP_DAEMON__HOST", "0.0.0.0")
     monkeypatch.setenv("ASYNC_CRUD_MCP_DAEMON__PORT", "7777")
     monkeypatch.setenv("ASYNC_CRUD_MCP_PERSISTENCE__ENABLED", "true")
-    monkeypatch.setenv("ASYNC_CRUD_MCP_WATCHER__DEBOUNCE_MS", "200")
 
     settings = Settings()
     assert settings.daemon.host == "0.0.0.0"
     assert settings.daemon.port == 7777
     assert settings.persistence.enabled is True
-    assert settings.watcher.debounce_ms == 200
 
 
 def test_json_config_loading(tmp_path):
@@ -169,10 +153,6 @@ def test_json_config_loading(tmp_path):
             "enabled": True,
             "state_file": "/custom/state.json",
         },
-        "watcher": {
-            "enabled": False,
-            "debounce_ms": 500,
-        },
     }
 
     config_file.write_text(json.dumps(config_data), encoding="utf-8")
@@ -193,10 +173,6 @@ def test_json_config_loading(tmp_path):
     # Verify persistence section
     assert settings.persistence.enabled is True
     assert settings.persistence.state_file == "/custom/state.json"
-
-    # Verify watcher section
-    assert settings.watcher.enabled is False
-    assert settings.watcher.debounce_ms == 500
 
 
 def test_json_config_partial_override(tmp_path):
@@ -223,7 +199,6 @@ def test_json_config_partial_override(tmp_path):
     assert settings.daemon.transport == "sse"
     assert settings.crud.max_timeout == 300.0
     assert settings.persistence.enabled is False
-    assert settings.watcher.enabled is True
 
 
 def test_env_var_overrides_json_config(tmp_path, monkeypatch):

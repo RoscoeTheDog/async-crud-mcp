@@ -225,9 +225,9 @@ The `async-crud-mcp` project uses a two-layer architecture for robust daemon man
 ┌─────────────────────────────────────────────────────────────┐
 │ Layer 2: MCP Server (server.py)                            │
 │ ----------------------------------------------------------- │
-│ • FastMCP-based server exposing 11 CRUD tools:             │
-│   - write, read, update, delete, append, rename            │
-│   - list, status, batch_write, batch_read, batch_update    │
+│ • FastMCP-based server exposing 26 MCP tools (see the          │
+│   "Tools" section below): CRUD, batch, transactional           │
+│   edits, recycle-bin, shell/search, status, config             │
 │ • Supports SSE and stdio transports                         │
 │ • Shared core components:                                   │
 │   - PathValidator: Safe path resolution                     │
@@ -269,6 +269,52 @@ per-user by `systemd --user` — each user manages their own daemon instance ind
 - `server.py` - FastMCP server with CRUD tools
 - `config.py` - Configuration management (Pydantic)
 - `cli/` - CLI command groups (setup, daemon, config, bootstrap, quick-install/uninstall)
+
+## Tools
+
+The server exposes **26 MCP tools** across seven categories. The names below are
+the server-side tool names; MCP clients see them prefixed (e.g.
+`mcp__async-crud-mcp__async_read_tool`).
+
+| Category | Tools |
+|----------|-------|
+| **File CRUD** | `async_read_tool`, `async_write_tool`, `async_update_tool`, `async_delete_tool`, `async_rename_tool`, `async_append_tool`, `async_mkdir_tool`, `async_list_tool` |
+| **Batch** | `async_batch_read_tool`, `async_batch_write_tool`, `async_batch_update_tool` |
+| **Transactional edits** | `async_query_replace_tool`, `async_commit_tool`, `async_amend_tool`, `async_abort_tool` |
+| **Recycle bin** | `async_restore_tool`, `async_recycle_list_tool`, `async_recycle_clean_tool` |
+| **Shell / search** | `async_exec_tool`, `async_wait_tool`, `async_search_tool` |
+| **Status / health** | `async_status_tool`, `health_tool` |
+| **Config / project** | `crud_activate_project`, `crud_get_config`, `crud_update_config` |
+
+> Most non-exempt tools require a project to be activated first via
+> `crud_activate_project`; calls before activation fail with a structured
+> `NO_PROJECT_ACTIVATED` error so an agent can detect and self-activate.
+
+### Editing model: read-then-edit and the dual-state hazard
+
+`async_update_tool` uses **optimistic concurrency control**: `expected_hash` is a
+required argument, supplied from a prior `async_read_tool`. The server tracks
+content integrity in a `HashRegistry`; if the file changed since your read, the
+update is rejected rather than silently clobbering a concurrent agent's write.
+The flow is:
+
+1. `async_read_tool(path)` → returns content **and** its content hash.
+2. `async_update_tool(path, ..., expected_hash=<hash>)` → applies only if the
+   file still matches; otherwise it returns a contention/hash-mismatch response —
+   re-read and retry.
+
+For broad or risky multi-match edits, prefer the **transactional tools**
+(`async_query_replace_tool` → `async_commit_tool`), which generalize this manual
+hash dance into a staged query→commit transaction: a diff preview, a server-side
+compare-and-swap at commit time, and `async_amend_tool` / `async_abort_tool` to
+adjust or discard staged changes.
+
+**Dual file-state rule.** Claude's native `Edit` tracks its own
+read-before-edit state, and this server tracks its own via `HashRegistry`. On any
+given file, use **either** the server's tools **or** native tools for a single
+mutation sequence — do not interleave them mid-edit. The commit-time CAS will
+catch a native write that lands between query and commit, but mixing the two
+mid-sequence invites avoidable hash-mismatch churn.
 
 ## License
 

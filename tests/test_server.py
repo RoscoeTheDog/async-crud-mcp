@@ -574,7 +574,6 @@ class TestGetConfigTool:
         assert "daemon" in result
         assert "crud" in result
         assert "persistence" in result
-        assert "watcher" in result
 
     @pytest.mark.asyncio
     async def test_get_crud_section(self):
