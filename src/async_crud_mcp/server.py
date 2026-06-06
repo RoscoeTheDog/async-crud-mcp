@@ -53,6 +53,7 @@ from async_crud_mcp.core import (
     RecycleBin,
     ShellProvider,
     ShellValidator,
+    TransactionManager,
 )
 from async_crud_mcp.core.audit_logger import AuditConfig as AuditConfigDC
 from async_crud_mcp.daemon.config_watcher import ConfigWatcher, atomic_write_config
@@ -81,6 +82,10 @@ from async_crud_mcp.models import (
     RegexPatch,
     SearchRequest,
     WaitRequest,
+    QueryReplaceRequest,
+    CommitRequest,
+    AmendRequest,
+    AbortRequest,
 )
 from async_crud_mcp.tools import (
     async_append,
@@ -99,6 +104,10 @@ from async_crud_mcp.tools import (
     async_update,
     async_wait,
     async_write,
+    async_query_replace,
+    async_commit,
+    async_amend,
+    async_abort,
 )
 
 # Tools that work without project activation
@@ -306,6 +315,7 @@ path_validator = PathValidator(
 )
 lock_manager = LockManager(ttl_multiplier=settings.persistence.ttl_multiplier)
 hash_registry = HashRegistry()
+transaction_manager = TransactionManager()
 content_scanner = ContentScanner(
     rules=settings.crud.content_scan_rules,
     enabled=settings.crud.content_scan_enabled,
@@ -1128,6 +1138,91 @@ async def _config_watch_loop() -> None:
 # =============================================================================
 # Project config MCP tools
 # =============================================================================
+
+
+@mcp.tool()
+async def async_query_replace_tool(
+    path: str,
+    pattern: str,
+    replacement: str,
+    case_insensitive: bool = False,
+    ttl: float = 600.0,
+    timeout: float = 30.0,
+):
+    """Stage a transactional regex replace: preview matches before applying (ADR-001).
+
+    Returns a transaction id (txn_id) and a per-match diff preview. The file is NOT
+    changed until async_commit. Apply a subset with async_commit(txn_id, match_ids),
+    hand-edit a replacement with async_amend, or discard with async_abort. Commit
+    validates the file is unchanged since the query (or rebases onto non-overlapping
+    external edits) and returns a stale_conflict if matches no longer locate cleanly.
+
+    Args:
+        path: File path to edit
+        pattern: Regex pattern to match
+        replacement: Replacement string (supports backreferences like \\1)
+        case_insensitive: Case-insensitive matching (default: False)
+        ttl: Transaction time-to-live in seconds (default: 600)
+        timeout: Read lock timeout in seconds (default: 30)
+    """
+    request = QueryReplaceRequest(
+        path=path, pattern=pattern, replacement=replacement,
+        case_insensitive=case_insensitive, ttl=ttl, timeout=timeout,
+    )
+    response = await async_query_replace(
+        request, path_validator, lock_manager, transaction_manager,
+        str(_active_project_root), content_scanner=content_scanner,
+    )
+    return response.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def async_commit_tool(
+    txn_id: str,
+    match_ids: list[int] | None = None,
+    timeout: float = 30.0,
+):
+    """Apply a staged transactional edit; subset or all (ADR-001).
+
+    Args:
+        txn_id: Transaction id from async_query_replace
+        match_ids: Subset of match_ids to apply (None/omitted = all staged matches)
+        timeout: Write lock timeout in seconds (default: 30)
+    """
+    if match_ids is not None and isinstance(match_ids, str):
+        match_ids = json.loads(match_ids)
+    request = CommitRequest(txn_id=txn_id, match_ids=match_ids, timeout=timeout)
+    response = await async_commit(
+        request, path_validator, lock_manager, hash_registry,
+        transaction_manager, str(_active_project_root),
+    )
+    return response.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def async_amend_tool(txn_id: str, match_id: int, replacement: str):
+    """Override a staged replacement before commit (ADR-001).
+
+    Args:
+        txn_id: Transaction id from async_query_replace
+        match_id: Match id to amend
+        replacement: New replacement text for this match
+    """
+    request = AmendRequest(txn_id=txn_id, match_id=match_id, replacement=replacement)
+    response = await async_amend(request, transaction_manager, str(_active_project_root))
+    return response.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def async_abort_tool(txn_id: str):
+    """Discard a staged transaction (ADR-001).
+
+    Args:
+        txn_id: Transaction id to discard
+    """
+    request = AbortRequest(txn_id=txn_id)
+    response = await async_abort(request, transaction_manager, str(_active_project_root))
+    return response.model_dump(exclude_none=True)
 
 
 @mcp.tool(name="crud_activate_project")

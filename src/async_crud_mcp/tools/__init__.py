@@ -16,6 +16,10 @@ from .async_status import async_status
 from .async_update import async_update
 from .async_wait import async_wait
 from .async_write import async_write
+from .async_query_replace import async_query_replace
+from .async_commit import async_commit
+from .async_amend import async_amend
+from .async_abort import async_abort
 
 __all__ = [
     "async_append",
@@ -34,4 +38,8 @@ __all__ = [
     "async_update",
     "async_wait",
     "async_write",
+    "async_query_replace",
+    "async_commit",
+    "async_amend",
+    "async_abort",
 ]

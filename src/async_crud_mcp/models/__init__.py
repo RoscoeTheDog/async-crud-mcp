@@ -22,6 +22,10 @@ from .requests import (
     RegexPatch,
     SearchRequest,
     WaitRequest,
+    QueryReplaceRequest,
+    CommitRequest,
+    AmendRequest,
+    AbortRequest,
 )
 from .responses import (
     ActiveLocks,
@@ -63,6 +67,12 @@ from .responses import (
     UpdateSuccessResponse,
     WaitResponse,
     WriteSuccessResponse,
+    StagedMatchEntry,
+    QueryReplaceResponse,
+    CommitSuccessResponse,
+    StaleConflictResponse,
+    AmendResponse,
+    AbortResponse,
 )
 
 __all__ = [
@@ -128,4 +138,15 @@ __all__ = [
     "UpdateSuccessResponse",
     "WaitResponse",
     "WriteSuccessResponse",
+    # Transactional edit models (ADR-001)
+    "QueryReplaceRequest",
+    "CommitRequest",
+    "AmendRequest",
+    "AbortRequest",
+    "StagedMatchEntry",
+    "QueryReplaceResponse",
+    "CommitSuccessResponse",
+    "StaleConflictResponse",
+    "AmendResponse",
+    "AbortResponse",
 ]
