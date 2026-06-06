@@ -366,8 +366,11 @@ recycle_bin = RecycleBin(
 @contextlib.asynccontextmanager
 async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
     """Server lifespan handler for startup/shutdown of background services."""
+    global _txn_gc_task
     await background_registry.start()
     logger.info("Background task registry started")
+    _txn_gc_task = asyncio.create_task(_txn_gc_loop())
+    logger.info("Transaction GC sweep started")
     try:
         yield
     finally:
@@ -376,6 +379,13 @@ async def _server_lifespan(app: FastMCP) -> AsyncIterator[None]:
             _config_watcher_task.cancel()
             try:
                 await _config_watcher_task
+            except asyncio.CancelledError:
+                pass
+        # Stop the transaction GC sweep
+        if _txn_gc_task is not None:
+            _txn_gc_task.cancel()
+            try:
+                await _txn_gc_task
             except asyncio.CancelledError:
                 pass
         audit_logger.close()
@@ -393,6 +403,26 @@ mcp.add_middleware(ValidationErrorMiddleware())    # Innermost: catch Pydantic e
 # Per-project activation state
 _active_project_root: Path | None = None
 _config_watcher_task: asyncio.Task | None = None
+_txn_gc_task: asyncio.Task | None = None
+
+# How often the server sweeps expired edit transactions out of memory. Lazy
+# expiry (on access via TransactionManager.get) already covers correctness; this
+# bounds memory for transactions created and then abandoned without commit/abort.
+_TXN_GC_INTERVAL_SECONDS = 300.0
+
+
+async def _txn_gc_loop() -> None:
+    """Periodically prune expired edit transactions (ADR-001 TTL GC)."""
+    while True:
+        try:
+            await asyncio.sleep(_TXN_GC_INTERVAL_SECONDS)
+            pruned = transaction_manager.prune_expired()
+            if pruned:
+                logger.debug(f"Transaction GC: pruned {pruned} expired transaction(s)")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:  # never let the GC sweep kill the server
+            logger.warning(f"Transaction GC sweep error: {e}")
 _last_valid_project_config: ProjectConfig | None = None
 _config_warning: str | None = None  # Non-None when local config has parse errors
 
