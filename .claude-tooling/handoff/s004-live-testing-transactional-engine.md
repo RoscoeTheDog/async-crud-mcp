@@ -16,6 +16,7 @@
 - **Backup gate: CLEARED** — user completed a system backup before redeploy. Live testing (incl. delete/exec tools against real data) is now authorized.
 - **Phases 1-3 complete; Phase 4 deferred by design** (adaptive fair-lease — build only if contention is observed).
 - **Deploy model (important):** the live daemon runs from a **COPIED, non-editable** install at `C:\Users\Admin\AppData\Local\async-crud-mcp\venv` (NOT the dev repo `.venv`, which is editable). So **any code fix made during testing needs a redeploy** (`scripts\setup.bat`, or `<install-venv>\Scripts\python.exe -m pip install --no-deps <repo>`) + daemon restart before it goes live. See project memory `[[deployment-topology]]`.
+- **Handoff location:** this chain now lives in `.claude-tooling/handoff/` (migrated from `.claude/handoff/` to the newer convention). `/context:GET_HANDOFF` finds it via the CLI default now — no manual path needed.
 
 ---
 
