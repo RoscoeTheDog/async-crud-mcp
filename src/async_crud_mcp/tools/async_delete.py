@@ -75,6 +75,19 @@ async def async_delete(
                 path=request.path,
             )
 
+        # 2b. async_delete is file-only. Reject directories with a distinct code
+        # (separation of concerns) instead of a misleading OS permission error;
+        # directory trees are recycled via async_mkdir(force=True).
+        if os.path.isdir(validated_path):
+            return ErrorResponse(
+                error_code=ErrorCode.IS_A_DIRECTORY,
+                message=(
+                    f"Path is a directory, not a file: {request.path}. "
+                    f"Use async_mkdir(force=True) to recycle a directory tree."
+                ),
+                path=request.path,
+            )
+
         # 3. Acquire exclusive write lock
         try:
             request_id = await lock_manager.acquire_write(

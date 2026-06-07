@@ -149,6 +149,21 @@ class TestAsyncDeleteErrors:
         assert "not found" in response.message.lower()
 
     @pytest.mark.asyncio
+    async def test_delete_directory_returns_is_a_directory(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        """Deleting a directory returns IS_A_DIRECTORY (not a misleading OS error)."""
+        dir_path = temp_base_dir / "a_dir"
+        (dir_path / "nested").mkdir(parents=True)
+        (dir_path / "nested" / "f.txt").write_text("x", encoding="utf-8")
+
+        request = AsyncDeleteRequest(path=str(dir_path))
+        response = await async_delete(request, path_validator, lock_manager, hash_registry)
+
+        assert response.status == "error"
+        assert response.error_code == ErrorCode.IS_A_DIRECTORY
+        assert "mkdir" in response.message.lower()
+        assert dir_path.exists()  # untouched
+
+    @pytest.mark.asyncio
     async def test_delete_path_outside_base(self, temp_base_dir, path_validator, lock_manager, hash_registry):
         """Test delete returns PATH_OUTSIDE_BASE when path is outside allowed directories."""
         outside_path = "/etc/passwd"

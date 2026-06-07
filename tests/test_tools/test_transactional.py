@@ -76,6 +76,52 @@ async def test_commit_subset(base_dir, pv, lm, hr, tm):
 
 
 @pytest.mark.asyncio
+async def test_subset_commit_keeps_txn_open(base_dir, pv, lm, hr, tm):
+    # A subset commit retains the unapplied matches; they commit on the SAME txn,
+    # relocated via rebase (each `before` is unique here so it locates cleanly).
+    f = base_dir / "m.txt"
+    write(f, "func_alpha()\nfunc_beta()\nfunc_gamma()\n")
+    q = await async_query_replace(
+        QueryReplaceRequest(path=str(f), pattern=r"func_(\w+)\(\)", replacement=r"method_\1()"),
+        pv, lm, tm, USER,
+    )
+    assert q.match_count == 3
+    c1 = await async_commit(CommitRequest(txn_id=q.txn_id, match_ids=[2]), pv, lm, hr, tm, USER)
+    assert c1.status == "ok" and c1.applied_count == 1
+    assert c1.txn_id == q.txn_id and c1.remaining_match_ids == [1, 3]
+    assert f.read_text() == "func_alpha()\nmethod_beta()\nfunc_gamma()\n"
+    # remaining matches commit on the same txn (file changed -> rebase path)
+    c2 = await async_commit(CommitRequest(txn_id=q.txn_id, match_ids=[1, 3]), pv, lm, hr, tm, USER)
+    assert c2.status == "ok" and c2.applied_count == 2 and c2.rebased is True
+    assert f.read_text() == "method_alpha()\nmethod_beta()\nmethod_gamma()\n"
+    # exhausted -> txn consumed
+    c3 = await async_commit(CommitRequest(txn_id=q.txn_id), pv, lm, hr, tm, USER)
+    assert c3.status == "error" and c3.error_code == ErrorCode.TXN_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_full_commit_consumes_txn(base_dir, pv, lm, hr, tm):
+    # A commit that applies every staged match leaves nothing open.
+    f = base_dir / "m2.txt"
+    write(f, "foo foo")
+    q = await async_query_replace(QueryReplaceRequest(path=str(f), pattern="foo", replacement="X"), pv, lm, tm, USER)
+    c = await async_commit(CommitRequest(txn_id=q.txn_id), pv, lm, hr, tm, USER)
+    assert c.status == "ok" and c.applied_count == 2
+    assert c.txn_id is None and c.remaining_match_ids is None
+    assert tm.count == 0
+
+
+@pytest.mark.asyncio
+async def test_zero_match_creates_no_txn(base_dir, pv, lm, tm):
+    # An empty match set must not allocate a transaction (nothing to commit).
+    f = base_dir / "n.txt"
+    write(f, "nothing to see here")
+    q = await async_query_replace(QueryReplaceRequest(path=str(f), pattern="ZZZ_NOPE", replacement="x"), pv, lm, tm, USER)
+    assert q.status == "ok" and q.match_count == 0 and q.txn_id is None
+    assert tm.count == 0
+
+
+@pytest.mark.asyncio
 async def test_amend_then_commit(base_dir, pv, lm, hr, tm):
     f = base_dir / "c.txt"
     write(f, "hello world")

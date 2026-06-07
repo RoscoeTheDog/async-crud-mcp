@@ -131,10 +131,24 @@ async def async_commit(
         finally:
             await lock_manager.release_write(path, rid)
 
-        transaction_manager.remove(txn.txn_id)
+        # Keep the transaction open after a subset commit: drop the matches we
+        # just applied and retain the rest (with their ORIGINAL anchors). The
+        # file now differs from base_hash, so the next commit takes the rebase
+        # path and relocates each remaining match by its content anchor -- never
+        # by a now-stale offset, and never re-scanning for new occurrences the
+        # replacement may have introduced. The found set stays frozen; positions
+        # are re-derived from content (ambiguous -> stale_conflict, never a guess).
+        applied_ids = {m.match_id for m in selected}
+        remaining = [m for m in txn.matches if m.match_id not in applied_ids]
+        if remaining:
+            transaction_manager.set_matches(txn.txn_id, remaining)
+        else:
+            transaction_manager.remove(txn.txn_id)
         return CommitSuccessResponse(
             path=path, previous_hash=previous_hash, hash=new_hash,
             applied_count=len(spans), rebased=rebased,
+            txn_id=txn.txn_id if remaining else None,
+            remaining_match_ids=[m.match_id for m in remaining] or None,
         )
     except Exception as e:
         return ErrorResponse(error_code=ErrorCode.SERVER_ERROR, message=f"Unexpected error during commit: {e}")

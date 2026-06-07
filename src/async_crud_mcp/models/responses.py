@@ -34,6 +34,7 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = "VALIDATION_ERROR"
     TXN_NOT_FOUND = "TXN_NOT_FOUND"
     CONTENT_BLOCKED = "CONTENT_BLOCKED"
+    IS_A_DIRECTORY = "IS_A_DIRECTORY"
 
 
 # Shared Models
@@ -554,7 +555,11 @@ class QueryReplaceResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["ok"] = "ok"
-    txn_id: str = Field(..., description="Transaction id (pass to async_commit/async_amend/async_abort)")
+    txn_id: str | None = Field(
+        default=None,
+        description="Transaction id (pass to async_commit/async_amend/async_abort); "
+        "None when match_count is 0 (no transaction is created for an empty match set)",
+    )
     path: str = Field(..., description="File path being edited")
     base_hash: str = Field(..., description="File hash captured at query time (CAS token)")
     match_count: int = Field(..., description="Number of matches staged")
@@ -575,6 +580,16 @@ class CommitSuccessResponse(BaseModel):
     hash: str = Field(..., description="Hash after commit (format: sha256:...)")
     applied_count: int = Field(..., description="Number of matches applied")
     rebased: bool = Field(default=False, description="True if matches were relocated onto externally-changed content")
+    txn_id: str | None = Field(
+        default=None,
+        description="Transaction id if it remains open after a subset commit (unapplied "
+        "matches are still staged); None when the transaction was fully consumed",
+    )
+    remaining_match_ids: list[int] | None = Field(
+        default=None,
+        description="Match ids still staged after a subset commit. Commit again (they are "
+        "relocated via rebase) or abort. None when the transaction was fully consumed",
+    )
 
 
 class StaleConflictResponse(BaseModel):

@@ -88,6 +88,14 @@ async def async_query_replace(
                 anchor=make_anchor(content, m.start(), m.end()),
             ))
 
+        # No matches -> nothing to stage; don't allocate a transaction (there is
+        # nothing to commit/amend/abort). Return a txn-less preview.
+        if not staged:
+            return QueryReplaceResponse(
+                txn_id=None, path=str(validated), base_hash=base_hash,
+                match_count=0, matches=[], redactions=None,
+            )
+
         txn = transaction_manager.create(
             path=str(validated), base_hash=base_hash, original_content=content,
             matches=staged, user_key=user_key, ttl=request.ttl,

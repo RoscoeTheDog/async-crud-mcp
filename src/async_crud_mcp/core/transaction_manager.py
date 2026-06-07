@@ -171,6 +171,13 @@ class TransactionManager:
     def remove(self, txn_id: str) -> bool:
         return self._txns.pop(txn_id, None) is not None
 
+    def set_matches(self, txn_id: str, matches: list[StagedMatch]) -> None:
+        """Replace a transaction's staged matches (e.g. drop the ones a subset
+        commit just applied, keeping the rest open for a follow-up commit)."""
+        txn = self._txns.get(txn_id)
+        if txn is not None:
+            txn.matches = matches
+
     def amend(self, txn_id: str, user_key: str, match_id: int, new_after: str) -> StagedMatch | None:
         """Override the staged replacement for one match; returns it, or None."""
         txn = self.get(txn_id, user_key)
