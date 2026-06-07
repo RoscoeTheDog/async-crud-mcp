@@ -12,6 +12,7 @@ from typing import Union
 
 from async_crud_mcp.core import (
     AccessDeniedError,
+    ContentScanner,
     HashRegistry,
     LockManager,
     LockTimeout,
@@ -40,6 +41,7 @@ async def async_commit(
     hash_registry: HashRegistry,
     transaction_manager: TransactionManager,
     user_key: str,
+    content_scanner: ContentScanner | None = None,
 ) -> Union[CommitSuccessResponse, StaleConflictResponse, ErrorResponse]:
     """Apply selected staged matches to the file (CAS + rebase)."""
     try:
@@ -62,6 +64,25 @@ async def async_commit(
             selected = [m for m in txn.matches if m.match_id in wanted]
         if not selected:
             return ErrorResponse(error_code=ErrorCode.VALIDATION_ERROR, message="No matching match_ids to commit", path=path)
+
+        # Content-scan write guard (mirrors async_update's regex guard). A staged
+        # match's `before` is the exact text the commit would overwrite -- the
+        # rebase path also relocates by `before` -- so scanning it refuses to
+        # clobber a secret the agent cannot see (reads are egress-redacted).
+        # All-or-nothing: nothing is written and the transaction is preserved so
+        # the caller can amend/deselect/abort.
+        if content_scanner is not None:
+            blocked = [m.match_id for m in selected if content_scanner.scan(m.before, path).blocked]
+            if blocked:
+                return ErrorResponse(
+                    error_code=ErrorCode.CONTENT_BLOCKED,
+                    message=(
+                        f"Refusing to commit: {len(blocked)} selected match(es) {blocked} "
+                        f"overlap egress-protected content; nothing was applied. Amend or "
+                        f"deselect them, or abort the transaction."
+                    ),
+                    path=path,
+                )
 
         try:
             rid = await lock_manager.acquire_write(path, timeout=request.timeout)

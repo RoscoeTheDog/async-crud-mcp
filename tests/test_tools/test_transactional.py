@@ -155,6 +155,42 @@ async def test_commit_unknown_txn(base_dir, pv, lm, hr, tm):
 
 
 @pytest.mark.asyncio
+async def test_commit_blocks_secret_match(base_dir, pv, lm, hr, tm):
+    # The transactional commit must refuse to overwrite a region whose original
+    # text is egress-protected (parity with async_update's regex write guard).
+    scanner = ContentScanner(rules=_default_content_scan_rules(), enabled=True)
+    f = base_dir / "k.txt"
+    original = 'keep\napi_key = "sk-test-SECRETVALUE0000000000000000"\nkeep\n'
+    write(f, original)
+    q = await async_query_replace(
+        QueryReplaceRequest(path=str(f), pattern=r'api_key = "[^"]*"', replacement='api_key = "ROTATED"'),
+        pv, lm, tm, USER, content_scanner=scanner,
+    )
+    assert q.status == "ok" and q.match_count == 1
+    c = await async_commit(CommitRequest(txn_id=q.txn_id), pv, lm, hr, tm, USER, content_scanner=scanner)
+    assert c.status == "error" and c.error_code == ErrorCode.CONTENT_BLOCKED
+    # file untouched and the transaction is preserved (still abortable)
+    assert f.read_text() == original
+    ab = await async_abort(AbortRequest(txn_id=q.txn_id), tm, USER)
+    assert ab.status == "ok" and ab.discarded is True
+
+
+@pytest.mark.asyncio
+async def test_commit_allows_nonsecret_match_with_scanner(base_dir, pv, lm, hr, tm):
+    # A scanner present must not block edits over non-sensitive regions.
+    scanner = ContentScanner(rules=_default_content_scan_rules(), enabled=True)
+    f = base_dir / "l.txt"
+    write(f, "region = us-east-1\n")
+    q = await async_query_replace(
+        QueryReplaceRequest(path=str(f), pattern="region", replacement="zone"),
+        pv, lm, tm, USER, content_scanner=scanner,
+    )
+    c = await async_commit(CommitRequest(txn_id=q.txn_id), pv, lm, hr, tm, USER, content_scanner=scanner)
+    assert c.status == "ok" and c.applied_count == 1
+    assert f.read_text() == "zone = us-east-1\n"
+
+
+@pytest.mark.asyncio
 async def test_query_preview_redacts_secret(base_dir, pv, lm, tm):
     scanner = ContentScanner(rules=_default_content_scan_rules(), enabled=True)
     f = base_dir / "j.txt"

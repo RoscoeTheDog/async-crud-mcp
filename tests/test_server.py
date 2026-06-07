@@ -14,8 +14,53 @@ from async_crud_mcp.server import (
     _apply_project_config,
     _check_port_available,
     _deep_merge,
+    _extract_args_summary,
     mcp,
 )
+
+
+class TestExtractArgsSummary:
+    """Audit args redaction, including nested write payloads (livetest F2)."""
+
+    def test_top_level_content_and_replacement_redacted(self):
+        out = _extract_args_summary({"path": "/a", "content": "secret-bytes", "replacement": "x" * 5})
+        assert out["path"] == "/a"
+        assert out["content"] == "<12 chars>"
+        assert out["replacement"] == "<5 chars>"
+
+    def test_env_values_redacted_keys_kept(self):
+        out = _extract_args_summary({"command": "echo", "env": {"API_KEY": "shh", "FOO": "bar"}})
+        assert out["command"] == "echo"  # match specifier preserved
+        assert out["env"] == {"API_KEY": "<redacted>", "FOO": "<redacted>"}
+
+    def test_nested_regex_patches_replacement_redacted(self):
+        out = _extract_args_summary({
+            "path": "/a",
+            "regex_patches": [{"pattern": "api_key = .*", "replacement": 'api_key = "SECRET"'}],
+        })
+        patch = out["regex_patches"][0]
+        assert patch["pattern"] == "api_key = .*"  # specifier preserved
+        assert patch["replacement"] == "<18 chars>"  # payload redacted
+
+    def test_nested_patch_new_string_redacted(self):
+        out = _extract_args_summary({
+            "path": "/a",
+            "patches": [{"old_string": "foo", "new_string": "password = hunter2"}],
+        })
+        patch = out["patches"][0]
+        assert patch["old_string"] == "foo"
+        assert patch["new_string"] == "<18 chars>"
+
+    def test_batch_files_content_redacted(self):
+        out = _extract_args_summary({
+            "files": [
+                {"path": "/a", "content": "password = batchsecret123"},
+                {"path": "/b", "content": "ok"},
+            ],
+        })
+        assert out["files"][0]["content"] == "<25 chars>"
+        assert out["files"][1]["content"] == "<2 chars>"
+        assert out["files"][0]["path"] == "/a"
 
 
 class TestPortPreflightCheck:

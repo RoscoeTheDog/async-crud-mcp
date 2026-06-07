@@ -119,9 +119,46 @@ _ACTIVATION_EXEMPT_TOOLS = frozenset({
 # Arg keys whose string values are ALWAYS replaced with a length placeholder in
 # audit entries -- these carry file content / write payloads that may contain
 # secrets (e.g. a 64-char private key, well under any truncation threshold).
-_REDACT_ARG_KEYS = frozenset({"content", "replacement"})
+# String-valued arg keys whose VALUES are write payloads that may carry secrets.
+# Redacted to a length placeholder wherever they appear (including nested in
+# patches / regex_patches / batch files[]). Match specifiers (pattern,
+# old_string) are intentionally preserved for audit context.
+_REDACT_ARG_KEYS = frozenset({"content", "replacement", "new_string"})
 # Dict-valued arg keys whose VALUES may carry secrets (keys kept for context).
 _REDACT_DICT_ARG_KEYS = frozenset({"env"})
+
+
+def _redact_args(obj):
+    """Recursively redact secret-bearing payloads in a loggable args structure.
+
+    Walks dicts and lists so write payloads nested inside `patches`,
+    `regex_patches`, and batch `files[]` are scrubbed too -- not just top-level
+    args. String payloads (content/replacement/new_string) become a length
+    placeholder; env values are redacted (keys preserved).
+    """
+    if isinstance(obj, dict):
+        out = {}
+        for key, val in obj.items():
+            if key in _REDACT_ARG_KEYS:
+                if isinstance(val, str):
+                    out[key] = f"<{len(val)} chars>"
+                elif val is not None:
+                    out[key] = "<redacted>"
+                else:
+                    out[key] = val
+            elif key in _REDACT_DICT_ARG_KEYS:
+                if isinstance(val, dict):
+                    out[key] = {k: "<redacted>" for k in val}
+                elif val is not None:
+                    out[key] = "<redacted>"
+                else:
+                    out[key] = val
+            else:
+                out[key] = _redact_args(val)
+        return out
+    if isinstance(obj, list):
+        return [_redact_args(item) for item in obj]
+    return obj
 
 
 def _extract_args_summary(args: dict) -> dict:
@@ -129,23 +166,12 @@ def _extract_args_summary(args: dict) -> dict:
 
     File content / write payloads and environment values are never written to
     the audit log verbatim -- they may contain credentials, private keys, or
-    BIP-39 mnemonics. Env keys are preserved (so the audit shows WHICH vars were
-    set) while their values are redacted.
+    BIP-39 mnemonics. Redaction recurses into nested patch/file structures so
+    `patches[].new_string`, `regex_patches[].replacement`, and batch
+    `files[].content` are scrubbed too. Env keys are preserved (so the audit
+    shows WHICH vars were set) while their values are redacted.
     """
-    summary = dict(args)
-    for key in _REDACT_ARG_KEYS:
-        val = summary.get(key)
-        if isinstance(val, str):
-            summary[key] = f"<{len(val)} chars>"
-        elif val is not None:
-            summary[key] = "<redacted>"
-    for key in _REDACT_DICT_ARG_KEYS:
-        val = summary.get(key)
-        if isinstance(val, dict):
-            summary[key] = {k: "<redacted>" for k in val}
-        elif val is not None:
-            summary[key] = "<redacted>"
-    return summary
+    return _redact_args(args)
 
 
 def _parse_tool_result(result: ToolResult) -> tuple[str, str | None, dict | None]:
@@ -1224,7 +1250,7 @@ async def async_commit_tool(
     request = CommitRequest(txn_id=txn_id, match_ids=match_ids, timeout=timeout)
     response = await async_commit(
         request, path_validator, lock_manager, hash_registry,
-        transaction_manager, str(_active_project_root),
+        transaction_manager, str(_active_project_root), content_scanner=content_scanner,
     )
     return response.model_dump(exclude_none=True)
 
