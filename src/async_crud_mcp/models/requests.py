@@ -41,6 +41,11 @@ class AsyncWriteRequest(BaseModel):
     encoding: str = Field(default="utf-8", description="File encoding")
     create_dirs: bool = Field(default=True, description="Create parent directories if missing")
     timeout: float = Field(default=30.0, description="Operation timeout in seconds")
+    allow_redaction_markers: bool = Field(
+        default=False,
+        description="Allow content containing <<REDACTED:...>> placeholders (normally rejected to "
+        "prevent persisting redacted read-output back to disk and destroying the secret)",
+    )
 
 
 class AsyncUpdateRequest(BaseModel):
@@ -54,6 +59,11 @@ class AsyncUpdateRequest(BaseModel):
     encoding: str = Field(default="utf-8", description="File encoding")
     timeout: float = Field(default=30.0, description="Operation timeout in seconds")
     diff_format: Literal["json", "unified"] = Field(default="json", description="Diff format for contention responses")
+    allow_redaction_markers: bool = Field(
+        default=False,
+        description="Allow content containing <<REDACTED:...>> placeholders (normally rejected to "
+        "prevent persisting redacted read-output back to disk and destroying the secret)",
+    )
 
     @model_validator(mode="after")
     def validate_content_or_patches(self) -> "AsyncUpdateRequest":
@@ -142,6 +152,9 @@ class BatchWriteItem(BaseModel):
     content: str = Field(..., description="Content to write")
     encoding: str = Field(default="utf-8", description="File encoding")
     create_dirs: bool = Field(default=True, description="Create parent directories if missing")
+    allow_redaction_markers: bool = Field(
+        default=False, description="Allow content containing <<REDACTED:...>> placeholders (normally rejected)"
+    )
 
 
 class BatchUpdateItem(BaseModel):
@@ -152,6 +165,9 @@ class BatchUpdateItem(BaseModel):
     content: str | None = Field(default=None, description="New file content (mutually exclusive with patches)")
     patches: list[Patch] | None = Field(default=None, description="List of patches to apply (mutually exclusive with content)")
     encoding: str = Field(default="utf-8", description="File encoding")
+    allow_redaction_markers: bool = Field(
+        default=False, description="Allow content containing <<REDACTED:...>> placeholders (normally rejected)"
+    )
 
     @model_validator(mode="after")
     def validate_content_or_patches(self) -> "BatchUpdateItem":

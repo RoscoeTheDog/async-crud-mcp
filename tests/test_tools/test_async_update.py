@@ -48,6 +48,49 @@ def create_file_with_hash(file_path: Path, content: str) -> str:
     return file_hash
 
 
+class TestAsyncUpdateRedactionGuard:
+    """async_update rejects redacted read-output via content mode (livetest F7)."""
+
+    @pytest.mark.asyncio
+    async def test_content_with_placeholder_rejected(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        file_path = temp_base_dir / "u_guard.txt"
+        h = create_file_with_hash(file_path, 'api_key = "real-secret-value-123"\n')
+        request = AsyncUpdateRequest(
+            path=str(file_path), expected_hash=h,
+            content="api_key = <<REDACTED:generic-api-key-assignment:1>>\n",
+        )
+        response = await async_update(request, path_validator, lock_manager, hash_registry)
+        assert response.status == "error"
+        assert response.error_code == ErrorCode.REDACTION_MARKERS_PRESENT
+        # original file untouched
+        assert file_path.read_text() == 'api_key = "real-secret-value-123"\n'
+
+    @pytest.mark.asyncio
+    async def test_content_with_placeholder_override_allowed(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        file_path = temp_base_dir / "u_guard_ok.txt"
+        h = create_file_with_hash(file_path, "before\n")
+        new_content = "literal <<REDACTED:rule:1>> doc\n"
+        request = AsyncUpdateRequest(
+            path=str(file_path), expected_hash=h, content=new_content, allow_redaction_markers=True,
+        )
+        response = await async_update(request, path_validator, lock_manager, hash_registry)
+        assert response.status == "ok"
+        assert file_path.read_text() == new_content
+
+    @pytest.mark.asyncio
+    async def test_patches_path_unaffected_by_guard(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        # The guard targets content mode only; patches remain the safe edit path.
+        file_path = temp_base_dir / "u_patch.txt"
+        h = create_file_with_hash(file_path, "alpha beta gamma\n")
+        request = AsyncUpdateRequest(
+            path=str(file_path), expected_hash=h,
+            patches=[Patch(old_string="beta", new_string="BETA")],
+        )
+        response = await async_update(request, path_validator, lock_manager, hash_registry)
+        assert response.status == "ok"
+        assert file_path.read_text() == "alpha BETA gamma\n"
+
+
 class TestAsyncUpdateContentSuccess:
     """Test successful full content replacement."""
 

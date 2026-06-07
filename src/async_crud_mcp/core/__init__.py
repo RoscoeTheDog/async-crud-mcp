@@ -2,7 +2,13 @@
 
 from .audit_logger import AuditEntry, AuditLogger
 from .background_tasks import BackgroundTask, BackgroundTaskRegistry
-from .content_scanner import ContentScanner, ContentScanResult, RedactedContent, RedactionSpan
+from .content_scanner import (
+    ContentScanner,
+    ContentScanResult,
+    RedactedContent,
+    RedactionSpan,
+    contains_redaction_placeholder,
+)
 from .diff_engine import check_patch_applicability, compute_diff, compute_json_diff, compute_unified_diff
 from .file_io import HashRegistry, atomic_write, compute_file_hash, compute_hash, safe_rename
 from .lock_manager import LockManager, LockTimeout, LockType
@@ -32,6 +38,7 @@ __all__ = [
     "ContentScanResult",
     "RedactedContent",
     "RedactionSpan",
+    "contains_redaction_placeholder",
     "LockManager",
     "LockTimeout",
     "LockType",

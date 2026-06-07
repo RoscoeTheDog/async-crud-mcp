@@ -11,6 +11,19 @@ from functools import lru_cache
 from typing import List, Optional
 
 
+# Sentinel emitted by ContentScanner.redact() for egress-scrubbed spans:
+#   <<REDACTED:rule_name:id>>  (metadata exposed)  or  <<REDACTED>>  (metadata hidden)
+# Write paths reject content containing it (unless explicitly overridden): such
+# content is almost always redacted read-output being round-tripped back to disk,
+# which would persist the placeholder and destroy the real secret.
+_REDACTION_PLACEHOLDER_RE = re.compile(r"<<REDACTED(?::[^>]*)?>>")
+
+
+def contains_redaction_placeholder(text: str) -> bool:
+    """Return True if text contains a redaction placeholder produced by redact()."""
+    return _REDACTION_PLACEHOLDER_RE.search(text) is not None
+
+
 # English function words that appear in normal prose but NOT in the BIP-39
 # wordlist. Used to distinguish mnemonic phrases from natural English text.
 # Words that overlap with BIP-39 (above, also, before, below, between, can,

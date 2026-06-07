@@ -511,6 +511,7 @@ async def async_write_tool(
     encoding: str = "utf-8",
     create_dirs: bool = True,
     timeout: float = 30.0,
+    allow_redaction_markers: bool = False,
 ):
     """Write content to a new file atomically. Fails with FILE_EXISTS if file already exists -- use async_update_tool to modify existing files.
 
@@ -520,6 +521,9 @@ async def async_write_tool(
         encoding: File encoding (default: utf-8)
         create_dirs: Create parent directories if missing (default: True)
         timeout: Operation timeout in seconds (default: 30.0)
+        allow_redaction_markers: Permit content containing <<REDACTED:...>> placeholders.
+            Default False rejects them (they usually mean redacted read-output is being
+            written back, which would persist the placeholder and destroy the secret).
 
     Returns:
         WriteSuccessResponse with file metadata, or ErrorResponse on failure
@@ -530,6 +534,7 @@ async def async_write_tool(
         encoding=encoding,
         create_dirs=create_dirs,
         timeout=timeout,
+        allow_redaction_markers=allow_redaction_markers,
     )
     response = await async_write(request, path_validator, lock_manager, hash_registry, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump(exclude_none=True)
@@ -545,6 +550,7 @@ async def async_update_tool(
     encoding: str = "utf-8",
     timeout: float = 30.0,
     diff_format: str = "json",  # Will be validated by Pydantic
+    allow_redaction_markers: bool = False,
 ):
     """Update file content with conflict detection.
 
@@ -561,6 +567,9 @@ async def async_update_tool(
         encoding: File encoding (default: utf-8)
         timeout: Operation timeout in seconds (default: 30.0)
         diff_format: Diff format for contention responses (default: json)
+        allow_redaction_markers: Permit content containing <<REDACTED:...>> placeholders
+            (content mode only). Default False rejects them to avoid persisting redacted
+            read-output back to disk; the patch paths are unaffected.
 
     Returns:
         UpdateSuccessResponse or UpdateContentionResponse or ErrorResponse
@@ -594,6 +603,7 @@ async def async_update_tool(
         encoding=encoding,
         timeout=timeout,
         diff_format=diff_format,  # type: ignore[arg-type]  # Validated above
+        allow_redaction_markers=allow_redaction_markers,
     )
     response = await async_update(request, path_validator, lock_manager, hash_registry, content_scanner, max_file_size_bytes=_effective_max_file_size)
     return response.model_dump(exclude_none=True)

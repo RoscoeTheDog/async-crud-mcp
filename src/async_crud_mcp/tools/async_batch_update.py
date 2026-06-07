@@ -54,6 +54,7 @@ async def async_batch_update(
                 encoding=item.encoding,
                 timeout=request.timeout,
                 diff_format=request.diff_format,
+                allow_redaction_markers=item.allow_redaction_markers,
             )
 
             # Call single-file async_update

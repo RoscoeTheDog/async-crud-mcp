@@ -316,6 +316,43 @@ mutation sequence — do not interleave them mid-edit. The commit-time CAS will
 catch a native write that lands between query and commit, but mixing the two
 mid-sequence invites avoidable hash-mismatch churn.
 
+**Stale-conflict and rebase contract.** At commit the server re-reads the file.
+If it is unchanged since the query, staged matches apply at their captured
+offsets. If it changed, each selected match is *relocated* by a **content
+anchor** — the matched text plus roughly 48 characters of surrounding context.
+A match applies only if that anchor (or, failing that, the matched text itself)
+occurs **exactly once** in the new content; any ambiguity marks it stale, and if
+any selected match is stale the entire commit is refused as `stale_conflict`
+(nothing is written) — re-query to refresh. Practical consequence: a
+"non-overlapping" external edit auto-rebases cleanly only when it lands
+**outside the ~48-character window** of every match *and* the matched text stays
+uniquely locatable. Editing close to a match, or replacing a token that recurs
+elsewhere, conservatively triggers `stale_conflict` rather than risk a
+wrong-position edit. A **subset commit** keeps the transaction open with the
+remaining (unapplied) matches; they commit later through this same rebase path,
+and the staged set is never re-scanned, so a replacement that introduces new
+pattern occurrences never expands the transaction.
+
+**Egress redaction and the write-back guard.** Reads, searches, transaction
+previews, and shell output are scanned, and any secret-looking span is replaced
+with a `<<REDACTED:rule:id>>` placeholder before leaving the daemon — the
+response still carries the file's **real** hash, so read-then-edit CAS keeps
+working. Because a read returns *redacted* text, writing that text straight back
+would persist the placeholder and destroy the real secret. The full-content
+write paths (`async_write_tool`, `async_update_tool` content mode, and their
+batch forms) therefore **reject** content containing a redaction placeholder
+with a `REDACTION_MARKERS_PRESENT` error. Edit via **patches**
+(`patches` / `regex_patches`) — which carry only the changed snippets and are the
+recommended path — or pass `allow_redaction_markers=true` for the rare file that
+legitimately contains that literal text.
+
+**Search vs. list scoping.** `async_search_tool` honors `search.exclude_dirs`
+(e.g. `.async-crud-mcp`, `.git`, `node_modules`) and never returns matches from
+them, so deleted secrets sitting in the recycle bin are not re-found by content
+search. `async_list_tool` is a **metadata-only** directory listing and does
+**not** apply `exclude_dirs`: a recursive list enumerates those directories'
+entries (names and sizes only — never file content).
+
 ## License
 
 [MIT](LICENSE)

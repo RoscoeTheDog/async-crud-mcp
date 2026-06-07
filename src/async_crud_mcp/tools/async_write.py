@@ -12,6 +12,7 @@ from async_crud_mcp.core import (
     PathValidator,
     atomic_write,
     compute_hash,
+    contains_redaction_placeholder,
 )
 from async_crud_mcp.models import AsyncWriteRequest, ErrorCode, ErrorResponse, WriteSuccessResponse
 
@@ -49,6 +50,20 @@ async def async_write(
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,
                 message=str(e),
+                path=request.path,
+            )
+
+        # 1b. Reject redacted read-output being written back (would persist the
+        # <<REDACTED>> placeholder and destroy the secret). Override deliberately
+        # via allow_redaction_markers for the rare file that legitimately contains it.
+        if not request.allow_redaction_markers and contains_redaction_placeholder(request.content):
+            return ErrorResponse(
+                error_code=ErrorCode.REDACTION_MARKERS_PRESENT,
+                message=(
+                    "Content contains <<REDACTED:...>> placeholder(s) -- this looks like redacted "
+                    "read-output being written back, which would persist the placeholder and destroy "
+                    "the secret. Edit via patches instead, or set allow_redaction_markers=true if intended."
+                ),
                 path=request.path,
             )
 

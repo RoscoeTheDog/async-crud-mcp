@@ -14,6 +14,7 @@ from async_crud_mcp.core import (
     PathValidator,
     atomic_write,
     compute_hash,
+    contains_redaction_placeholder,
 )
 from async_crud_mcp.core.diff_engine import compute_diff
 from async_crud_mcp.models import (
@@ -76,6 +77,24 @@ async def async_update(
             return ErrorResponse(
                 error_code=ErrorCode.PATH_OUTSIDE_BASE,
                 message=str(e),
+                path=request.path,
+            )
+
+        # 1b. Reject full-content writes carrying redacted read-output (the
+        # <<REDACTED>> placeholder), which would overwrite the real secret. The
+        # patch paths are unaffected (and are the recommended edit path).
+        if (
+            request.content is not None
+            and not request.allow_redaction_markers
+            and contains_redaction_placeholder(request.content)
+        ):
+            return ErrorResponse(
+                error_code=ErrorCode.REDACTION_MARKERS_PRESENT,
+                message=(
+                    "content contains <<REDACTED:...>> placeholder(s) -- this looks like redacted "
+                    "read-output being written back, which would persist the placeholder and destroy "
+                    "the secret. Use patches instead, or set allow_redaction_markers=true if intended."
+                ),
                 path=request.path,
             )
 

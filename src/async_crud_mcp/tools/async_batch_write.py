@@ -48,6 +48,7 @@ async def async_batch_write(
                 encoding=item.encoding,
                 create_dirs=item.create_dirs,
                 timeout=request.timeout,
+                allow_redaction_markers=item.allow_redaction_markers,
             )
 
             # Call single-file async_write

@@ -36,6 +36,33 @@ def hash_registry():
     return HashRegistry()
 
 
+class TestAsyncWriteRedactionGuard:
+    """async_write rejects redacted read-output being written back (livetest F7)."""
+
+    @pytest.mark.asyncio
+    async def test_write_rejects_redaction_placeholder(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        file_path = temp_base_dir / "guard.txt"
+        content = 'api_key = <<REDACTED:generic-api-key-assignment:1>>\n'
+        request = AsyncWriteRequest(path=str(file_path), content=content)
+
+        response = await async_write(request, path_validator, lock_manager, hash_registry)
+
+        assert response.status == "error"
+        assert response.error_code == ErrorCode.REDACTION_MARKERS_PRESENT
+        assert not file_path.exists()  # nothing written
+
+    @pytest.mark.asyncio
+    async def test_write_allows_placeholder_with_override(self, temp_base_dir, path_validator, lock_manager, hash_registry):
+        file_path = temp_base_dir / "guard_ok.txt"
+        content = "docs mention <<REDACTED:rule:1>> literally\n"
+        request = AsyncWriteRequest(path=str(file_path), content=content, allow_redaction_markers=True)
+
+        response = await async_write(request, path_validator, lock_manager, hash_registry)
+
+        assert response.status == "ok"
+        assert file_path.read_text() == content
+
+
 class TestAsyncWriteSuccess:
     """Test successful write operations."""
 
