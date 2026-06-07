@@ -115,4 +115,23 @@ The safety property (never clobber) is correct. But the handoff's "confirm non-o
 2. Decide on **F3** semantics (terminal subset-commit vs. keep-open) and **F4** error message.
 3. F5–F8 are documentation/UX; fold into README "editing model" notes if desired.
 
-**Reproduction:** all sandbox files remain under `C:\Users\Admin\async-crud-livetest\` (with `.async-crud-mcp/logs/audit.log` capturing every call). The branch `s004-live-testing` is unmodified source.
+**Reproduction:** all sandbox files remain under `C:\Users\Admin\async-crud-livetest\` (with `.async-crud-mcp/logs/audit.log` capturing every call).
+
+---
+
+## Resolution status (post-discussion, on branch `s004-live-testing`)
+
+All findings were triaged with the maintainer; outcomes below. Fixes are committed locally and **not yet deployed** — redeploy via `scripts\setup.bat` (copied install venv) before the next live test.
+
+| # | Finding | Decision | Status | Commit |
+|---|---------|----------|--------|--------|
+| F1 | Transactional commit bypasses content-scan write guard | Mirror `async_update`'s guard into `async_commit` (all-or-nothing; txn preserved) | ✅ Fixed + tests | `2b0fbb9` |
+| F2 | Audit redaction not recursive | Recurse `_extract_args_summary` into `patches`/`regex_patches`/batch `files[]` | ✅ Fixed + tests | `2b0fbb9` |
+| F3 | Subset commit consumes whole txn | Keep txn open with unapplied matches; relocate via rebase (positions re-derived, set never re-scanned) | ✅ Fixed + tests | `375ae8b` |
+| F4 | Directory delete → misleading error | Distinct `IS_A_DIRECTORY` error pointing to `async_mkdir(force=True)` | ✅ Fixed + tests | `375ae8b` |
+| F5 | "Non-overlapping" rebase narrower than expected | Docs only — document the ~48-char anchor + uniqueness rebase contract | ✅ Documented (README) | (this pass) |
+| F6 | `async_list` doesn't exclude `.async-crud-mcp` | Leave behavior (metadata-only; content stays redacted); clarify in docs | ✅ Documented (README) | (this pass) |
+| F7 | Read returns redacted text + real hash (round-trip hazard) | Reject full-content writes carrying `<<REDACTED:...>>` (`REDACTION_MARKERS_PRESENT`), `allow_redaction_markers` override; patches unaffected | ✅ Fixed + tests | (this pass) |
+| F8 | Zero-match query_replace allocates a txn | Return a txn-less preview (`txn_id=None`, `match_count=0`) | ✅ Fixed + tests | `375ae8b` |
+
+Test suite after all fixes: **837 passed, 10 skipped, 0 failed.**
