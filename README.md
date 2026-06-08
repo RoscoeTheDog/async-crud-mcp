@@ -280,7 +280,7 @@ the server-side tool names; MCP clients see them prefixed (e.g.
 |----------|-------|
 | **File CRUD** | `async_read_tool`, `async_write_tool`, `async_update_tool`, `async_delete_tool`, `async_rename_tool`, `async_append_tool`, `async_mkdir_tool`, `async_list_tool` |
 | **Batch** | `async_batch_read_tool`, `async_batch_write_tool`, `async_batch_update_tool` |
-| **Transactional edits** | `async_query_replace_tool`, `async_commit_tool`, `async_amend_tool`, `async_abort_tool` |
+| **Transactional edits** | `async_query_replace_tool`, `async_commit_tool`, `async_amend_tool`, `async_abort_tool`, `async_txn_status_tool` |
 | **Recycle bin** | `async_restore_tool`, `async_recycle_list_tool`, `async_recycle_clean_tool` |
 | **Shell / search** | `async_exec_tool`, `async_wait_tool`, `async_search_tool` |
 | **Status / health** | `async_status_tool`, `health_tool` |
@@ -308,6 +308,17 @@ For broad or risky multi-match edits, prefer the **transactional tools**
 hash dance into a staged query→commit transaction: a diff preview, a server-side
 compare-and-swap at commit time, and `async_amend_tool` / `async_abort_tool` to
 adjust or discard staged changes.
+
+A **subset commit keeps the transaction open** with the unapplied matches still
+staged; commit is **all-or-nothing**, so a successful `async_commit_tool` applies
+exactly the matches you requested and returns them in `applied_match_ids` (plus
+`remaining_match_ids`, `ignored_match_ids` for requested ids no longer staged, and
+`ttl_remaining`). To decide the next step without re-querying (which would start a
+fresh transaction and re-scan the file), call the read-only `async_txn_status_tool`:
+it relocates each still-staged match against the current file and reports its live
+position and a `locatable` flag that predicts whether the next commit would apply
+it or report it stale. Reported positions are an optimistic snapshot — only the
+commit-time compare-and-swap is authoritative.
 
 **Dual file-state rule.** Claude's native `Edit` tracks its own
 read-before-edit state, and this server tracks its own via `HashRegistry`. On any

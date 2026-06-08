@@ -57,11 +57,17 @@ async def async_commit(
             return ErrorResponse(error_code=ErrorCode.PATH_OUTSIDE_BASE, message=str(e), path=txn.path)
         path = str(validated)
 
+        # Snapshot the staged ids before any mutation so we can report which
+        # requested ids were absent (e.g. already applied by an earlier subset
+        # commit) and silently skipped.
+        staged_ids = {m.match_id for m in txn.matches}
         if request.match_ids is None:
             selected = list(txn.matches)
+            ignored_ids: list[int] = []
         else:
             wanted = set(request.match_ids)
             selected = [m for m in txn.matches if m.match_id in wanted]
+            ignored_ids = [mid for mid in dict.fromkeys(request.match_ids) if mid not in staged_ids]
         if not selected:
             return ErrorResponse(error_code=ErrorCode.VALIDATION_ERROR, message="No matching match_ids to commit", path=path)
 
@@ -146,9 +152,12 @@ async def async_commit(
             transaction_manager.remove(txn.txn_id)
         return CommitSuccessResponse(
             path=path, previous_hash=previous_hash, hash=new_hash,
-            applied_count=len(spans), rebased=rebased,
+            applied_count=len(spans), applied_match_ids=[m.match_id for m in selected],
+            rebased=rebased,
             txn_id=txn.txn_id if remaining else None,
             remaining_match_ids=[m.match_id for m in remaining] or None,
+            ignored_match_ids=ignored_ids or None,
+            ttl_remaining=(txn.ttl_remaining if remaining else None),
         )
     except Exception as e:
         return ErrorResponse(error_code=ErrorCode.SERVER_ERROR, message=f"Unexpected error during commit: {e}")

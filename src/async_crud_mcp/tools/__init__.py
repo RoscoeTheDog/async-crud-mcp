@@ -20,6 +20,7 @@ from .async_query_replace import async_query_replace
 from .async_commit import async_commit
 from .async_amend import async_amend
 from .async_abort import async_abort
+from .async_txn_status import async_txn_status
 
 __all__ = [
     "async_append",
@@ -42,4 +43,5 @@ __all__ = [
     "async_commit",
     "async_amend",
     "async_abort",
+    "async_txn_status",
 ]

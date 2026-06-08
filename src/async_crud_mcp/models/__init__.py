@@ -26,6 +26,7 @@ from .requests import (
     CommitRequest,
     AmendRequest,
     AbortRequest,
+    TxnStatusRequest,
 )
 from .responses import (
     ActiveLocks,
@@ -73,6 +74,8 @@ from .responses import (
     StaleConflictResponse,
     AmendResponse,
     AbortResponse,
+    TxnStatusMatchEntry,
+    TxnStatusResponse,
 )
 
 __all__ = [
@@ -143,10 +146,13 @@ __all__ = [
     "CommitRequest",
     "AmendRequest",
     "AbortRequest",
+    "TxnStatusRequest",
     "StagedMatchEntry",
     "QueryReplaceResponse",
     "CommitSuccessResponse",
     "StaleConflictResponse",
     "AmendResponse",
     "AbortResponse",
+    "TxnStatusMatchEntry",
+    "TxnStatusResponse",
 ]

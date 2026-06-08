@@ -86,6 +86,7 @@ from async_crud_mcp.models import (
     CommitRequest,
     AmendRequest,
     AbortRequest,
+    TxnStatusRequest,
 )
 from async_crud_mcp.tools import (
     async_append,
@@ -108,6 +109,7 @@ from async_crud_mcp.tools import (
     async_commit,
     async_amend,
     async_abort,
+    async_txn_status,
 )
 
 # Tools that work without project activation
@@ -1288,6 +1290,29 @@ async def async_abort_tool(txn_id: str):
     """
     request = AbortRequest(txn_id=txn_id)
     response = await async_abort(request, transaction_manager, str(_active_project_root))
+    return response.model_dump(exclude_none=True)
+
+
+@mcp.tool()
+async def async_txn_status_tool(txn_id: str, timeout: float = 30.0):
+    """Inspect an open transaction without changing anything (ADR-001).
+
+    Read-only. Relocates each still-staged match against the CURRENT file and
+    reports its live line/column (content redacted) plus a per-match `locatable`
+    flag that predicts whether async_commit would apply it or report it stale --
+    so you can pick a subset, amend, or re-query before committing. Also returns
+    `current_hash`/`file_changed` and `ttl_remaining`. Positions are a snapshot;
+    only async_commit's compare-and-swap is authoritative.
+
+    Args:
+        txn_id: Transaction id from async_query_replace
+        timeout: Read lock timeout in seconds (default: 30)
+    """
+    request = TxnStatusRequest(txn_id=txn_id, timeout=timeout)
+    response = await async_txn_status(
+        request, path_validator, lock_manager, transaction_manager,
+        str(_active_project_root), content_scanner=content_scanner,
+    )
     return response.model_dump(exclude_none=True)
 
 

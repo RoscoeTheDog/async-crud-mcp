@@ -288,3 +288,10 @@ class AbortRequest(BaseModel):
     """Request model for async_abort tool (discard a staged transaction)."""
 
     txn_id: str = Field(..., description="Transaction id to discard")
+
+
+class TxnStatusRequest(BaseModel):
+    """Request model for async_txn_status tool (inspect an open transaction)."""
+
+    txn_id: str = Field(..., description="Transaction id from async_query_replace")
+    timeout: float = Field(default=30.0, description="Read lock timeout in seconds")

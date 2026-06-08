@@ -580,6 +580,12 @@ class CommitSuccessResponse(BaseModel):
     previous_hash: str = Field(..., description="Hash before commit")
     hash: str = Field(..., description="Hash after commit (format: sha256:...)")
     applied_count: int = Field(..., description="Number of matches applied")
+    applied_match_ids: list[int] = Field(
+        ...,
+        description="Exact match ids applied by this commit (== the requested subset; "
+        "commit is all-or-nothing, so a success applies every selected match). Removes "
+        "the need to infer applied ids by set-difference",
+    )
     rebased: bool = Field(default=False, description="True if matches were relocated onto externally-changed content")
     txn_id: str | None = Field(
         default=None,
@@ -590,6 +596,55 @@ class CommitSuccessResponse(BaseModel):
         default=None,
         description="Match ids still staged after a subset commit. Commit again (they are "
         "relocated via rebase) or abort. None when the transaction was fully consumed",
+    )
+    ignored_match_ids: list[int] | None = Field(
+        default=None,
+        description="Requested match ids that were NOT in the transaction (e.g. already "
+        "applied by an earlier subset commit) and so were silently skipped. None when "
+        "every requested id was present (or match_ids was omitted)",
+    )
+    ttl_remaining: float | None = Field(
+        default=None,
+        description="Seconds until the still-open transaction expires (measured from the "
+        "original query; a subset commit does not reset it). None when fully consumed",
+    )
+
+
+class TxnStatusMatchEntry(BaseModel):
+    """Live state of one staged match, relocated against the current file."""
+
+    model_config = ConfigDict(frozen=True)
+
+    match_id: int = Field(..., description="Stable id for this match within the transaction")
+    locatable: bool = Field(
+        ...,
+        description="True if the match relocates unambiguously in the current file (would "
+        "apply on commit); False means it would be reported stale (ambiguous/gone)",
+    )
+    line: int | None = Field(default=None, description="Current 1-based line of the match, or None if not locatable")
+    col_start: int | None = Field(default=None, description="Current 0-based column of the match, or None if not locatable")
+    before: str = Field(..., description="Original matched text (redacted if sensitive)")
+    after: str = Field(..., description="Proposed replacement (redacted if sensitive)")
+
+
+class TxnStatusResponse(BaseModel):
+    """Response for async_txn_status: a read-only, current-state view of an open txn."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: Literal["ok"] = "ok"
+    txn_id: str = Field(..., description="The inspected transaction id")
+    path: str = Field(..., description="File path the transaction edits")
+    base_hash: str = Field(..., description="File hash captured at query time (CAS token)")
+    current_hash: str = Field(..., description="Live on-disk hash now")
+    file_changed: bool = Field(..., description="True if the file changed since the query (commit would take the rebase path)")
+    match_count: int = Field(..., description="Number of matches still staged")
+    matches: list[TxnStatusMatchEntry] = Field(..., description="Per-match live state (positions relocated, content redacted)")
+    locatable_match_ids: list[int] = Field(..., description="Match ids that would apply cleanly on commit")
+    stale_match_ids: list[int] = Field(..., description="Match ids that would be reported stale on commit")
+    ttl_remaining: float = Field(..., description="Seconds until the transaction expires")
+    redactions: list[RedactionEntry] | None = Field(
+        default=None, description="Redaction metadata for sensitive spans in the preview"
     )
 
 

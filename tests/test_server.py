@@ -190,15 +190,16 @@ class TestFastMCPServer:
             "async_commit_tool",
             "async_amend_tool",
             "async_abort_tool",
+            "async_txn_status_tool",
         ]
 
         for expected_tool in expected_tools:
             assert expected_tool in tool_names, f"Tool {expected_tool} not registered"
 
     def test_tool_count(self):
-        """Test that exactly 26 tools are registered (+4 transactional: query_replace/commit/amend/abort)."""
+        """Test that exactly 27 tools are registered (+5 transactional: query_replace/commit/amend/abort/txn_status)."""
         tool_count = len(mcp._tool_manager._tools)
-        assert tool_count == 26, f"Expected 26 tools, found {tool_count}"
+        assert tool_count == 27, f"Expected 27 tools, found {tool_count}"
 
 
 class TestToolWrappers:

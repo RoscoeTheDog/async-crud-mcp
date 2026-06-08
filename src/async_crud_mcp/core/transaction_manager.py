@@ -80,6 +80,16 @@ class EditTransaction:
     def expired(self) -> bool:
         return (time.monotonic() - self.created_at) > self.ttl
 
+    @property
+    def ttl_remaining(self) -> float:
+        """Seconds until this transaction expires (0.0 once past its TTL).
+
+        Measured from the original query time -- a subset commit does NOT reset
+        the clock, so a long-lived open transaction can still expire between
+        follow-up commits.
+        """
+        return max(0.0, self.ttl - (time.monotonic() - self.created_at))
+
 
 def rebase_match(current_content: str, match: StagedMatch) -> tuple[int, int] | None:
     """Relocate a staged match in possibly-changed content via its anchor.
