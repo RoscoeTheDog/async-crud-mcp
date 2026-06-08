@@ -1,6 +1,6 @@
 # Session 006: Live-Verify F9 (self-describing commit + async_txn_status)
 
-**Status**: ACTIVE
+**Status**: COMPLETED (2026-06-07 — all 7 F9 live checks PASS; F9 merged to dev + main)
 **Created**: 2026-06-07 18:30
 **Skill Version**: context v2.56.0-alpha
 **Objective**: Live-verify the F9 changes (self-describing commit response + the new read-only `async_txn_status` tool) against a redeployed :8720 daemon after reconnecting a fresh MCP client, then merge to dev/main.

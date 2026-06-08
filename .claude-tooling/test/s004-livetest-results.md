@@ -159,3 +159,30 @@ Re-ran the F1–F8 fixes **live against the running `:8720` daemon** after the r
 (F5/F6 are docs-only; their README contracts were confirmed at fix time.)
 
 **Outcome: all live checks PASS against the redeployed daemon.** The s004 fixes are confirmed live.
+
+---
+
+## F9 live-verification (s006, 2026-06-07, redeployed daemon)
+
+Live-verified the F9 changes — **self-describing commit response** (`applied_match_ids` / `ignored_match_ids` / `ttl_remaining`) and the new **read-only `async_txn_status` tool** — against the running `:8720` daemon after the redeploy + a fresh MCP-client reconnect. Tests ran in an isolated subdir `C:\Users\Admin\async-crud-livetest\s006\` with a fake AWS key.
+
+**Deployment gates verified first:**
+- **Redeploy landed** — `health_tool` healthy, current process pid `6724`, uptime ~20 min (recent restart); `server.log` clean (0 ERROR/CRITICAL/Traceback across the whole file). The new commit fields appearing in F9.1 (below) prove the running process imported the F9 code from the install venv.
+- **Fresh client** — `async_txn_status_tool` is present in the tool list (schema advertised; the tool exists only post-`e1ddc7d`), confirming the client re-fetched schemas at connect.
+- **Sandbox** — `crud_activate_project` → `content_scan_enabled: true`.
+
+| # | Live check | Result | Verdict |
+|---|------------|--------|---------|
+| F9.1 | `query_replace` 3 matches → `commit([2])` | `applied_match_ids:[2]`, `remaining_match_ids:[1,3]`, `ttl_remaining:596`, no `ignored_match_ids`; `applied_count:1`, `rebased:false` | ✅ PASS |
+| F9.2 | same txn → `commit([2,3])` (2 already applied) | `applied_match_ids:[3]`, `ignored_match_ids:[2]`, `remaining_match_ids:[1]`, `rebased:true` (match 3 rebased onto the mutated file) | ✅ PASS |
+| F9.3 | fresh `query_replace` 3 matches → `txn_status` (file untouched) | `file_changed:false`, `current_hash == base_hash`, `match_count:3`, `locatable_match_ids:[1,2,3]`, `stale_match_ids:[]`, `ttl_remaining:597` | ✅ PASS |
+| F9.4 | `query_replace` 1 match → external `update` duplicates the anchor line → `txn_status` | `file_changed:true`, `stale_match_ids:[1]`, match `locatable:false`, `line` omitted (null), `locatable_match_ids:[]`. **Prediction confirmed:** the subsequent `commit` returned `stale_conflict` with the same `stale_match_ids:[1]` | ✅ PASS |
+| F9.5 | `query_replace` 3 matches → `commit([1])` → `txn_status` | `match_count:2` (reduced), `file_changed:true`, remaining `[2,3]` both `locatable:true` at correct live positions, `stale_match_ids:[]` | ✅ PASS |
+| F9.6 | `query_replace` over `AKIA…EXAMPLE` → `txn_status` | `matches[].before == <<REDACTED:aws-access-key-id:1>>` (secret never verbatim in the response), `redactions[]` populated (`rule_name:"aws-access-key-id"`, `original_length:20`) | ✅ PASS |
+| F9.7 | `status` (hash) → `txn_status` → `status` (hash) → `commit` | hash identical before/after `txn_status` (read-only confirmed); commit afterward `applied_match_ids:[1]` — txn still committable | ✅ PASS |
+
+**Bonus observations (expected behavior, confirmed):**
+- **`CONTENT_BLOCKED` guardrail holds on the transactional path.** Committing a match whose `before` overlaps egress-protected content (the AWS key) returns `CONTENT_BLOCKED` ("nothing was applied"), matching the F1 fix + the F9 design ("any protected `before` → CONTENT_BLOCKED; nothing partial"). This is why F9.7's committable check was re-run on a non-secret txn.
+- **Redaction is conditional on sensitivity.** `txn_status` / `query_replace` show non-sensitive `before`/`after` in plaintext (F9.3 / F9.5) and only redact content that trips a deny rule (F9.6) — consistent with the egress redaction model.
+
+**Outcome: all 7 F9 live checks PASS against the redeployed daemon.** The self-describing commit fields and the read-only `async_txn_status` tool behave exactly as designed; `txn_status`'s `locatable` flag is an accurate per-match predictor of commit's apply/stale outcome.
