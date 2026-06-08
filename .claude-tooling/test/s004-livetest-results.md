@@ -135,3 +135,27 @@ All findings were triaged with the maintainer; outcomes below. Fixes are committ
 | F8 | Zero-match query_replace allocates a txn | Return a txn-less preview (`txn_id=None`, `match_count=0`) | ✅ Fixed + tests | `375ae8b` |
 
 Test suite after all fixes: **837 passed, 10 skipped, 0 failed.**
+
+---
+
+## Live re-verification (s005, 2026-06-07, redeployed daemon)
+
+Re-ran the F1–F8 fixes **live against the running `:8720` daemon** after the redeploy + a fresh MCP-client reconnect. Tests ran in an isolated subdir `C:\Users\Admin\async-crud-livetest\s005\` with fake secrets.
+
+**Deployment gates verified first:**
+- **Fresh client** — daemon now advertises `allow_redaction_markers` on `async_write_tool`/`async_update_tool` (param exists only post-`b14f5e7`), so the client re-fetched schemas.
+- **Redeploy landed** — same param being *server-advertised* proves the running process imported the fixed code; audit log shows it loads from the install venv (`AppData\Local\async-crud-mcp\venv\…`), not the dev `.venv`. Current daemon pid `7068`, uptime ~5h (restart ~13:19, matching the redeploy). `health_tool`: healthy.
+- **Sandbox** — `crud_activate_project` → `content_scan_enabled: true`.
+
+| # | Live check | Result | Verdict |
+|---|------------|--------|---------|
+| F1 | `query_replace` over an `AKIA…` line → `commit` | `CONTENT_BLOCKED`, file hash unchanged (== base), txn still abortable (`discarded:true`) | ✅ PASS |
+| F2 | `batch_write` (secret in `files[].content`) + `update` (secret in `regex_patches[].replacement`) → grep raw `audit.log` | 0 verbatim occurrences of any sentinel across all logs; fresh entry logs `content: "<76 chars>"`. Old pre-restart entry (pid 21264) still shows `password = batchsecret123` verbatim — confirms the bug was the *old* daemon | ✅ PASS |
+| F3 | `query_replace` 3 matches → `commit([2])` → `commit([1,3])` | First: `applied_count:1, rebased:false, txn_id` kept, `remaining_match_ids:[1,3]`. Second: `applied_count:2, rebased:true`, txn closed. Final file = all three applied | ✅ PASS |
+| F4 | `delete` on a directory | `IS_A_DIRECTORY` with the `async_mkdir(force=True)` hint | ✅ PASS |
+| F7 | `read` redacted file → write/update that text back | Both full-content paths → `REDACTION_MARKERS_PRESENT`; retry `allow_redaction_markers=true` → ok; `patches` path applies without the flag | ✅ PASS |
+| F8 | `query_replace` non-matching pattern | `match_count:0`, **no** `txn_id`, no txn allocated | ✅ PASS |
+
+(F5/F6 are docs-only; their README contracts were confirmed at fix time.)
+
+**Outcome: all live checks PASS against the redeployed daemon.** The s004 fixes are confirmed live.
